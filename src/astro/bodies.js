@@ -117,11 +117,13 @@ export const MOON_PHYS = {
                textures: { map: 'moon.jpg' },
                desc: '地球唯一的天然卫星，潮汐锁定使其永远以同一面朝向地球。人类唯一踏足过的地外天体。' },
   phobos:    { nameZh: '火卫一', nameEn: 'Phobos', parent: 'mars', radiusKm: 11.27, gm: 7.087e-4,
-               landable: true, surface: { ampKm: 1.5, roughness: 0.7, craters: 1.5, palette: 'gray' },
-               desc: '火星的大卫星，轨道极低（9376 km），正以每百年 1.8 米的速度向火星坠落。' },
+               landable: true, shape: { dims: [27.0, 18.4, 22.0] }, // 真实土豆状（长轴指向火星）
+               surface: { ampKm: 1.5, roughness: 0.7, craters: 1.5, palette: 'gray' },
+               desc: '火星的大卫星，土豆状（27×22×18 km），轨道极低（9376 km），正以每百年 1.8 米的速度向火星坠落。' },
   deimos:    { nameZh: '火卫二', nameEn: 'Deimos', parent: 'mars', radiusKm: 6.2, gm: 9.6e-5,
-               landable: true, surface: { ampKm: 0.8, roughness: 0.7, craters: 1.2, palette: 'gray' },
-               desc: '火星较小较远的卫星，表面覆盖细腻尘埃层。' },
+               landable: true, shape: { dims: [15.0, 11.0, 12.2] }, // 不规则（15×12.2×11 km）
+               surface: { ampKm: 0.8, roughness: 0.7, craters: 1.2, palette: 'gray' },
+               desc: '火星较小较远的卫星，不规则状，表面覆盖细腻尘埃层。' },
   io:        { nameZh: '木卫一', nameEn: 'Io', parent: 'jupiter', radiusKm: 1821.6, gm: 5.916e3,
                landable: true, surface: { ampKm: 4, roughness: 0.5, craters: 0.1, palette: 'io' },
                textures: { map: 'io.jpg' },

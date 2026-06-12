@@ -17,8 +17,8 @@
     "io.jpg":  true,
     "europa.png":  true,
     "ganymede.jpg":  true,
-    "callisto.jpg":  false,
-    "titan.jpg":  false,
+    "callisto.jpg":  true,
+    "titan.jpg":  true,
     "triton.jpg":  true,
     "pluto.jpg":  true,
     "charon.jpg":  true

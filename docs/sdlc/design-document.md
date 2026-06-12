@@ -393,3 +393,40 @@ flowchart TD
 ## 3. 回滚
 
 atmosphere.js / orbitCamera.js / ship.js / main.js 按文件还原即回滚对应主题。
+
+---
+
+# R9 设计（2026-06-12）
+
+## 方案对比与选择
+
+| 问题 | 备选 A | 备选 B（选用） | 理由 |
+|------|--------|----------------|------|
+| 1b/1d 缩放跳跃+无法登陆 | 修补 dolly 状态机（锁靶+限幅） | **焦点交接** + 手势锁靶 | 交接让全部语义（minDist/自动倾斜/登陆链路/拖拽灵敏度）随目标切换，架构上消除"绕旧锚点"整类缺陷；锁靶兜底深空场景 |
+| 2a 闪烁 | 顶点烘相机相对（每帧重传） | **级原点相对几何**（fround 原点 + uPatchRel） | 零每帧 CPU 开销；mesh.position 取 fp32 精确可表示值 → 无量化误差 |
+| 2c 不规则体 | 专用网格资产 | **HeightField 三轴椭球 + 噪声**变形球网格 | 视觉=碰撞同源（行走/相机/网格一个函数），零新资产 |
+| 1e 绕转观察 | 独立相机类 | **frameQuat() 锚定系切换**（体固/惯性） | 复用全部既有语义（拖拽/缩放/极点穿越），切换 adoptPosition 保证连续 |
+
+## 关键接口
+- `env.centerHit(posKm, dir) -> {id, depth}|null`（main.js orbitEnv，替代 centerDepth 主通道）
+- `OrbitCamera.setInertial(on, env)` / `frameQuat(f)`；`MAX_DIST=3.74e10`
+- `HeightField.baseRadius(dir)`（shape.dims 三轴椭球）/ `heightSolid(dir)`（海床）/ `oceanFloor(dir)`
+- `TerrainManager.isWater(id, dir)`；`update(nearest, dir, timeSec)`
+- ship `env.isWater` → 浮力/上浮/终端下沉；Input `muteUntil`（锁定切换静默）
+
+```mermaid
+sequenceDiagram
+  participant U as 用户
+  participant C as OrbitCamera
+  participant E as orbitEnv
+  U->>C: 右键平移(太阳居中) + 滚轮拉近
+  C->>E: centerHit(pos, view)
+  E-->>C: {id:'sun', depth}
+  C->>C: adoptPosition(env,'sun',pos,quat) 焦点交接(视向连续)
+  Note over C: tilt≈0, pan=0 → 径向缩放<br/>minDist/自动倾斜/登陆链路 = 太阳语义
+  U->>C: 持续滚轮
+  C->>C: 收敛至 minDist(日面上空)，途中灵敏度连滚渐加速
+```
+
+## 回滚策略
+每项独立：焦点交接（orbitCamera 缩放段）、地形原点（terrain.js）、形状（bodies.js dims + builder deform）、水体（heightSolid+main 视效）可单独 revert，互不依赖。

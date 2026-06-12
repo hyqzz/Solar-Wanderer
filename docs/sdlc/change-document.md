@@ -212,3 +212,33 @@ flowchart LR
 **开发期缺陷修复**：① dolly 深度回退 this.dist → 越过锚点后匀速冲越 26R（改为无目标停止推进）；② 位移吸收进 panOffset 后锚点投影平移不变 → 深度恒定不收敛（改为参考深度独立捕获并随推进递减）。两者均被 repro-r8 逐帧插桩捕获。
 
 **副作用自查**：可登陆行星 uStretch=0 椭球式退化为原式（地球/火星/金星/土卫六大气零回归）；用户 tilt=0 且未平移时缩放路径与 R7 完全一致（着陆流程探针回归通过）；星历层零改动 33/33。
+
+---
+
+# R9 变更记录（2026-06-12）
+
+## 变更摘要
+镜头系统深度修复（焦点交接/锁靶推拉/距离上限/灵敏度渐进/行走防快速旋转/惯性观察模式）+
+登陆闪烁根治（级原点相对几何）+ 海洋下潜与水下环境 + 天体真实性（火卫一/二土豆形、冥王星心形贴图、titan/callisto 实贴图）。
+
+## 文件变更详情
+
+| 文件 | 变更 |
+|------|------|
+| `src/engine/orbitCamera.js` | 缩放段重写：焦点交接（centerHit + adoptPosition）、推拉手势锁靶（_dollyTargetId，仅对锁定目标刷新深度）、MAX_DIST=3.74e10、滚轮连滚加速（×1.12→×1.38）/PageUp 按住渐加速、惯性观察 frameQuat/setInertial、groundRadiusOf 惯性系换算 |
+| `src/engine/ship.js` | 行走帧级输入钳制 ±260px、卡顿帧平滑 dt≤33ms、WALK_SENS 0.00085、Input 指针锁定 150ms 静默、飞行日心距上限、水中浮力/上浮/终端下沉/移速 |
+| `src/scene/terrain.js` | 级原点相对几何（origin fround + uPatchRel）、每级独立材质 polygonOffset、最内 30m 级、water attribute（低粗糙度+时变波纹）、DoubleSide、heightSolid/oceanFloor/baseRadius、isWater、岩石原点相对、小天体激活半径按比例 |
+| `src/scene/builder.js` | deformIrregular（HeightField 同源变形不规则卫星网格） |
+| `src/astro/bodies.js` | phobos/deimos shape.dims 真实尺寸 |
+| `src/main.js` | centerHit（带 id）、KeyV 惯性模式、水下视效（深海雾/曝光衰减/浸没层）、穿云薄纱、terrainMgr 时基、env.isWater |
+| `public/textures/` | pluto.jpg（新视野号 8K→4K 真实拼图，原为 HTML 错误页）、titan.jpg、callisto.jpg（manifest 同步 true） |
+| `tools/repro-r9.mjs`（新） | 11 项缺陷复现/验证断言 |
+| `tools/probe-r9.mjs`（新） | 水下/海床行走/惯性模式/形态截图端到端 |
+
+## 修改范围声明
+未触碰：星历层算法（astro/*.js 仅 bodies.js 数据字段）、atmosphere.js、quality.js、UI 层结构、浮动原点机制。
+
+## 副作用自查
+- R8 屏幕中心缩放语义保持（repro-r8 5/5）；R7 着陆/起飞/入气链路保持（probe-r7 全过）
+- 无海洋天体行走/相机不受水体改动影响（isOcean=false 路径恒等）
+- 非 shape 天体 baseRadius 恒等返回 radiusKm

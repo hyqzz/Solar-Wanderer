@@ -205,11 +205,11 @@ const orbitEnv = {
       minDistKm: t.minDistKm ?? null,
     };
   },
-  /** 屏幕中心视线命中的最近天体深度（km）——倾斜/平移时缩放的收敛目标（R8 #2）。
-   * 无命中返回 null（退化为轨道锚点投影）。 */
-  centerDepth(posKm, dir) {
+  /** 屏幕中心视线命中的最近天体（id+深度 km）——缩放收敛目标与焦点交接依据
+   * （R8 #2 / R9-1b/1d）。无命中返回 null。 */
+  centerHit(posKm, dir) {
     let best = null;
-    for (const [, t] of registry) {
+    for (const [id, t] of registry) {
       const R = t.phys?.radiusKm ?? 0;
       if (R < 1) continue; // 探测器/边界点不作为缩放收敛目标
       const margin = R * 1.004 + 1; // 收敛下限留在表面略上方
@@ -221,10 +221,11 @@ const orbitEnv = {
       const det = b * b - (ox * ox + oy * oy + oz * oz - margin * margin);
       if (det < 0) continue;
       const tHit = b - Math.sqrt(det);
-      if (tHit > 1e-6 && (best === null || tHit < best)) best = tHit;
+      if (tHit > 1e-6 && (best === null || tHit < best.depth)) best = { id, depth: tHit };
     }
     return best;
   },
+  centerDepth(posKm, dir) { return this.centerHit(posKm, dir)?.depth ?? null; },
 };
 
 function setupLabels() {
@@ -392,7 +393,7 @@ function loop() {
     );
     _q.copy(e.mesh.quaternion).invert();
     _rel.applyQuaternion(_q).normalize();
-    terrainMgr.update(nearest, _rel);
+    terrainMgr.update(nearest, _rel, performance.now() / 1000);
   } else {
     terrainMgr.update(null, null);
   }
@@ -461,6 +462,7 @@ function makeEnv(nearest) {
     getBodyQuat: (id) => builder.bodies.get(id).mesh.quaternion,
     getBodyPos: (id) => builder.bodies.get(id).posKm,
     heightFn: (id, dir) => terrainMgr.heightAt(id, dir),
+    isWater: (id, dir) => terrainMgr.isWater(id, dir),
     phys: (id) => builder.bodies.get(id).phys,
   };
 }
@@ -484,6 +486,10 @@ function handleUIKeys() {
     if (input.tapped(key)) flyTo(id); // GE 风格：快捷键直接前往
   }
   if (input.tapped('KeyO')) orbitLinesOn = !orbitLinesOn;
+  // V：惯性观察模式（相机不随天体自转——配合时间加速观赏卫星/行星绕转，R9-1e）
+  if (input.tapped('KeyV') && appMode === 'orbit' && !orbitCam.flight) {
+    orbitCam.setInertial(!orbitCam.inertial, orbitEnv);
+  }
   // 行走模式自动隐藏轨道辅助线（沉浸真实星空）
   const showOrbits = orbitLinesOn && appMode !== 'walk';
   for (const line of Object.values(builder.orbitLines.userData)) line.visible = showOrbits;
@@ -512,6 +518,8 @@ function updateTip(nearest) {
     hud.tip('⚠ 气态/冰巨行星无固体表面：可下潜入大气层，无法降落');
   } else if (nearest && nearest.id === 'sun' && nearest.distSurface < nearest.radiusKm * 2) {
     hud.tip('⚠ 接近太阳：表面温度 5772 K');
+  } else if (appMode === 'orbit' && orbitCam.inertial) {
+    hud.tip(`🛰 惯性观察模式：相机不随自转，加速时间（]键）可观赏 ${registry.get(orbitCam.focusId)?.nameZh ?? ''} 的卫星绕转 · V 切回`);
   } else {
     hud.tip(null);
   }
@@ -529,6 +537,7 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   let skyFade = 1; // 白昼大气内星空淡出（日光散射淹没星光，物理正确）
   let immersion = 0; // 气巨大气浸没（全屏云雾层，R7 #5）
   let immTint = null;
+  let waterFx = null; // 水下环境（R9-2b）
   const fogColor = new THREE.Color(0x000000);
   if (nearest) {
     const e = builder.bodies.get(nearest.id);
@@ -552,6 +561,21 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
         immTint = [b[0] / m, b[1] / m, b[2] / m];
       }
     }
+    // 水下环境（R9-2b）：海面之下 → 深海雾 + 光照随深度指数衰减 + 星空遮蔽
+    if (e.phys.landable && e.phys.surface?.ocean) {
+      _rel.set(
+        ship.posKm[0] - e.posKm[0], ship.posKm[1] - e.posKm[1], ship.posKm[2] - e.posKm[2]
+      );
+      const relLen = _rel.length();
+      _q.copy(e.mesh.quaternion).invert();
+      _rel.applyQuaternion(_q).normalize();
+      const surfR = e.phys.radiusKm + 0.001;
+      if (relLen < surfR - 0.00003 && terrainMgr.isWater(nearest.id, _rel)) {
+        const depth = surfR - relLen; // km
+        const dim = Math.exp(-depth * 1.6); // 海水对日光的指数衰减
+        waterFx = { depth, dim };
+      }
+    }
     if (inAtmo) {
       const alt = Math.max(nearest.distSurface, 0);
       _rel.set(
@@ -570,18 +594,42 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       // 星空淡出：白昼且身处稠密层内
       const density = Math.exp(-alt / (atm.rayleighScaleKm * 2.2));
       skyFade = THREE.MathUtils.clamp(1 - day * density * 0.97, 0, 1);
+      // 穿越云层薄纱（R9-2b）：掠过云甲板高度时短暂白雾，入气更有层次
+      if (e.cloudMesh && !waterFx) {
+        const hc = e.phys.radiusKm * 0.0035;
+        const veil = Math.exp(-(((alt - hc) / 1.8) ** 2)) * 0.4 * (0.3 + 0.7 * day);
+        if (veil > immersion) {
+          immersion = veil;
+          immTint = [0.9, 0.94, 1.0];
+        }
+      }
     }
   }
-  // 气巨浸没层：全屏云雾渐显（深处白化吞没，离开时归零）
-  if (immersion > 0 && immTint) {
-    skyFade = Math.min(skyFade, 1 - immersion); // 云中看不见星空
-    const cr = Math.round((immTint[0] * 0.45 + 0.55) * 255);
-    const cg = Math.round((immTint[1] * 0.45 + 0.55) * 255);
-    const cb = Math.round((immTint[2] * 0.45 + 0.55) * 255);
+  if (waterFx) {
+    // 水下（R9-2b）：深海蓝绿雾 + 全屏浸没层随深度变暗 + 曝光衰减 + 星空遮蔽
+    const { depth, dim } = waterFx;
+    fogColor.setRGB(0.015 + 0.09 * dim, 0.09 + 0.2 * dim, 0.15 + 0.26 * dim);
+    fogDensity = 16 + depth * 28;
+    skyFade = Math.min(skyFade, 0.04);
+    exposureTarget = Math.max(exposureTarget * Math.max(dim, 0.045), 0.05);
+    const wr = Math.round((0.04 + 0.16 * dim) * 255);
+    const wg = Math.round((0.12 + 0.34 * dim) * 255);
+    const wb = Math.round((0.2 + 0.42 * dim) * 255);
     immersionEl.style.background =
-      `radial-gradient(ellipse at center, rgba(${cr},${cg},${cb},0.75) 0%, rgb(${cr},${cg},${cb}) 78%)`;
+      `radial-gradient(ellipse at center, rgba(${wr},${wg},${wb},0.45) 0%, rgba(${Math.round(wr * 0.4)},${Math.round(wg * 0.4)},${Math.round(wb * 0.4)},0.9) 85%)`;
+    immersionEl.style.opacity = THREE.MathUtils.clamp(0.3 + depth * 0.5, 0, 0.9).toFixed(3);
+  } else {
+    // 气巨浸没层/穿云薄纱：全屏云雾渐显（深处白化吞没，离开时归零）
+    if (immersion > 0 && immTint) {
+      skyFade = Math.min(skyFade, 1 - immersion); // 云中看不见星空
+      const cr = Math.round((immTint[0] * 0.45 + 0.55) * 255);
+      const cg = Math.round((immTint[1] * 0.45 + 0.55) * 255);
+      const cb = Math.round((immTint[2] * 0.45 + 0.55) * 255);
+      immersionEl.style.background =
+        `radial-gradient(ellipse at center, rgba(${cr},${cg},${cb},0.75) 0%, rgb(${cr},${cg},${cb}) 78%)`;
+    }
+    immersionEl.style.opacity = immersion.toFixed(3);
   }
-  immersionEl.style.opacity = immersion.toFixed(3);
 
   scene.fog.color.copy(fogColor);
   scene.fog.density = fogDensity;

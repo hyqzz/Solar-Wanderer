@@ -40,12 +40,16 @@ export class Input {
       this.justPressed.add(e.code);
     });
     dom.addEventListener('keyup', (e) => { if (!isTyping(e)) this.keys.delete(e.code); });
+    this.muteUntil = 0; // 指针锁定切换瞬间静默（Chromium 锁定获得/释放时产生突发事件串，R9-1a）
     document.addEventListener('pointerlockchange', () => {
       this.locked = !!document.pointerLockElement;
+      this.muteUntil = performance.now() + 150;
+      this.dx = 0; this.dy = 0;
       if (!this.locked) this.keys.clear();
       this.onLockChange?.(this.locked);
     });
     document.addEventListener('mousemove', (e) => {
+      if (performance.now() < this.muteUntil) return;
       const mx = clampMove(e.movementX), my = clampMove(e.movementY);
       if (this.locked) {
         this.dx += mx; this.dy += my;
@@ -93,8 +97,10 @@ export class Input {
 }
 
 const MOUSE_SENS = 0.0022;
-const WALK_SENS = 0.0011;   // 行走视角灵敏度减半（R7 #3：杜绝快速旋转，仍 360° 无限制）
+const WALK_SENS = 0.00085;  // 行走视角灵敏度（R9-1a 再降：仰望天空可精确定位，仍 360° 无限制）
 const WALK_SMOOTH_TAU = 0.05; // 行走视角指数平滑时间常数（秒）
+const WALK_FRAME_CLAMP = 260; // 每帧累计输入上限 px（事件堆积/卡顿帧不得倾泻成快速旋转，R9-1a）
+const MAX_SUN_R = 3.9e10;   // 飞行模式日心距上限（略超探索模式 250 AU 全景距离，R9-1c）
 const WALK_EYE_KM = 0.0017; // 1.7 m
 const MIN_SPEED = 0.001;    // 1 m/s
 const MAX_SPEED = 3e8;      // ~2 AU/s
@@ -186,6 +192,16 @@ export class Ship {
     this.posKm[1] += this.vel.y * dt;
     this.posKm[2] += this.vel.z * dt;
 
+    // 日球层边界：飞行不得超出全景距离（与探索模式一致的世界边界，R9-1c）
+    const rSun = Math.hypot(this.posKm[0], this.posKm[1], this.posKm[2]);
+    if (rSun > MAX_SUN_R) {
+      const s = MAX_SUN_R / rSun;
+      this.posKm[0] *= s; this.posKm[1] *= s; this.posKm[2] *= s;
+      _v1.set(this.posKm[0], this.posKm[1], this.posKm[2]).normalize();
+      const vr = this.vel.dot(_v1);
+      if (vr > 0) this.vel.addScaledVector(_v1, -vr); // 消除外向分量
+    }
+
     // 碰撞站离：不允许进入天体表面之下（地形由行走模式处理，飞行用球面+余量）
     if (env.nearest) {
       const n = env.nearest;
@@ -262,9 +278,13 @@ export class Ship {
     // 视角：偏航绕天顶；俯仰 360° 连续循环（可仰头翻转环视，无任何钳制）。
     // R7 #2：dx>0（鼠标右移）→ yaw 增大 = 向右看，与探索模式方向一致；
     // R7 #3：低灵敏度 + 指数平滑（τ=50ms），未锁定指针时回退用左键拖拽环视。
-    const inDx = input.locked ? input.dx : (input.drag.active ? input.drag.dx : 0);
-    const inDy = input.locked ? input.dy : (input.drag.active ? input.drag.dy : 0);
-    const sm = 1 - Math.exp(-dt / WALK_SMOOTH_TAU);
+    // R9-1a：帧级总量钳制（一帧多事件累计无上限是尖峰根源）；
+    // 卡顿帧平滑系数按 dt≤33ms 计，积压输入分多帧释放而非一帧倾泻
+    let inDx = input.locked ? input.dx : (input.drag.active ? input.drag.dx : 0);
+    let inDy = input.locked ? input.dy : (input.drag.active ? input.drag.dy : 0);
+    inDx = Math.max(-WALK_FRAME_CLAMP, Math.min(WALK_FRAME_CLAMP, inDx));
+    inDy = Math.max(-WALK_FRAME_CLAMP, Math.min(WALK_FRAME_CLAMP, inDy));
+    const sm = 1 - Math.exp(-Math.min(dt, 0.033) / WALK_SMOOTH_TAU);
     w.smx += (inDx - w.smx) * sm;
     w.smy += (inDy - w.smy) * sm;
     w.yaw += w.smx * WALK_SENS;
@@ -290,13 +310,20 @@ export class Ship {
     if (input.down('KeyS')) move.sub(fwd);
     if (input.down('KeyD')) move.add(right);
     if (input.down('KeyA')) move.sub(right);
-    const speed = (input.down('ShiftLeft') ? 0.009 : 0.003); // 9 / 3 m/s
+    // 水中（R9-2b）：浮力抵消大部分重力，移动迟缓，下沉有终端速度，Space=向上游
+    const dirNow = w.localPos.clone().normalize();
+    const inWater = !!env.isWater?.(w.bodyId, dirNow) &&
+      r < phys.radiusKm + 0.001;
+    let speed = (input.down('ShiftLeft') ? 0.009 : 0.003); // 9 / 3 m/s
+    if (inWater) speed *= 0.45;
     if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed * dt);
     w.localPos.add(move);
 
     // 重力与跳跃（沿天顶）
-    if (input.tapped('Space') && w.grounded) { w.vAlt = 0.0042; w.grounded = false; } // 4.2 m/s
-    w.vAlt -= g * dt;
+    if (input.tapped('Space') && w.grounded) { w.vAlt = inWater ? 0.0024 : 0.0042; w.grounded = false; }
+    if (inWater && input.down('Space')) w.vAlt += g * 0.5 * dt; // 持续踩水上浮
+    w.vAlt -= (inWater ? g * 0.12 : g) * dt;
+    if (inWater) w.vAlt = Math.max(w.vAlt, -0.0025); // 水中终端下沉速度 2.5 m/s
     w.localPos.addScaledVector(up, w.vAlt * dt);
 
     // 地面碰撞（地形高度）

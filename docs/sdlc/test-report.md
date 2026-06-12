@@ -166,3 +166,26 @@ flowchart LR
 - 回归：repro-r7 6/6（#6 指针锚定断言按需求修订移除）、probe-r7 全过（自动登陆/起飞/木星入气/uBoost 复位）、smoke 全流程 0 错误、npm test 33/33、build 608.73 kB（gzip 173.30 kB）。
 
 **复现验证结论**：同一脚本修复前 FAIL → 修复后 PASS ✅。**回归结论**：着陆流程、可登陆行星大气、星历精度均无影响 ✅。
+
+---
+
+# R9 测试报告（2026-06-12）
+
+环境：Windows 11 / Node v24 / three 0.165 / Puppeteer SwiftShader。
+
+| 套件 | 结果 |
+|------|------|
+| tools/repro-r9.mjs | **11/11**（修复前 6 FAIL → 修复后全过） |
+| tools/repro-r7.mjs | 6/6（回归） |
+| tools/repro-r8.mjs | 5/5（回归） |
+| npm test | 33/33 |
+| tools/probe-r9.mjs | 全过（水下浸没→海床行走→惯性模式连续性→木卫一绕转），0 控制台错误 |
+| tools/probe-r7.mjs | 全过（火星自动登陆/起飞/木星入气/uBoost 复位），0 控制台错误 |
+| tools/smoke-test.mjs | 全流程通过，0 控制台错误 |
+| npm run build | 614.56 kB（gzip 175.31 kB） |
+
+截图存证：`docs/sdlc/screenshots/r9-01..06`（水下/海床行走/火卫一土豆/冥王星双半球含心形/惯性木星系）。
+
+视检确认：冥王星斯普特尼克心形平原清晰；火卫一椭长体+撞击坑；远观火卫一无地形色块（激活半径修正后）。
+
+**结论：全部通过。**

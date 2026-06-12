@@ -14,9 +14,13 @@ const _vm = new THREE.Vector3(); // minDist/groundRadius/光标锚点专用（�
 const _va = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
+const _qf = new THREE.Quaternion(); // frame/handover 专用（不与 _q 串用）
+const IDENTITY_Q = new THREE.Quaternion();
 
 const EYE_KM = 0.0017;          // 行走视高 1.7 m（与 ship.js 一致）
 const AUTO_TILT_MAX = 80 * DEG; // 近地自动倾斜上限（俯视 → 近地平，GE/NMS 着陆观感）
+// 远离上限：121 AU 日球层顶完整入画（58° 视场 → ~250 AU），不再无限远离（R9-1c）
+const MAX_DIST = 3.74e10;
 
 const smoother = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 
@@ -39,6 +43,23 @@ export class OrbitCamera {
     this._dolly = 1;      // 视线推拉模式的待消耗缩放比例（倾斜/平移时滚轮沿视线接近屏幕中心）
     this._dollyDepth = null; // 推拉参考深度（绝对值，随推进递减；位移吸收进 panOffset 后
                              // 锚点会随相机同移，深度必须独立跟踪，否则匀速冲越不收敛）
+    this._dollyTargetId = null; // 推拉手势锁定的目标天体（整个手势绝不换靶，R9-1b）
+    this.inertial = false; // 惯性观察模式：相机不随天体自转——观赏卫星/行星绕转（R9-1e）
+    this._streak = 0;      // 滚轮连滚加速度（轻拨精细 → 连滚加速，R9-1c）
+    this._streakIdle = 0;
+    this._zoomHold = 0;    // PageUp/Down 按住渐加速
+  }
+
+  /** 锚定参考系：体固（默认，随自转）或惯性（观赏绕转） */
+  frameQuat(f) { return this.inertial ? IDENTITY_Q : f.quat; }
+
+  /** 切换惯性观察模式：以当前位姿无缝重新锚定（位置/视向严格连续） */
+  setInertial(on, env) {
+    if (this.inertial === on) return;
+    const pos = Float64Array.from(this.posKm);
+    _qf.copy(this.quat);
+    this.inertial = on;
+    this.adoptPosition(env, this.focusId, pos, _qf);
   }
 
   /** env.get(id) -> { posKm:Float64Array, radiusKm, quat:THREE.Quaternion(体固→世界), viewDist? } */
@@ -54,7 +75,7 @@ export class OrbitCamera {
   alignSunward(env) {
     const f = env.get(this.focusId);
     _v1.set(-f.posKm[0], -f.posKm[1], -f.posKm[2]).normalize(); // 指向太阳
-    _q.copy(f.quat).invert();
+    _q.copy(this.frameQuat(f)).invert();
     _v1.applyQuaternion(_q); // → 体固系
     this.lat = Math.asin(THREE.MathUtils.clamp(_v1.y, -1, 1)) * 0.6;
     this.lon = Math.atan2(-_v1.z, _v1.x);
@@ -72,7 +93,7 @@ export class OrbitCamera {
     );
     const d = _v1.length();
     _v2.copy(_v1).normalize(); // 径向（世界系），姿态反解用
-    _q.copy(f.quat).invert();
+    _q.copy(this.frameQuat(f)).invert();
     _v1.applyQuaternion(_q).normalize();
     this.lat = Math.asin(THREE.MathUtils.clamp(_v1.y, -1, 1));
     this.lon = Math.atan2(-_v1.z, _v1.x);
@@ -84,6 +105,7 @@ export class OrbitCamera {
     this.flight = null;
     this._dolly = 1;
     this._dollyDepth = null;
+    this._dollyTargetId = null;
     if (quat) this.adoptOrientation(f, _v2, quat);
   }
 
@@ -101,8 +123,8 @@ export class OrbitCamera {
     }
     if (p.lengthSq() < 1e-10) { this.heading = 0; this.tilt = 0; return; }
     p.normalize();
-    // 体固北极在地平面的投影 np 与东向 ep
-    const np = _vm.set(0, 1, 0).applyQuaternion(f.quat);
+    // 锚定系北极在地平面的投影 np 与东向 ep
+    const np = _vm.set(0, 1, 0).applyQuaternion(this.frameQuat(f));
     np.addScaledVector(u, -np.dot(u));
     if (np.lengthSq() < 1e-10) { this.heading = 0; this.tilt = tiltTotal - this._autoTilt; return; }
     np.normalize();
@@ -118,6 +140,8 @@ export class OrbitCamera {
     if (!f.groundRadius) return f.radiusKm;
     const cl = Math.cos(this.lat);
     _vm.set(cl * Math.cos(this.lon), Math.sin(this.lat), -cl * Math.sin(this.lon));
+    // 惯性模式下 lat/lon 在惯性系：转为体固系再查地形（地形高度场是体固的）
+    if (this.inertial) _vm.applyQuaternion(_qf.copy(f.quat).invert());
     return f.groundRadius(_vm);
   }
 
@@ -200,7 +224,7 @@ export class OrbitCamera {
       this.updateFlight(dt, env);
       return;
     }
-    const f = env.get(this.focusId);
+    let f = env.get(this.focusId);
     const drag = input.drag;
 
     // ---- Google Earth 键盘方案 ----
@@ -256,8 +280,8 @@ export class OrbitCamera {
       _v2.set(1, 0, 0).applyQuaternion(this.quat);  // 相机右
       _v3.set(0, 1, 0).applyQuaternion(this.quat);  // 相机上
       _v2.multiplyScalar(-input.pan.dx * k).addScaledVector(_v3, input.pan.dy * k);
-      _q.copy(f.quat).invert();
-      _v2.applyQuaternion(_q); // 世界 → 体固系
+      _q.copy(this.frameQuat(f)).invert();
+      _v2.applyQuaternion(_q); // 世界 → 锚定系
       this.panOffset.add(_v2);
       const maxPan = this.dist * 2 + f.radiusKm * 2;
       if (this.panOffset.length() > maxPan) this.panOffset.setLength(maxPan);
@@ -278,38 +302,88 @@ export class OrbitCamera {
     this.vLon *= damp;
     this.vLat *= damp;
 
-    // ---- 缩放（R8 #2）：滚轮与 PageUp/Down 统一为"以屏幕中心接近/远离" ----
-    // 本帧缩放比例（<1 拉近）；滚轮按帧钳制防高速滚轮的离散跳跃
-    let zoomMul = 1;
-    if (zoomK !== 0) zoomMul *= Math.exp(zoomK * 1.4 * dt);
+    // ---- 缩放（R8 #2 / R9-1b/c/d）：滚轮与 PageUp/Down 统一为"以屏幕中心接近/远离" ----
+    // 灵敏度由低到高（R9-1c）：轻拨精细（×1.12/格），连滚渐加速（最高 ×1.38/格）；
+    // PageUp/Down 按住时间越长速率越高（0.55 → 2.2 /s）
     if (input.wheel !== 0) {
-      zoomMul *= Math.pow(1.25, THREE.MathUtils.clamp(input.wheel, -3, 3));
+      this._streak = Math.min(this._streak + Math.abs(input.wheel) * 0.18, 1);
+      this._streakIdle = 0;
+    } else {
+      this._streakIdle += dt;
+      if (this._streakIdle > 0.35) this._streak = Math.max(this._streak - dt * 2, 0);
+    }
+    this._zoomHold = zoomK !== 0 ? Math.min(this._zoomHold + dt, 2.5) : 0;
+    let zoomMul = 1;
+    if (zoomK !== 0) zoomMul *= Math.exp(zoomK * (0.55 + this._zoomHold * 0.65) * dt);
+    if (input.wheel !== 0) {
+      zoomMul *= Math.pow(1.12 + 0.26 * this._streak, THREE.MathUtils.clamp(input.wheel, -3, 3));
+    }
+
+    // 焦点交接（R9-1d）：拉近手势起点若屏幕中心命中其他天体 → 立即把焦点交给它。
+    // 此后所有语义（拖拽灵敏度、minDist、自动倾斜、自动登陆链路）都绑定新焦点 ——
+    // 右键平移 + 滚轮即可一路接近并登陆任何天体；也根治了"绕旧锚点猛甩"类跳跃（R9-1b）。
+    const offAxis0 = this.panOffset.lengthSq() > 0 || Math.abs(this.tilt) > 0.02;
+    if (zoomMul < 1 && this._dolly === 1 && offAxis0 && env.centerHit) {
+      _va.set(0, 0, -1).applyQuaternion(this.quat);
+      const hit = env.centerHit(this.posKm, _va);
+      if (hit && hit.id !== this.focusId) {
+        this.adoptPosition(env, hit.id, this.posKm, _qf.copy(this.quat));
+        f = env.get(this.focusId);
+      }
     }
 
     // 无倾斜无平移：视线轴 = 焦点径向 → 经典径向缩放（着陆流程依赖的语义，保持不变）。
     // 有倾斜或平移：视线不再指向轨道锚点，径向缩放会让屏幕中心目标甩偏/跳跃 ——
-    // 改为沿视线推拉（dolly），目标深度优先取屏幕中心命中的天体（env.centerDepth）。
+    // 改为沿视线推拉（dolly）；目标在手势起点锁定一次，整个手势绝不换靶（R9-1b：
+    // 旧实现每帧按屏幕中心实时重定目标，视线漂移扫过近处天体时参考深度突变 → 瞬间猛冲）。
     const offAxis = this.panOffset.lengthSq() > 0 || Math.abs(this.tilt) > 0.02;
     if (!offAxis) {
       this._dolly = 1;
+      this._dollyTargetId = null;
       this.distTarget *= zoomMul;
-      this.distTarget = THREE.MathUtils.clamp(this.distTarget, this.minDist(f), 7.5e10);
+      this.distTarget = THREE.MathUtils.clamp(this.distTarget, this.minDist(f), MAX_DIST);
       this.dist += (this.distTarget - this.dist) * Math.min(dt * 7, 1);
     } else {
       this.distTarget = this.dist; // 冻结径向缩放通道
       if (zoomMul !== 1) {
-        if (this._dolly === 1) this._dollyDepth = null; // 新手势：重新捕获参考深度
+        if (this._dolly === 1) {
+          // 新手势：捕获并锁定目标（命中天体优先，否则锚点投影）
+          this._dollyDepth = null;
+          this._dollyTargetId = null;
+          _va.set(0, 0, -1).applyQuaternion(this.quat);
+          const hit = env.centerHit?.(this.posKm, _va) ?? null;
+          if (hit) {
+            this._dollyTargetId = hit.id ?? null;
+            this._dollyDepth = hit.depth;
+          } else {
+            const d = env.centerDepth?.(this.posKm, _va) ?? null;
+            if (d != null) this._dollyDepth = d;
+          }
+        }
         this._dolly *= zoomMul;
       }
       if (Math.abs(this._dolly - 1) > 1e-5) {
-        // 视线方向与屏幕中心目标深度：优先实时命中的天体（随几何每帧刷新），
-        // 否则手势开始时一次性捕获锚点投影并随推进递减
         _va.set(0, 0, -1).applyQuaternion(this.quat);
-        const live = env.centerDepth?.(this.posKm, _va) ?? null;
-        if (live != null) {
-          this._dollyDepth = live;
-        } else if (this._dollyDepth == null) {
-          _v1.copy(this.panOffset).applyQuaternion(f.quat);
+        // 深度刷新：只对手势锁定的那一个目标做射线求交（绝不换靶）
+        if (this._dollyTargetId && env.get) {
+          const tb = env.get(this._dollyTargetId);
+          if (tb) {
+            const margin = tb.minDistKm ?? tb.radiusKm * 1.004 + 1;
+            _v2.set(
+              tb.posKm[0] - this.posKm[0], tb.posKm[1] - this.posKm[1], tb.posKm[2] - this.posKm[2]
+            );
+            const b = _v2.dot(_va);
+            if (b > 0) {
+              const det = b * b - (_v2.lengthSq() - margin * margin);
+              if (det > 0) {
+                const tHit = b - Math.sqrt(det);
+                if (tHit > 1e-6) this._dollyDepth = tHit;
+              }
+            }
+          }
+        }
+        if (this._dollyDepth == null) {
+          _v1.copy(this.panOffset).applyQuaternion(this.frameQuat(f));
           _v1.set(
             f.posKm[0] + _v1.x - this.posKm[0],
             f.posKm[1] + _v1.y - this.posKm[1],
@@ -341,6 +415,11 @@ export class OrbitCamera {
               if (tHit > 0 && delta > tHit) delta = Math.max(tHit - 1e-6, 0);
             }
           }
+          // 远离上限：日心距不得超过日球层全景距离（R9-1c）
+          if (delta < 0) {
+            const rSun = Math.hypot(this.posKm[0], this.posKm[1], this.posKm[2]);
+            if (rSun > MAX_DIST) delta = 0;
+          }
           this.posKm[0] += _va.x * delta;
           this.posKm[1] += _va.y * delta;
           this.posKm[2] += _va.z * delta;
@@ -350,9 +429,9 @@ export class OrbitCamera {
           );
           const cl = Math.cos(this.lat);
           _v3.set(cl * Math.cos(this.lon), Math.sin(this.lat), -cl * Math.sin(this.lon))
-            .applyQuaternion(f.quat); // 径向（世界）
+            .applyQuaternion(this.frameQuat(f)); // 径向（世界）
           _v1.addScaledVector(_v3, -this.dist); // 锚点偏移（世界）
-          _q.copy(f.quat).invert();
+          _q.copy(this.frameQuat(f)).invert();
           this.panOffset.copy(_v1.applyQuaternion(_q));
           // 参考深度随推进递减；剩余比例 = 绝对目标 / 新深度
           this._dollyDepth = depth - delta;
@@ -361,6 +440,7 @@ export class OrbitCamera {
         }
       } else {
         this._dollyDepth = null;
+        this._dollyTargetId = null;
       }
     }
 
@@ -369,13 +449,14 @@ export class OrbitCamera {
 
   compute(env) {
     const f = env.get(this.focusId);
-    // 体固系球坐标 → 世界（环绕中心 = 天体中心 + 平移偏置）
+    const fq = this.frameQuat(f); // 体固（默认）或惯性锚定系（R9-1e）
+    // 锚定系球坐标 → 世界（环绕中心 = 天体中心 + 平移偏置）
     const cl = Math.cos(this.lat);
     _v1.set(cl * Math.cos(this.lon), Math.sin(this.lat), -cl * Math.sin(this.lon))
-      .applyQuaternion(f.quat);
+      .applyQuaternion(fq);
     let ox = 0, oy = 0, oz = 0;
     if (this.panOffset.lengthSq() > 0) {
-      _v3.copy(this.panOffset).applyQuaternion(f.quat);
+      _v3.copy(this.panOffset).applyQuaternion(fq);
       ox = _v3.x; oy = _v3.y; oz = _v3.z;
     }
     this.posKm[0] = f.posKm[0] + ox + _v1.x * this.dist;
@@ -391,8 +472,8 @@ export class OrbitCamera {
       this.posKm[1] = f.posKm[1] + dcy * push;
       this.posKm[2] = f.posKm[2] + dcz * push;
     }
-    // 朝向：看向天体中心；上方向 = 天体北极绕径向转 heading（GE 航向）
-    _v2.set(0, 1, 0).applyQuaternion(f.quat);
+    // 朝向：看向天体中心；上方向 = 锚定系北极绕径向转 heading（GE 航向）
+    _v2.set(0, 1, 0).applyQuaternion(fq);
     if (this.heading !== 0) _v2.applyAxisAngle(_v1, this.heading);
     _v3.copy(_v1).negate(); // 视线
     _m.lookAt(new THREE.Vector3(), _v3, _v2);

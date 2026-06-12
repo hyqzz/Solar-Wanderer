@@ -14,6 +14,22 @@ import { createAtmosphere } from './atmosphere.js';
 import { createRings } from './rings.js';
 import { createSun } from './sun.js';
 import { proceduralMap, proceduralBands } from './proceduralTextures.js';
+import { HeightField } from './terrain.js';
+
+/** 不规则小天体（土豆状）：用与行走碰撞同源的 HeightField 变形球网格
+ * （视觉=碰撞严格一致；三轴椭球 + 噪声起伏，R9-2c 火卫一/二等） */
+function deformIrregular(mesh, id, phys) {
+  const hf = new HeightField(id, phys);
+  const pos = mesh.geometry.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    const h = hf.height(v);
+    pos.setXYZ(i, v.x * h, v.y * h, v.z * h);
+  }
+  pos.needsUpdate = true;
+  mesh.geometry.computeVertexNormals();
+}
 
 const ORBIT_COLORS = {
   mercury: 0x8a8a8a, venus: 0xc9a06a, earth: 0x4a90d9, mars: 0xd96a4a,
@@ -190,6 +206,7 @@ export async function buildSolarSystem(scene, world, onProgress) {
     });
     const big = phys.radiusKm > 1000;
     const mesh = new THREE.Mesh(sphereGeo(phys.radiusKm, big), mat);
+    if (phys.shape?.dims) deformIrregular(mesh, id, fullPhys);
     group.add(mesh);
 
     const entry = {

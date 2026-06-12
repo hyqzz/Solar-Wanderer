@@ -47,11 +47,35 @@ export class HeightField {
     return rim * rim * 0.25 - pit * pit * 0.35;
   }
 
+  /** 基准半径：默认正球；shape.dims=[X,Y,Z]（km 全径）时为三轴椭球
+   * （火卫一等土豆状不规则体，+X 指向母星 / +Y 北极，R9-2c）。 */
+  baseRadius(dir) {
+    const s = this.phys.shape?.dims;
+    if (!s) return this.phys.radiusKm;
+    const a = s[0] / 2, b = s[1] / 2, c = s[2] / 2;
+    const q = (dir.x * dir.x) / (a * a) + (dir.y * dir.y) / (b * b) + (dir.z * dir.z) / (c * c);
+    return 1 / Math.sqrt(Math.max(q, 1e-12));
+  }
+
+  /** 海床半径（海面之下 0.7–4 km 起伏的大陆架/深海盆，R9-2b 水下地形） */
+  oceanFloor(dir) {
+    const n = this.noise;
+    const d = 1.0 + 2.4 * (0.5 + 0.5 * n.fbm(dir.x * 22 + 11.1, dir.y * 22, dir.z * 22, 3))
+      + 0.5 * n.fbm(dir.x * 240, dir.y * 240, dir.z * 240, 2);
+    return this.phys.radiusKm + 0.001 - Math.max(d, 0.3);
+  }
+
+  /** 固体表面半径：海洋处返回海床（行走碰撞/相机下限用——水不是固体，可潜入） */
+  heightSolid(dir) {
+    if (this.sp.ocean && this.isOcean(dir)) return this.oceanFloor(dir);
+    return this.height(dir);
+  }
+
   /** dir: 网格本地系单位向量（+Y=北极, +X=本初子午线）。返回该方向的表面半径 km */
   height(dir) {
-    const R = this.phys.radiusKm;
+    const R = this.baseRadius(dir);
     const sp = this.sp;
-    if (sp.ocean && this.isOcean(dir)) return R + 0.001;
+    if (sp.ocean && this.isOcean(dir)) return this.phys.radiusKm + 0.001;
     const n = this.noise;
     // 大尺度构造（高原/盆地）
     let h = 0.42 * n.fbm(dir.x * 1.6, dir.y * 1.6, dir.z * 1.6, 4);
@@ -136,21 +160,35 @@ export class HeightField {
 }
 
 
-/** 地形材质：StandardMaterial + 片元级三尺度细节噪声注入（近看不糊）。
- * 噪声坐标 = 顶点位置 − 噪声原点（玩家附近的格点）：天体半径达数千 km，
- * 直接用对象坐标 ×5200 会超出 float32 小数精度产生乱纹。 */
-function makeTerrainMaterial(noiseOriginU) {
+/** 地形材质（每 LOD 级一份）：StandardMaterial + 片元级三尺度细节噪声注入（近看不糊）。
+ * 顶点坐标为"级原点相对"（R9-2a：绝对体本地坐标模 ≈ R，fp32 在 6400 km 模长下
+ * 量化 0.5 m，与 1.7 m 眼高同量级 → 登陆闪烁；改存小坐标后亚毫米精确）。
+ * 噪声坐标 = 级原点相对坐标 + uPatchRel（级原点 − 噪声原点，CPU 双精度算好），
+ * 全程小数值，跨级噪声严格连续。水面顶点（attribute water=1）低粗糙度 + 时变波纹法线。 */
+function makeTerrainMaterial(uPatchRel, uTime, polyUnits) {
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true, roughness: 0.95, metalness: 0.0, fog: true,
+    side: THREE.DoubleSide, // 水下仰望可见海面（R9-2b）
+    polygonOffset: polyUnits > 0, polygonOffsetFactor: polyUnits > 0 ? 1 : 0,
+    polygonOffsetUnits: polyUnits, // 粗级后推，消除 LOD 环带重叠区 z-fight（R9-2a）
   });
   mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uNoiseOrigin = noiseOriginU;
+    shader.uniforms.uPatchRel = uPatchRel;
+    shader.uniforms.uTime = uTime;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uNoiseOrigin;\nvarying vec3 vObjPos;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjPos = position - uNoiseOrigin;');
+      .replace('#include <common>', `#include <common>
+        uniform vec3 uPatchRel;
+        attribute float water;
+        varying float vWater;
+        varying vec3 vObjPos;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vObjPos = position + uPatchRel;
+        vWater = water;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', /* glsl */ `#include <common>
         varying vec3 vObjPos;
+        varying float vWater;
+        uniform float uTime;
         float thash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         float tnoise(vec3 p) {
           vec3 i = floor(p), f = fract(p);
@@ -171,14 +209,20 @@ function makeTerrainMaterial(noiseOriginU) {
           float d3 = tnoise(vObjPos * 5200.0) * f3;
           float dm = 0.78 + 0.46 * (d1 * 0.45 + d2 * 0.33 + d3 * 0.22)
                    + (1.0 - f2) * 0.075 + (1.0 - f3) * 0.05; // 均值补偿，避免远处变暗
-          diffuseColor.rgb *= dm;
+          diffuseColor.rgb *= mix(dm, 1.0, vWater); // 水面无岩屑细节
         }`)
+      .replace('#include <roughnessmap_fragment>', /* glsl */ `#include <roughnessmap_fragment>
+        roughnessFactor = mix(roughnessFactor, 0.12, vWater); // 水面镜面反射（太阳波光）`)
       .replace('#include <normal_fragment_begin>', /* glsl */ `#include <normal_fragment_begin>
         {
-          // 程序化凹凸（屏幕导数法，~米级与~分米级粗糙起伏的真实光照响应；随距离淡出）
+          // 程序化凹凸（屏幕导数法）：岩面粗糙起伏；水面 = 双向行进波叠加（时变波纹）
           float vdb = length(vViewPosition);
           float bf = 1.0 - smoothstep(0.1, 1.2, vdb);
-          float hb = (tnoise(vObjPos * 420.0) * 0.68 + tnoise(vObjPos * 5200.0) * 0.32) * 0.0016 * bf;
+          float hRock = (tnoise(vObjPos * 420.0) * 0.68 + tnoise(vObjPos * 5200.0) * 0.32) * 0.0016 * bf;
+          float wf = 1.0 - smoothstep(0.05, 14.0, vdb);
+          float hWave = (tnoise(vObjPos * 900.0 + vec3(uTime * 0.06, 0.0, uTime * 0.043)) * 0.6
+                       + tnoise(vObjPos * 3200.0 - vec3(uTime * 0.11, uTime * 0.05, 0.0)) * 0.4) * 0.0009 * wf;
+          float hb = mix(hRock, hWave, vWater);
           vec3 sX = dFdx(-vViewPosition);
           vec3 sY = dFdy(-vViewPosition);
           vec3 r1 = cross(sY, normal);
@@ -232,10 +276,12 @@ class RockField {
     return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
   }
 
-  rebuild(anchorDir) {
+  /** origin: 最细级地形原点（实例坐标存原点相对值，与地形同源消 fp32 量化闪烁，R9-2a） */
+  rebuild(anchorDir, origin) {
     const R = this.field.phys.radiusKm;
     const CELL = 0.022; // 22 m 格
     const RANGE = 0.33; // 330 m 半径内散布
+    this.mesh.position.copy(origin);
     const u = anchorDir.clone().normalize();
     const east = Math.abs(u.y) > 0.999
       ? new THREE.Vector3(1, 0, 0)
@@ -261,7 +307,7 @@ class RockField {
         if (this.field.sp.ocean && this.field.isOcean(dir)) continue; // 海面无岩石
         const h = this.field.height(dir);
         const scale = 0.0004 + r1 * r1 * 0.002; // 0.4 m – 2.4 m
-        this._p.copy(dir).multiplyScalar(h + scale * 0.3);
+        this._p.copy(dir).multiplyScalar(h + scale * 0.3).sub(origin);
         this._q.setFromAxisAngle(dir, r2 * Math.PI * 2);
         this._s.set(scale * (0.7 + r3 * 0.7), scale, scale * (0.7 + r2 * 0.7));
         this._m.compose(this._p, this._q, this._s);
@@ -285,21 +331,22 @@ export class TerrainPatchSet {
     this.grid = QUALITY.terrainGrid; // 画质分档（R7 #8）
     const GRID = this.grid;
     const R = field.phys.radiusKm;
-    // 各级半边长（km）：最内 0.1km → 格距 ~3m（行走尺度）
-    this.extents = [0.1, 0.5, 2.5, 12, 60, 280].filter((e) => e < R * 0.7);
+    // 各级半边长（km）：最内 0.03km → 格距 ~1m（R9-2a 行走尺度再加密一级）
+    this.extents = [0.03, 0.12, 0.5, 2.5, 12, 60, 280].filter((e) => e < R * 0.7);
     if (this.extents.length === 0) this.extents = [R * 0.3];
     this.group = new THREE.Group();
     this.levels = [];
     this.anchorDir = new THREE.Vector3(0, 1, 0);
+    this.uTime = { value: 0 };
     // 噪声原点：跟随玩家、每 2km 重新吸附（保证片元噪声参数始终小数精度充足）
     this.noiseOriginU = { value: new THREE.Vector3(1e9, 0, 0) };
-    const mat = makeTerrainMaterial(this.noiseOriginU);
     for (let li = 0; li < this.extents.length; li++) {
       const geo = new THREE.BufferGeometry();
       const verts = (GRID + 1) * (GRID + 1);
       geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
       geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
       geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
+      geo.setAttribute('water', new THREE.BufferAttribute(new Float32Array(verts), 1));
       const idx = [];
       const hole = li === 0 ? 0 : (this.extents[li - 1] / this.extents[li]) * GRID * 0.5 * 0.92;
       for (let y = 0; y < GRID; y++) {
@@ -311,26 +358,34 @@ export class TerrainPatchSet {
         }
       }
       geo.setIndex(idx);
+      // 级原点相对几何（R9-2a 修闪烁）：每级独立原点 + 独立材质（粗级 polygonOffset 后推）
+      const uPatchRel = { value: new THREE.Vector3() };
+      const mat = makeTerrainMaterial(uPatchRel, this.uTime, li * 2);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.frustumCulled = false;
       this.group.add(mesh);
-      this.levels.push({ mesh, geo, extent: this.extents[li], builtAnchor: new THREE.Vector3(1e9, 0, 0) });
+      this.levels.push({
+        mesh, geo, mat, uPatchRel, extent: this.extents[li],
+        origin: new THREE.Vector3(), builtAnchor: new THREE.Vector3(1e9, 0, 0),
+      });
     }
     // 岩石散布层
     this.rocks = new RockField(field);
     this.group.add(this.rocks.mesh);
   }
 
-  /** dirLocal: 相机在天体本地系中的方向（单位）。
+  /** dirLocal: 相机在天体本地系中的方向（单位）。timeSec: 水面波纹时基。
    * 每帧最多重建 1 级（细级优先）——旧实现一帧全量重建会卡顿跳帧，
    * 破坏滚轮降落的连续感（R7 #1）。 */
-  update(dirLocal) {
+  update(dirLocal, timeSec = 0) {
     const R = this.field.phys.radiusKm;
+    this.uTime.value = timeSec;
     // 噪声原点吸附（>2km 偏移时跟随，细节噪声仅 90m 内可见，重排不可察觉）
     const px = dirLocal.x * R, py = dirLocal.y * R, pz = dirLocal.z * R;
     const o = this.noiseOriginU.value;
     if (Math.hypot(px - o.x, py - o.y, pz - o.z) > 2) {
       o.set(Math.round(px), Math.round(py), Math.round(pz));
+      for (const lv of this.levels) lv.uPatchRel.value.copy(lv.origin).sub(o);
     }
     for (let li = 0; li < this.levels.length; li++) {
       const lv = this.levels[li];
@@ -338,7 +393,7 @@ export class TerrainPatchSet {
       if (moveKm > lv.extent * 0.25) {
         this.build(lv, dirLocal);
         lv.builtAnchor.copy(dirLocal);
-        if (li === 0) this.rocks.rebuild(dirLocal);
+        if (li === 0) this.rocks.rebuild(dirLocal, lv.origin);
         break; // 分帧：其余级下一帧再建
       }
     }
@@ -352,12 +407,21 @@ export class TerrainPatchSet {
       ? new THREE.Vector3(1, 0, 0)
       : new THREE.Vector3(0, 1, 0).cross(u).normalize();
     const north = new THREE.Vector3().crossVectors(u, east);
+    // 级原点：锚点地表（fround 取 fp32 精确可表示值 → mesh.position 无量化误差），
+    // 顶点存原点相对坐标（模 ≤ 2×extent，亚毫米精度，R9-2a 修闪烁根因）
+    lv.origin.set(
+      Math.fround(u.x * R), Math.fround(u.y * R), Math.fround(u.z * R)
+    );
+    lv.mesh.position.copy(lv.origin);
+    lv.uPatchRel.value.copy(lv.origin).sub(this.noiseOriginU.value);
     const pos = lv.geo.attributes.position.array;
     const col = lv.geo.attributes.color.array;
+    const wat = lv.geo.attributes.water.array;
     const dir = new THREE.Vector3();
     const c = new THREE.Color();
     const dirs = new Float32Array((GRID + 1) * (GRID + 1) * 3);
     const hs = new Float64Array((GRID + 1) * (GRID + 1));
+    const isO = this.field.sp.ocean;
     let k = 0;
     for (let y = 0; y <= GRID; y++) {
       for (let x = 0; x <= GRID; x++, k++) {
@@ -367,12 +431,14 @@ export class TerrainPatchSet {
         const h = this.field.height(dir);
         hs[k] = h;
         dirs[k * 3] = dir.x; dirs[k * 3 + 1] = dir.y; dirs[k * 3 + 2] = dir.z;
-        pos[k * 3] = dir.x * h;
-        pos[k * 3 + 1] = dir.y * h;
-        pos[k * 3 + 2] = dir.z * h;
+        pos[k * 3] = dir.x * h - lv.origin.x;
+        pos[k * 3 + 1] = dir.y * h - lv.origin.y;
+        pos[k * 3 + 2] = dir.z * h - lv.origin.z;
+        wat[k] = isO && this.field.isOcean(dir) ? 1 : 0;
       }
     }
     lv.geo.attributes.position.needsUpdate = true;
+    lv.geo.attributes.water.needsUpdate = true;
     lv.geo.computeVertexNormals();
     lv.geo.attributes.normal.needsUpdate = true;
     // 第二遍：用法线坡度上色（陡坡岩壁化）
@@ -415,15 +481,25 @@ export class TerrainManager {
     return f;
   }
 
-  /** 行走碰撞用 */
+  /** 行走碰撞/相机下限用：固体表面（海洋处为海床——水可潜入，R9-2b） */
   heightAt(bodyId, dirLocal) {
-    return this.field(bodyId).height(dirLocal);
+    return this.field(bodyId).heightSolid(dirLocal);
   }
 
-  update(nearest, camLocalDir) {
-    const wantId = nearest && nearest.landable &&
-      nearest.distSurface < Math.max(60, this.physOf(nearest.id).radiusKm * 0.06)
-      ? nearest.id : null;
+  /** 水面判定（行走浮力/水下环境用） */
+  isWater(bodyId, dirLocal) {
+    const f = this.field(bodyId);
+    return !!(f.sp.ocean && f.isOcean(dirLocal));
+  }
+
+  update(nearest, camLocalDir, timeSec = 0) {
+    // 激活半径：小天体按半径比例（火卫一在数十 km 外不该看到地形补丁色块，R9-2c）
+    let wantId = null;
+    if (nearest && nearest.landable) {
+      const R = this.physOf(nearest.id).radiusKm;
+      const actDist = R < 100 ? Math.max(8, R * 0.6) : Math.max(60, R * 0.06);
+      if (nearest.distSurface < actDist) wantId = nearest.id;
+    }
 
     if (this.active && this.active.bodyId !== wantId) {
       this.active.patches.group.removeFromParent();
@@ -435,6 +511,6 @@ export class TerrainManager {
       this.meshOf(wantId).add(patches.group);
       this.active = { bodyId: wantId, patches };
     }
-    if (this.active && camLocalDir) this.active.patches.update(camLocalDir);
+    if (this.active && camLocalDir) this.active.patches.update(camLocalDir, timeSec);
   }
 }
