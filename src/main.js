@@ -1,0 +1,604 @@
+// 主程序：Google Earth 范式 × 整个日球层。
+// 三种模式：
+//   orbit(探索, 默认) — GE 式环绕相机：拖拽旋转/滚轮缩放/搜索/双击前往，焦点恒居中
+//   fly(自由飞行)     — 指针锁定 6DOF 飞船（F 切换）
+//   walk(地表行走)    — 近地表按 G 登陆，真实重力
+// 仿真时钟（系统时间起步，可加速/倒退）驱动星历层 → 浮动原点世界 → HDR 渲染。
+
+import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+
+import { SimClock } from './astro/time.js';
+import { surfaceGravity } from './astro/bodies.js';
+import { World } from './engine/floating.js';
+import { Ship, Input } from './engine/ship.js';
+import { OrbitCamera } from './engine/orbitCamera.js';
+import { buildSolarSystem } from './scene/builder.js';
+import { createStarfield, BRIGHT_STARS, SKY_R } from './scene/starfield.js';
+import { createBelts } from './scene/belts.js';
+import { createComets } from './scene/comets.js';
+import { createHeliosphere, VOYAGERS, voyagerPosition } from './scene/heliosphere.js';
+import { TerrainManager } from './scene/terrain.js';
+import { Labels } from './ui/labels.js';
+import { HUD, targetInfo } from './ui/hud.js';
+import { SearchUI } from './ui/search.js';
+import { eclToWorldArr, KM_PER_AU } from './config.js';
+import { initQuality, makeFpsGuard, QUALITY } from './engine/quality.js';
+
+const canvas = document.getElementById('app');
+// powerPreference: 多显卡系统由浏览器选高性能独显（R7 #8）
+const renderer = new THREE.WebGLRenderer({
+  canvas, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance',
+});
+initQuality(renderer); // 必须在 buildSolarSystem 之前（着色器步进/网格密度构建期固化）
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY.pixelRatio));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000000, 0); // 地形气溶胶透视（仅 fog:true 材质受影响）
+const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 5e-7, 8e10);
+scene.add(camera);
+const ambient = new THREE.AmbientLight(0x404858, 0.02);
+scene.add(ambient);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth / QUALITY.bloomDiv, window.innerHeight / QUALITY.bloomDiv),
+  0.38, 0.5, 1.1
+);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// 运行时帧率兜底：识别失败的弱 GPU 在持续低帧时一次性降档
+const fpsGuard = makeFpsGuard(renderer, () => {
+  for (const [, e] of builder.bodies) {
+    if (e.mat?.userData.uniforms?.uDetailMode) e.mat.userData.uniforms.uDetailMode.value = 0;
+  }
+  hud.tip('已自动降低画质以保证流畅运行');
+});
+
+const hud = new HUD();
+const world = new World();
+const input = new Input(window, canvas);
+const ship = new Ship();
+const orbitCam = new OrbitCamera();
+const simClock = new SimClock();
+const clock = new THREE.Clock();
+
+let builder, comets, labels, searchUI, sky, belts;
+let appMode = 'orbit'; // orbit | fly | walk
+const registry = new Map();
+let selectedId = null;
+const voyagerEntries = [];
+const boundaryEntries = [];
+const IDENTITY_Q = new THREE.Quaternion();
+
+init();
+
+async function init() {
+  builder = await buildSolarSystem(scene, world, (d, t) => hud.setLoading(d, t));
+
+  sky = createStarfield(builder.cache.get('milkyway.jpg'));
+  scene.add(sky.group); // 恒星视为无穷远：不注册浮动原点（零视差，物理正确）
+
+  // 带/尘光/日球层壳为日心结构：必须注册浮动原点，否则会错误地以相机为中心
+  belts = createBelts();
+  scene.add(belts);
+  world.register(new Float64Array(3), belts);
+  const helio = createHeliosphere();
+  scene.add(helio);
+  world.register(new Float64Array(3), helio);
+  comets = createComets(world);
+  for (const e of comets.entries) scene.add(e.group);
+
+  // 旅行者号
+  for (const vg of VOYAGERS) {
+    const group = new THREE.Group();
+    const posKm = new Float64Array(3);
+    world.register(posKm, group);
+    scene.add(group);
+    voyagerEntries.push({ vg, posKm, group });
+  }
+
+  // 日球层边界地标（可前往的"边界鼻尖"）
+  const DEG = Math.PI / 180;
+  const noseLon = 255.4 * DEG, noseLat = 5.1 * DEG;
+  const noseEcl = {
+    x: Math.cos(noseLat) * Math.cos(noseLon),
+    y: Math.cos(noseLat) * Math.sin(noseLon),
+    z: Math.sin(noseLat),
+  };
+  for (const [id, nameZh, nameEn, rAU, desc] of [
+    ['termshock', '终止激波（鼻尖）', 'Termination Shock', 90,
+      '太阳风从超音速骤降为亚音速的边界（约 90 AU）。旅行者 1 号于 2004 年穿越此处。'],
+    ['heliopause', '日球层顶（鼻尖）', 'Heliopause', 121,
+      '太阳风与星际介质压力平衡的边界——太阳系"势力范围"的尽头（约 121 AU）。穿过这里就是星际空间。'],
+  ]) {
+    const posKm = new Float64Array([0, 0, 0]);
+    const w = eclToWorldArr({ x: noseEcl.x * rAU * KM_PER_AU, y: noseEcl.y * rAU * KM_PER_AU, z: noseEcl.z * rAU * KM_PER_AU });
+    posKm[0] = w[0]; posKm[1] = w[1]; posKm[2] = w[2];
+    const group = new THREE.Group();
+    group.position.set(0, 0, 0);
+    world.register(posKm, group);
+    scene.add(group);
+    boundaryEntries.push({ id, nameZh, nameEn, desc, posKm, group, rAU });
+  }
+
+  buildRegistry();
+  setupLabels();
+  searchUI = new SearchUI(registry, (id) => flyTo(id), {
+    getOrbits: () => orbitLinesOn,
+    toggleOrbits: () => { orbitLinesOn = !orbitLinesOn; },
+  });
+  setupTerrainMgr();
+
+  // 初始：GE 式俯瞰地球（无需指针锁定）
+  builder.update(simClock.jdTT);
+  orbitCam.init(orbitEnv, 'earth', 4);
+  syncShipToOrbit();
+  select('earth');
+
+  document.getElementById('start-btn').addEventListener('click', () => hud.hideStart());
+  canvas.addEventListener('click', () => {
+    // fly/walk 需要指针锁定；orbit 模式自由光标
+    if ((appMode === 'fly' || appMode === 'walk') && !input.locked) canvas.requestPointerLock();
+    else if (input.locked && labels.aimedId) select(labels.aimedId);
+  });
+  input.onLockChange = (locked) => {
+    if (!locked && appMode === 'fly') switchToOrbit(); // Esc 解锁 → 回探索模式
+  };
+  window.addEventListener('resize', onResize);
+  hud.loadingDone();
+  window.__game = { ship, simClock, select, flyTo, orbitCam, builder, registry, input, terrainMgr, getMode: () => appMode };
+  renderer.setAnimationLoop(loop);
+}
+
+function buildRegistry() {
+  for (const [id, e] of builder.bodies) {
+    registry.set(id, {
+      nameZh: e.phys.nameZh, nameEn: e.phys.nameEn, phys: e.phys,
+      desc: e.phys.desc, parentId: e.parentId,
+      kind: id === 'sun' ? 'star' : e.isMoon ? 'moon' : 'planet',
+      posKm: e.posKm, relObj: e.group, quatRef: e.mesh.quaternion,
+      // 地形感知相机下限（与行走碰撞同源）；气巨允许下潜入大气（R7 #1/#5）
+      groundRadius: e.phys.landable ? (dir) => terrainMgr.heightAt(id, dir) : null,
+      minDistKm: !e.phys.landable && e.phys.atmosphere && id !== 'sun'
+        ? e.phys.radiusKm * 1.0012 : null,
+    });
+  }
+  for (const e of comets.entries) {
+    registry.set(e.c.id, {
+      nameZh: e.c.nameZh, nameEn: e.c.nameEn, desc: e.c.desc, kind: 'comet',
+      phys: { radiusKm: 10 }, posKm: e.posKm, relObj: e.group, viewDist: 2.5e6,
+    });
+  }
+  for (const v of voyagerEntries) {
+    registry.set(v.vg.id, {
+      nameZh: v.vg.nameZh, nameEn: v.vg.nameEn, desc: v.vg.desc, kind: 'probe',
+      phys: { radiusKm: 0.01 }, posKm: v.posKm, relObj: v.group, viewDist: 8e5,
+    });
+  }
+  for (const b of boundaryEntries) {
+    registry.set(b.id, {
+      nameZh: b.nameZh, nameEn: b.nameEn, desc: b.desc, kind: 'boundary',
+      phys: { radiusKm: 1 }, posKm: b.posKm, relObj: b.group, viewDist: 2.5 * KM_PER_AU,
+    });
+  }
+}
+
+/** OrbitCamera 环境访问器 */
+const orbitEnv = {
+  get(id) {
+    const t = registry.get(id);
+    return {
+      posKm: t.posKm,
+      radiusKm: t.phys?.radiusKm ?? 1,
+      quat: t.quatRef ?? IDENTITY_Q,
+      viewDist: t.viewDist,
+      groundRadius: t.groundRadius ?? null,
+      minDistKm: t.minDistKm ?? null,
+    };
+  },
+  /** 屏幕中心视线命中的最近天体深度（km）——倾斜/平移时缩放的收敛目标（R8 #2）。
+   * 无命中返回 null（退化为轨道锚点投影）。 */
+  centerDepth(posKm, dir) {
+    let best = null;
+    for (const [, t] of registry) {
+      const R = t.phys?.radiusKm ?? 0;
+      if (R < 1) continue; // 探测器/边界点不作为缩放收敛目标
+      const margin = R * 1.004 + 1; // 收敛下限留在表面略上方
+      const ox = t.posKm[0] - posKm[0];
+      const oy = t.posKm[1] - posKm[1];
+      const oz = t.posKm[2] - posKm[2];
+      const b = ox * dir.x + oy * dir.y + oz * dir.z;
+      if (b <= 0) continue;
+      const det = b * b - (ox * ox + oy * oy + oz * oz - margin * margin);
+      if (det < 0) continue;
+      const tHit = b - Math.sqrt(det);
+      if (tHit > 1e-6 && (best === null || tHit < best)) best = tHit;
+    }
+    return best;
+  },
+};
+
+function setupLabels() {
+  labels = new Labels(document.getElementById('labels'), camera);
+  labels.onSelect = select;
+  labels.onFlyTo = (id) => flyTo(id);
+  for (const [id, t] of registry) {
+    labels.add({
+      id, nameZh: t.nameZh,
+      kind: t.kind === 'moon' ? 'moon' : t.kind === 'planet' || t.kind === 'star' ? 'planet' : 'poi',
+      radiusKm: t.phys?.radiusKm ?? 1,
+      getRelPos: (v) => v.copy(t.relObj.position),
+    });
+  }
+  // 真实亮星标签（恒星视为无穷远，方向固定；显示真实光年距离——科教）
+  for (const s of BRIGHT_STARS) {
+    if (!s.dirWorld) continue;
+    labels.add({
+      id: 'star_' + s.en, nameZh: s.zh, kind: 'fixstar', radiusKm: 0.001,
+      distText: s.ly + ' 光年',
+      getRelPos: (v) => v.copy(s.dirWorld).multiplyScalar(SKY_R * 0.97),
+    });
+  }
+}
+
+function select(id) {
+  selectedId = id;
+}
+
+/** GE 式前往：任意模式 → 飞行动画 → 探索模式锚定目标 */
+function flyTo(id) {
+  if (!registry.has(id)) return;
+  select(id);
+  if (appMode !== 'orbit') {
+    // 从飞船/行走就地接管为探索模式（带 quat：视向连续）
+    const focus = nearestCache?.id ?? 'sun';
+    document.exitPointerLock?.();
+    orbitCam.adoptPosition(orbitEnv, focus, ship.posKm, ship.quat);
+    appMode = 'orbit';
+    ship.mode = 'fly';
+  }
+  orbitCam.flyTo(orbitEnv, id);
+}
+
+function syncShipToOrbit() {
+  ship.posKm[0] = orbitCam.posKm[0];
+  ship.posKm[1] = orbitCam.posKm[1];
+  ship.posKm[2] = orbitCam.posKm[2];
+  ship.quat.copy(orbitCam.quat);
+  ship.vel.set(0, 0, 0);
+}
+
+function switchToOrbit() {
+  appMode = 'orbit';
+  ship.mode = 'fly';
+  document.exitPointerLock?.();
+  const focus = nearestCache?.id ?? selectedId ?? 'sun';
+  orbitCam.adoptPosition(orbitEnv, focus, ship.posKm, ship.quat); // 视向连续（R7 #7）
+}
+
+function switchToFly() {
+  if (orbitCam.flight) orbitCam.cancelFlight(orbitEnv);
+  appMode = 'fly';
+  ship.mode = 'fly';
+  syncShipToOrbit();
+  canvas.requestPointerLock();
+}
+
+// ---------- 地形 ----------
+const terrainMgr = new TerrainManager();
+function setupTerrainMgr() {
+  terrainMgr.physOf = (id) => builder.bodies.get(id).phys;
+  terrainMgr.meshOf = (id) => builder.bodies.get(id).mesh;
+  terrainMgr.getMapData = (id) => builder.mapDataOf(id);
+}
+
+// ---------- 主循环 ----------
+const _rel = new THREE.Vector3();
+const _q = new THREE.Quaternion();
+let exposureTarget = 1;
+let nearestCache = null;
+let lastTakeoff = -1e9; // 滚轮起飞时间戳（自动登陆 0.8s 冷却，防滞回）
+
+function loop() {
+  const dtReal = Math.min(clock.getDelta(), 0.1);
+
+  // 时间系统
+  handleTimeKeys();
+  simClock.rate = hud.warpRate(simClock.paused);
+  const jdTT = simClock.tick(dtReal);
+
+  // 星历驱动
+  builder.update(jdTT);
+  comets.update(jdTT);
+  for (const v of voyagerEntries) {
+    const p = voyagerPosition(v.vg, jdTT);
+    const w = eclToWorldArr(p);
+    v.posKm[0] = w[0]; v.posKm[1] = w[1]; v.posKm[2] = w[2];
+  }
+
+  const nearest = findNearest();
+  nearestCache = nearest;
+  const env = makeEnv(nearest);
+
+  // ---------- 模式更新 ----------
+  if (appMode === 'orbit') {
+    // 拖拽打断飞行动画（GE 行为）
+    if (orbitCam.flight && input.drag.active) orbitCam.cancelFlight(orbitEnv);
+    orbitCam.update(dtReal, input, orbitEnv);
+    syncShipToOrbit();
+    // 登陆：按 G，或滚轮一路拉近贴地自动转行走（NMS 式无缝衔接，R7 #1）
+    const landRange = nearest ? Math.max(20, nearest.radiusKm * 0.05) : 0;
+    let autoLand = false;
+    if (nearest?.landable && !orbitCam.flight && nearest.distSurface < 30 &&
+      performance.now() - lastTakeoff > 800) {
+      _rel.set(
+        ship.posKm[0] - nearest.posKm[0], ship.posKm[1] - nearest.posKm[1], ship.posKm[2] - nearest.posKm[2]
+      );
+      const relLen = _rel.length();
+      _q.copy(builder.bodies.get(nearest.id).mesh.quaternion).invert();
+      _rel.applyQuaternion(_q).normalize();
+      const altGround = relLen - terrainMgr.heightAt(nearest.id, _rel);
+      autoLand = altGround < 0.0022; // 离地 < 2.2m（视高 1.7m + 余量）
+    }
+    if ((autoLand || (input.tapped('KeyG') && nearest?.landable && nearest.distSurface < landRange))
+      && !orbitCam.flight) {
+      ship.enterWalk(env); // 视向严格连续（yaw+pitch 自当前相机反解）
+      appMode = 'walk';
+      try { canvas.requestPointerLock(); } catch { /* 非手势上下文可能被拒，行走支持拖拽环视 */ }
+    }
+    if (input.tapped('KeyF') && !orbitCam.flight) switchToFly();
+  } else {
+    // 行走中滚轮后退 → 无缝起飞回探索模式（视向连续，R7 #1；
+    // 阈值 0.5 防触控板轻扫误触发——滚轮事件已按 deltaY 归一化）
+    if (appMode === 'walk' && input.wheel >= 0.5) {
+      lastTakeoff = performance.now();
+      document.exitPointerLock?.();
+      orbitCam.adoptPosition(orbitEnv, ship.walk.bodyId, ship.posKm, ship.quat);
+      orbitCam.distTarget = orbitCam.dist + Math.max(orbitCam.dist * 0.002, 0.05);
+      appMode = 'orbit';
+      ship.mode = 'fly';
+      ship.vel.set(0, 0, 0);
+    } else {
+      ship.update(dtReal, input, env);
+      if (appMode === 'walk' && ship.mode === 'fly') {
+        switchToOrbit(); // 行走中按 G 返回 → 探索模式
+      } else {
+        appMode = ship.mode === 'walk' ? 'walk' : 'fly';
+      }
+      if (appMode === 'fly' && input.tapped('KeyF')) switchToOrbit();
+    }
+  }
+  if (input.tapped('KeyT') && selectedId) flyTo(selectedId);
+
+  // 浮动原点（相机=飞船位姿）
+  world.update(ship.posKm);
+  builder.postWorldUpdate(ship.posKm, performance.now() / 1000);
+  camera.quaternion.copy(ship.quat);
+
+  // 地形
+  if (nearest && nearest.landable) {
+    const e = builder.bodies.get(nearest.id);
+    _rel.set(
+      ship.posKm[0] - e.posKm[0], ship.posKm[1] - e.posKm[1], ship.posKm[2] - e.posKm[2]
+    );
+    _q.copy(e.mesh.quaternion).invert();
+    _rel.applyQuaternion(_q).normalize();
+    terrainMgr.update(nearest, _rel);
+  } else {
+    terrainMgr.update(null, null);
+  }
+
+  updateAtmosphereFogAndExposure(nearest, dtReal);
+  handleUIKeys();
+
+  // HUD
+  hud.updateTime(simClock);
+  const flight = orbitCam.flight;
+  hud.updateNav({
+    mode: appMode,
+    flight: flight ? { toName: registry.get(flight.toId)?.nameZh, t: flight.t } : null,
+    speed: ship.vel.length(),
+    speedSetting: ship.speedSetting,
+    focusName: appMode === 'orbit' ? registry.get(orbitCam.focusId)?.nameZh : null,
+    nearest: nearest ? { nameZh: registry.get(nearest.id).nameZh, distSurface: nearest.distSurface } : null,
+    gravity: appMode === 'walk' ? surfaceGravity(builder.bodies.get(ship.walk.bodyId).phys) : null,
+  });
+  updateTip(nearest);
+  if (selectedId) {
+    const t = registry.get(selectedId);
+    const dist = Math.hypot(
+      t.posKm[0] - ship.posKm[0], t.posKm[1] - ship.posKm[1], t.posKm[2] - ship.posKm[2]
+    );
+    const dSun = Math.hypot(t.posKm[0], t.posKm[1], t.posKm[2]);
+    hud.updateTarget(targetInfo(selectedId, registry, dist, dSun));
+  } else {
+    hud.updateTarget(null);
+  }
+  // 标签遮挡：贴近天体时，地平线以下/天体背面的标签隐藏
+  let occluder = null;
+  if (nearest && nearest.distSurface < nearest.radiusKm * 2.5) {
+    const e = builder.bodies.get(nearest.id);
+    occluder = { pos: e.group.position, r: nearest.radiusKm * 0.999 };
+  }
+  labels.update(selectedId, occluder);
+  document.getElementById('crosshair').style.display =
+    appMode === 'orbit' ? 'none' : '';
+
+  fpsGuard(dtReal);
+  input.endFrame();
+  composer.render();
+}
+
+function findNearest() {
+  let best = null;
+  for (const [id, e] of builder.bodies) {
+    const d = Math.hypot(
+      e.posKm[0] - ship.posKm[0], e.posKm[1] - ship.posKm[1], e.posKm[2] - ship.posKm[2]
+    );
+    const ds = d - e.phys.radiusKm;
+    if (!best || ds < best.distSurface) {
+      best = {
+        id, posKm: e.posKm, radiusKm: e.phys.radiusKm,
+        landable: !!e.phys.landable, distSurface: ds,
+      };
+    }
+  }
+  return best;
+}
+
+function makeEnv(nearest) {
+  return {
+    nearest,
+    getBodyQuat: (id) => builder.bodies.get(id).mesh.quaternion,
+    getBodyPos: (id) => builder.bodies.get(id).posKm,
+    heightFn: (id, dir) => terrainMgr.heightAt(id, dir),
+    phys: (id) => builder.bodies.get(id).phys,
+  };
+}
+
+function handleTimeKeys() {
+  if (input.tapped('BracketRight')) hud.warpUp();
+  if (input.tapped('BracketLeft')) hud.warpDown();
+  if (input.tapped('KeyP')) simClock.paused = !simClock.paused;
+  if (input.tapped('KeyN')) { simClock.setNow(); hud.warpReset(); simClock.paused = false; }
+}
+
+const PLANET_KEYS = {
+  Digit1: 'mercury', Digit2: 'venus', Digit3: 'earth', Digit4: 'mars', Digit5: 'jupiter',
+  Digit6: 'saturn', Digit7: 'uranus', Digit8: 'neptune', Digit9: 'pluto', Digit0: 'sun',
+};
+
+let orbitLinesOn = true;
+
+function handleUIKeys() {
+  for (const [key, id] of Object.entries(PLANET_KEYS)) {
+    if (input.tapped(key)) flyTo(id); // GE 风格：快捷键直接前往
+  }
+  if (input.tapped('KeyO')) orbitLinesOn = !orbitLinesOn;
+  // 行走模式自动隐藏轨道辅助线（沉浸真实星空）
+  const showOrbits = orbitLinesOn && appMode !== 'walk';
+  for (const line of Object.values(builder.orbitLines.userData)) line.visible = showOrbits;
+  if (input.tapped('KeyL')) labels.setVisible(!labels.visible);
+  if (input.tapped('KeyH')) hud.toggleHelp();
+}
+
+function updateTip(nearest) {
+  const atm = nearest ? builder.bodies.get(nearest.id)?.phys.atmosphere : null;
+  if (orbitCam.flight) {
+    hud.tip(`✈ 正在前往 ${registry.get(orbitCam.flight.toId)?.nameZh} …（拖拽可中断）`);
+  } else if (appMode === 'walk') {
+    hud.tip(input.locked
+      ? '滚轮后退起飞 · G 返回探索 · Space 跳跃 · Shift 奔跑 · 抬头看看天空'
+      : '单击画面锁定鼠标环视（或按住左键拖拽）· 滚轮后退起飞');
+  } else if (nearest && nearest.landable &&
+    nearest.distSurface < Math.max(20, nearest.radiusKm * 0.05)) {
+    hud.tip(`滚轮继续拉近 = 直接降落 ${registry.get(nearest.id).nameZh}（或按 G 立即登陆）`);
+  } else if (appMode === 'orbit' && nearest && nearest.landable &&
+    nearest.distSurface < nearest.radiusKm * 0.6) {
+    hud.tip('滚轮一路拉近即可无缝降落地表');
+  } else if (nearest && !nearest.landable && nearest.id !== 'sun' && atm &&
+    nearest.distSurface < atm.heightKm) {
+    hud.tip(`☁ 正在进入 ${registry.get(nearest.id).nameZh} 大气层（无固体表面，滚轮后退离开）`);
+  } else if (nearest && !nearest.landable && nearest.id !== 'sun' && nearest.distSurface < nearest.radiusKm * 0.5) {
+    hud.tip('⚠ 气态/冰巨行星无固体表面：可下潜入大气层，无法降落');
+  } else if (nearest && nearest.id === 'sun' && nearest.distSurface < nearest.radiusKm * 2) {
+    hud.tip('⚠ 接近太阳：表面温度 5772 K');
+  } else {
+    hud.tip(null);
+  }
+}
+
+const immersionEl = document.getElementById('immersion');
+let lastBoosted = null; // 上一个被密度增幅的大气网格（离开时必须复位为 1）
+
+function updateAtmosphereFogAndExposure(nearest, dt) {
+  const dSunAU = Math.hypot(ship.posKm[0], ship.posKm[1], ship.posKm[2]) / KM_PER_AU;
+  // 近日处压低曝光以保留米粒组织细节；行星处≈1；外太阳系适度提亮
+  exposureTarget = THREE.MathUtils.clamp(Math.pow(Math.max(dSunAU, 0.004), 0.85), 0.25, 12);
+
+  let fogDensity = 0;
+  let skyFade = 1; // 白昼大气内星空淡出（日光散射淹没星光，物理正确）
+  let immersion = 0; // 气巨大气浸没（全屏云雾层，R7 #5）
+  let immTint = null;
+  const fogColor = new THREE.Color(0x000000);
+  if (nearest) {
+    const e = builder.bodies.get(nearest.id);
+    const atm = e.phys.atmosphere;
+    const inAtmo = atm && nearest.distSurface < atm.heightKm;
+    // 入气密度增幅：仅气巨/冰巨且相机在大气内（在大气外恒 1 → R5 外观零回归）
+    if (e.atmoMesh) {
+      const gasGiant = e.phys.type === 'gas' || e.phys.type === 'ice';
+      const depth = inAtmo ? 1 - Math.max(nearest.distSurface, 0) / atm.heightKm : 0;
+      e.atmoMesh.material.userData.uniforms.uBoost.value =
+        gasGiant && inAtmo ? 1 + depth * depth * 24 : 1;
+      if (lastBoosted && lastBoosted !== e.atmoMesh) {
+        lastBoosted.material.userData.uniforms.uBoost.value = 1;
+      }
+      lastBoosted = e.atmoMesh;
+      if (gasGiant && inAtmo) {
+        // 浸没层：深入云层逐渐被云雾吞没（色调取自该行星散射系数）
+        immersion = THREE.MathUtils.smoothstep(depth, 0.45, 0.85);
+        const b = atm.rayleigh;
+        const m = Math.max(b[0], b[1], b[2]);
+        immTint = [b[0] / m, b[1] / m, b[2] / m];
+      }
+    }
+    if (inAtmo) {
+      const alt = Math.max(nearest.distSurface, 0);
+      _rel.set(
+        ship.posKm[0] - e.posKm[0], ship.posKm[1] - e.posKm[1], ship.posKm[2] - e.posKm[2]
+      ).normalize();
+      const sunDir = new THREE.Vector3(-e.posKm[0], -e.posKm[1], -e.posKm[2]).normalize();
+      const sunElev = _rel.dot(sunDir);
+      const b = atm.rayleigh;
+      const m = Math.max(b[0], b[1], b[2]);
+      const tint = new THREE.Color(b[0] / m, b[1] / m, b[2] / m);
+      const day = THREE.MathUtils.clamp(sunElev * 4 + 0.1, 0, 1);
+      const dusk = Math.max(0, 1 - Math.abs(sunElev) * 6);
+      fogColor.copy(tint).multiplyScalar(0.5 * day / Math.max(dSunAU * dSunAU, 1e-4));
+      fogColor.r += dusk * 0.25; fogColor.g += dusk * 0.1;
+      fogDensity = (1 / 180) * Math.exp(-alt / atm.rayleighScaleKm) * (atm.multiplier >= 3 ? 4 : 1);
+      // 星空淡出：白昼且身处稠密层内
+      const density = Math.exp(-alt / (atm.rayleighScaleKm * 2.2));
+      skyFade = THREE.MathUtils.clamp(1 - day * density * 0.97, 0, 1);
+    }
+  }
+  // 气巨浸没层：全屏云雾渐显（深处白化吞没，离开时归零）
+  if (immersion > 0 && immTint) {
+    skyFade = Math.min(skyFade, 1 - immersion); // 云中看不见星空
+    const cr = Math.round((immTint[0] * 0.45 + 0.55) * 255);
+    const cg = Math.round((immTint[1] * 0.45 + 0.55) * 255);
+    const cb = Math.round((immTint[2] * 0.45 + 0.55) * 255);
+    immersionEl.style.background =
+      `radial-gradient(ellipse at center, rgba(${cr},${cg},${cb},0.75) 0%, rgb(${cr},${cg},${cb}) 78%)`;
+  }
+  immersionEl.style.opacity = immersion.toFixed(3);
+
+  scene.fog.color.copy(fogColor);
+  scene.fog.density = fogDensity;
+  sky.setFade(skyFade);
+  belts.visible = skyFade > 0.4; // 带点云为统计表示，白昼天空中不可见
+  document.getElementById('labels').classList.toggle('daysky', skyFade < 0.5);
+
+  // 行走在夜面时的微环境光（地照/星光下的暗适应，保证夜间探索可见性）
+  ambient.intensity += ((appMode === 'walk' ? 0.14 : 0.02) - ambient.intensity) * Math.min(dt * 3, 1);
+
+  renderer.toneMappingExposure +=
+    (exposureTarget - renderer.toneMappingExposure) * Math.min(dt * 1.5, 1);
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+}

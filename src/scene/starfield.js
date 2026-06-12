@@ -1,0 +1,144 @@
+// 星空背景：真实银河全景贴图（按银道坐标系正确定向）+ 程序化恒星点。
+// 恒星视为无穷远：星空组恒挂在相机原点，不参与浮动原点平移（零视差，物理正确）。
+
+import * as THREE from 'three';
+import { raDecToWorld } from '../config.js';
+import { makeNoise } from '../util/noise.js';
+
+const DEG = Math.PI / 180;
+const SKY_R = 4.5e9; // km，远小于 far，零视差
+export { SKY_R };
+
+// 全天最亮恒星实测目录（J2000 RA小时/Dec度/视星等/色指数类别/中文名/距离光年）
+// 数据：依巴谷星表（科教用途，角分级精度足够）
+export const BRIGHT_STARS = [
+  { ra: 6.752, dec: -16.72, mag: -1.46, c: 'w', zh: '天狼星', en: 'Sirius', ly: 8.6 },
+  { ra: 6.399, dec: -52.70, mag: -0.74, c: 'w', zh: '老人星', en: 'Canopus', ly: 310 },
+  { ra: 14.660, dec: -60.83, mag: -0.27, c: 'y', zh: '南门二', en: 'α Centauri', ly: 4.37 },
+  { ra: 14.261, dec: 19.18, mag: -0.05, c: 'o', zh: '大角星', en: 'Arcturus', ly: 36.7 },
+  { ra: 18.615, dec: 38.78, mag: 0.03, c: 'w', zh: '织女一', en: 'Vega', ly: 25 },
+  { ra: 5.278, dec: 45.998, mag: 0.08, c: 'y', zh: '五车二', en: 'Capella', ly: 43 },
+  { ra: 5.242, dec: -8.20, mag: 0.13, c: 'b', zh: '参宿七', en: 'Rigel', ly: 860 },
+  { ra: 7.655, dec: 5.22, mag: 0.34, c: 'w', zh: '南河三', en: 'Procyon', ly: 11.5 },
+  { ra: 1.629, dec: -57.24, mag: 0.46, c: 'b', zh: '水委一', en: 'Achernar', ly: 139 },
+  { ra: 5.919, dec: 7.41, mag: 0.50, c: 'r', zh: '参宿四', en: 'Betelgeuse', ly: 550 },
+  { ra: 14.064, dec: -60.37, mag: 0.61, c: 'b', zh: '马腹一', en: 'Hadar', ly: 390 },
+  { ra: 19.846, dec: 8.87, mag: 0.76, c: 'w', zh: '河鼓二（牛郎星）', en: 'Altair', ly: 16.7 },
+  { ra: 12.443, dec: -63.10, mag: 0.76, c: 'b', zh: '十字架二', en: 'Acrux', ly: 320 },
+  { ra: 4.599, dec: 16.51, mag: 0.86, c: 'o', zh: '毕宿五', en: 'Aldebaran', ly: 65 },
+  { ra: 16.490, dec: -26.43, mag: 0.96, c: 'r', zh: '心宿二', en: 'Antares', ly: 550 },
+  { ra: 13.420, dec: -11.16, mag: 0.97, c: 'b', zh: '角宿一', en: 'Spica', ly: 250 },
+  { ra: 7.755, dec: 28.03, mag: 1.14, c: 'o', zh: '北河三', en: 'Pollux', ly: 34 },
+  { ra: 22.961, dec: -29.62, mag: 1.16, c: 'w', zh: '北落师门', en: 'Fomalhaut', ly: 25 },
+  { ra: 20.690, dec: 45.28, mag: 1.25, c: 'w', zh: '天津四', en: 'Deneb', ly: 2600 },
+  { ra: 10.139, dec: 11.97, mag: 1.35, c: 'b', zh: '轩辕十四', en: 'Regulus', ly: 79 },
+  { ra: 2.530, dec: 89.26, mag: 1.98, c: 'y', zh: '北极星', en: 'Polaris', ly: 433 },
+];
+
+const STAR_COLORS = {
+  b: [0.62, 0.72, 1.0], w: [0.95, 0.96, 1.0], y: [1.0, 0.94, 0.8], o: [1.0, 0.8, 0.6], r: [1.0, 0.62, 0.45],
+};
+
+export function createStarfield(milkywayTex) {
+  const group = new THREE.Group();
+  const fadeMats = []; // 白昼大气内星空淡出（真实：日光散射淹没星光）
+  let milkyMat = null;
+
+  // 银河球：银道坐标定向（NGP: RA 192.8595°, Dec 27.1284°；银心: RA 266.405°, Dec −28.936°）
+  if (milkywayTex) {
+    milkywayTex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({
+      map: milkywayTex, side: THREE.BackSide, depthWrite: false, fog: false,
+      transparent: true,
+      color: new THREE.Color(0.5, 0.5, 0.55), // 压暗，避免压过前景
+    });
+    milkyMat = mat;
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(SKY_R, 64, 32), mat);
+    const xg = raDecToWorld(266.405 * DEG, -28.936 * DEG, new THREE.Vector3()); // 银心 → 本地+X
+    const zg = raDecToWorld(192.8595 * DEG, 27.1284 * DEG, new THREE.Vector3()); // NGP → 本地+Y
+    // 正交化；银经向东增加映射到本地 −Z（球面UV约定），故 Z 列 = −(xg×y)
+    const y = zg.clone().sub(xg.clone().multiplyScalar(zg.dot(xg))).normalize();
+    const zCol = new THREE.Vector3().crossVectors(xg, y).negate();
+    const m = new THREE.Matrix4().makeBasis(xg, y, zCol);
+    mesh.quaternion.setFromRotationMatrix(m);
+    mesh.renderOrder = -10;
+    group.add(mesh);
+  }
+
+  // 程序化恒星：两层（普通 + 亮星），等概率球面分布，颜色按黑体近似
+  const n = makeNoise(99);
+  for (const [count, size, baseI] of [[11000, 1.4, 0.55], [900, 2.6, 1.0]]) {
+    const posArr = new Float32Array(count * 3);
+    const colArr = new Float32Array(count * 3);
+    let s = count * 7 + 13;
+    const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+    for (let i = 0; i < count; i++) {
+      const z = rnd() * 2 - 1;
+      const phi = rnd() * Math.PI * 2;
+      const r = Math.sqrt(1 - z * z);
+      posArr[i * 3] = SKY_R * 0.98 * r * Math.cos(phi);
+      posArr[i * 3 + 1] = SKY_R * 0.98 * z;
+      posArr[i * 3 + 2] = SKY_R * 0.98 * r * Math.sin(phi);
+      // 黑体色温分布
+      const t = rnd();
+      let cr, cg, cb;
+      if (t < 0.12) { cr = 0.62; cg = 0.7; cb = 1.0; }       // 蓝白 O/B
+      else if (t < 0.4) { cr = 0.9; cg = 0.93; cb = 1.0; }   // 白 A/F
+      else if (t < 0.75) { cr = 1.0; cg = 0.93; cb = 0.78; } // 黄 G/K
+      else { cr = 1.0; cg = 0.74; cb = 0.55; }               // 橙红 M
+      const I = baseI * (0.25 + 0.75 * Math.pow(rnd(), 2.2));
+      colArr[i * 3] = cr * I; colArr[i * 3 + 1] = cg * I; colArr[i * 3 + 2] = cb * I;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+    const mat = new THREE.PointsMaterial({
+      size, sizeAttenuation: false, vertexColors: true, fog: false,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    fadeMats.push(mat);
+    const pts = new THREE.Points(geo, mat);
+    pts.renderOrder = -9;
+    group.add(pts);
+  }
+
+  // 真实亮星（位置/亮度/色温按依巴谷实测；尺寸与强度按视星等）
+  {
+    const N = BRIGHT_STARS.length;
+    const posArr = new Float32Array(N * 3);
+    const colArr = new Float32Array(N * 3);
+    const dir = new THREE.Vector3();
+    BRIGHT_STARS.forEach((s, i) => {
+      raDecToWorld(s.ra * 15 * DEG, s.dec * DEG, dir);
+      s.dirWorld = dir.clone(); // 供标签定位
+      posArr[i * 3] = dir.x * SKY_R * 0.97;
+      posArr[i * 3 + 1] = dir.y * SKY_R * 0.97;
+      posArr[i * 3 + 2] = dir.z * SKY_R * 0.97;
+      const c = STAR_COLORS[s.c];
+      const I = 1.45 * Math.pow(10, -0.22 * s.mag); // 星等→相对强度（压缩动态范围）
+      colArr[i * 3] = c[0] * I; colArr[i * 3 + 1] = c[1] * I; colArr[i * 3 + 2] = c[2] * I;
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+    const mat = new THREE.PointsMaterial({
+      size: 3.4, sizeAttenuation: false, vertexColors: true, fog: false,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    fadeMats.push(mat);
+    const pts = new THREE.Points(geo, mat);
+    pts.renderOrder = -8;
+    group.add(pts);
+  }
+
+  group.frustumCulled = false;
+  return {
+    group,
+    /** f∈[0,1]：白昼大气内日光淹没星光（0=不可见） */
+    setFade(f) {
+      for (const m of fadeMats) m.opacity = f;
+      if (milkyMat) milkyMat.opacity = f;
+      group.visible = f > 0.01;
+    },
+  };
+}

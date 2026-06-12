@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>遨游太阳系 Solar Wanderer — 太阳系 1:1 实时探索</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='7' fill='%23ffcc55'/><circle cx='26' cy='16' r='2' fill='%234a90d9'/></svg>" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="app"></canvas>
+
+  <div id="immersion"></div>
+
+  <div id="labels"></div>
+
+  <div id="search-box" style="display:none">
+    <input id="search-input" type="text" placeholder="🔍 搜索天体并前往（如：月球 / mars / 哈雷 / 旅行者）" autocomplete="off" />
+    <div id="search-results"></div>
+  </div>
+
+  <button id="dir-toggle" title="天体目录">🪐 目录</button>
+  <div id="directory">
+    <div class="dir-head">天体目录 <span class="dim">点击即前往</span></div>
+    <div id="dir-body"></div>
+  </div>
+
+  <div id="hud">
+    <div id="hud-time" class="panel"></div>
+    <div id="hud-nav" class="panel"></div>
+    <div id="hud-target" class="panel"></div>
+    <div id="hud-tip"></div>
+    <div id="crosshair">+</div>
+  </div>
+
+  <div id="start">
+    <div class="start-inner">
+      <h1>遨游太阳系 <span>SOLAR WANDERER</span></h1>
+      <p class="sub">太阳系 1:1 实时模拟 · 基于 NASA JPL 星历还原此刻太阳系 · 自由探索整个日球层</p>
+      <div id="loading"><div class="spinner"></div><div id="loading-progress">加载中…</div></div>
+      <button id="start-btn" style="display:none">点击进入太阳系</button>
+      <p class="hint">进入后单击画面锁定鼠标 · H 查看完整操作说明</p>
+    </div>
+  </div>
+
+  <div id="help" style="display:none">
+    <div class="help-inner">
+      <h2>操作说明（H 关闭）</h2>
+      <div class="help-cols">
+        <div>
+          <h3>🌐 探索模式（默认 · Google Earth 式）</h3>
+          <table>
+            <tr><td>左键拖拽</td><td>环绕焦点旋转（带惯性，近地自动减速）</td></tr>
+            <tr><td>Ctrl+左键拖拽</td><td>旋转航向 / 倾斜（3D 环视）</td></tr>
+            <tr><td>右键/中键拖拽</td><td>平移整个空间（无旋转，R 复位）</td></tr>
+            <tr><td>W S A D / 方向键</td><td>平移视角（北/南/西/东，随高度调速）</td></tr>
+            <tr><td>Shift+A / Shift+D</td><td>旋转航向（逆时针 / 顺时针）</td></tr>
+            <tr><td>Shift+W / Shift+S</td><td>倾斜看向地平 / 回到俯视</td></tr>
+            <tr><td>滚轮 / PageUp PageDown / + −</td><td>以屏幕中心拉近 / 拉远（倾斜/平移后沿视线接近屏幕中心目标）</td></tr>
+            <tr><td>滚轮拉近到底</td><td><b>无缝降落地表</b>（自动转入行走）</td></tr>
+            <tr><td>R</td><td>复位视角（北朝上、俯视）</td></tr>
+            <tr><td>顶部搜索框 / 🪐 目录</td><td>输入或点选天体 → 飞行动画前往</td></tr>
+            <tr><td>双击标签 / T / 1–9,0</td><td>GE 式动态前往（目标居中）</td></tr>
+            <tr><td>拖拽（飞行中）</td><td>中断飞行动画</td></tr>
+            <tr><td>G</td><td>贴近地表时登陆行走</td></tr>
+            <tr><td>F</td><td>切换自由飞行模式</td></tr>
+          </table>
+          <h3>🚶 地表行走</h3>
+          <table>
+            <tr><td>鼠标 / W S A D</td><td>视角（360° 自由环视）/ 行走（真实表面重力）</td></tr>
+            <tr><td>滚轮后退</td><td><b>无缝起飞</b>返回探索模式（视向不变）</td></tr>
+            <tr><td>Shift / Space</td><td>奔跑 / 跳跃（月球跳 6 倍高）</td></tr>
+            <tr><td>G</td><td>返回探索模式</td></tr>
+          </table>
+        </div>
+        <div>
+          <h3>🚀 自由飞行（F 进入）</h3>
+          <table>
+            <tr><td>鼠标 / Q E</td><td>俯仰偏航 / 滚转</td></tr>
+            <tr><td>W S A D R F</td><td>六向平移</td></tr>
+            <tr><td>滚轮 / Shift</td><td>速度档（1 m/s→2 AU/s）/ 加速</td></tr>
+            <tr><td>X</td><td>急停（任意位置悬停驻留）</td></tr>
+            <tr><td>Esc</td><td>返回探索模式</td></tr>
+          </table>
+          <h3>⏱ 时间</h3>
+          <table>
+            <tr><td>[ / ]</td><td>时间倍率 减 / 加（可倒退）</td></tr>
+            <tr><td>P / N</td><td>暂停 / 回到现在</td></tr>
+          </table>
+          <h3>🖥 显示</h3>
+          <table>
+            <tr><td>O / L / H</td><td>轨道线 / 标签 / 本帮助</td></tr>
+          </table>
+        </div>
+      </div>
+      <p class="credit">星历：NASA JPL（行星 Standish 元素 + Horizons 拟合卫星轨道，已对照官方数据验证）<br>
+      贴图：NASA/USGS 实测数据（Solar System Scope CC-BY-4.0 / Steve Albers SOS / JPL Photojournal）</p>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
