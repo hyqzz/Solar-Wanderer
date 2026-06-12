@@ -5,7 +5,7 @@ Powered by real NASA JPL ephemerides — the planets are exactly where they are 
 
 **太阳系 1:1 实时自由探索** — 基于系统时间和 NASA JPL 星历精确还原**此刻**的太阳系：从太阳表面到 120 AU 的日球层顶，自由飞行、登陆行走、身临其境。
 
-[English](#why-solar-wanderer) · [中文](#特性) · MIT License · Zero install — just a browser
+**[▶ Live Demo 在线体验](https://hyqzz.github.io/Solar-Wanderer/)** · [English](#why-solar-wanderer) · [中文](#特性) · MIT License · Zero install — just a browser
 
 ![Earth](docs/sdlc/screenshots/02-earth.png)
 
