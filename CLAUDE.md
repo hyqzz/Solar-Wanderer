@@ -110,6 +110,28 @@ Three.js 0.165 + Vite 5 + 原生 ESM（无 TypeScript）。纯浏览器 WebGL2�
 - **V 键跳跃根治**：`groundRadiusOf` 惯性换算曾复用 `_qf`，覆盖 setInertial 待恢复视向（仅可登陆天体触发——地球/火星/冥王星跳、木星正常的原因）→ 专用 `_qg`
 - 验证：`node tools/repro-r10.mjs`（12 断言）+ `node tools/probe-r10.mjs`（起飞后按键/点击拾取/V 连续性端到端）
 
+### R10-fix（2026-06-12）：修复返回探索模式 GE 操控失效 + 右键平移后滚轮跳回原空间
+- **问题 1**：登陆后按 G 或滚轮起飞返回探索模式，GE 键盘/滚轮感觉"失效"。
+  - 根因：相机在体表面上方 1.7 m，平移速率被压到极低；滚轮已触地下限；adoptPosition
+    把 `this.tilt` 设为 `-autoTilt`，抬升后 auto-tilt 消失导致视线指向地平线下方，
+    滚轮进入 dolly 分支而不再改变距离。
+  - 修复：`switchToOrbit()` 中把 `this.tilt` 复位为 0，并把 `distTarget` 抬升
+    `max(dist×0.002, 0.05) km`，让相机回到有响应的高度，同时由 auto-tilt 自然接管。
+- **问题 2**：右键平移空间后再滚轮缩放，look-at 点被甩回焦点方向（"跳回原空间"）。
+  - 根因：旧实现把"有 panOffset"一律判为 offAxis 并走 dolly；dolly 在视线仍径向时
+    把径向位移吸收进 panOffset，导致 look-at 点漂移；近地 auto-tilt 出现后
+    viewRadial 变假，手势中途中断切 dolly，进一步放大漂移。
+  - 修复：
+    - 径向/dolly 选择改为基于实际视线与平移方向：典型横向平移（垂直于径向）且
+      视线径向时走径向缩放，保持 panOffset / look-at 点固定；平移带径向分量或
+      用户倾斜导致视线偏离径向时才走 dolly。
+    - 引入 `_radialGesture` 手势锁：一旦开始径向缩放，连续 0.35 s 内无缩放输入才
+      清空标记，防止滚轮多格之间的短暂停顿误判为新手势。
+    - 外部设置 `distTarget` 后（如起飞/返回探索的抬升）即使没有缩放输入也走径向
+      平滑过渡。
+- 新增验证：`tools/repro-issue1.mjs`（返回探索后 WASD/Shift+W/滚轮生效）+
+  `tools/repro-issue2.mjs`（右键平移后滚轮缩放 look-at 点不漂移）。
+
 - **计算**：日心黄道 J2000，单位 km。
 - **→ Three 世界**：`(x, y, z)_ecl → (x, z, -y)_three`（黄道北极 = +Y）。
 - **体固系 → 世界**：体固基矢经相同映射（本初子午线=本地+X，北极=+Y）。
@@ -139,6 +161,8 @@ node tools/repro-r9.mjs        # R9 镜头/地形/天体真实性验证（11 断
 node tools/probe-r9.mjs        # R9 运行时探针（海洋下潜/海床行走/惯性模式/形态截图）
 node tools/repro-r10.mjs       # R10 焦点/缩放/水体/V 连续性验证（12 断言）
 node tools/probe-r10.mjs       # R10 运行时探针（起飞后按键/点击拾取/V 连续性）
+node tools/repro-issue1.mjs    # R10-fix：返回探索模式后 GE 操控生效验证
+node tools/repro-issue2.mjs    # R10-fix：右键平移后滚轮缩放不跳回原空间验证
 node tools/probe-r7.mjs        # R7 运行时探针（自动登陆/起飞/气巨入气，需 dev server）
 node tools/probe-r7-visual.mjs # R7 高画质档外行星近景视检截图
 ```

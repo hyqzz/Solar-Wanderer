@@ -47,6 +47,7 @@ export class OrbitCamera {
     this._dollyDepth = null; // 推拉参考深度（绝对值，随推进递减；位移吸收进 panOffset 后
                              // 锚点会随相机同移，深度必须独立跟踪，否则匀速冲越不收敛）
     this._dollyTargetId = null; // 推拉手势锁定的目标天体（整个手势绝不换靶，R9-1b）
+    this._radialGesture = false; // 当前滚轮手势是否已锁定为径向缩放（防 mid-gesture 切 dolly）
     this.inertial = false; // 惯性观察模式：相机不随天体自转——观赏卫星/行星绕转（R9-1e）
     this._streak = 0;      // 滚轮连滚加速度（轻拨精细 → 连滚加速，R9-1c）
     this._streakIdle = 0;
@@ -110,6 +111,7 @@ export class OrbitCamera {
     this._dolly = 1;
     this._dollyDepth = null;
     this._dollyTargetId = null;
+    this._radialGesture = false;
     if (quat) this.adoptOrientation(f, _v2, quat);
   }
 
@@ -329,14 +331,41 @@ export class OrbitCamera {
     // （R10 修订）滚轮/PageUp/Down 不再隐式切换焦点 —— 严格沿屏幕中心前进/后退；
     // 焦点只通过点击天体 / 搜索 / 双击标签显式切换（main.js pickBody）。
 
-    // 无倾斜无平移：视线轴 = 焦点径向 → 经典径向缩放（着陆流程依赖的语义，保持不变）。
-    // 缩放按"离地高度"等比（R10）：贴地时步长米级、高空步长公里级 ——
-    // 可精确定位到任何高度（旧实现按中心距等比，贴地一格外推 700 km）。
-    // 有倾斜或平移：视线不再指向轨道锚点，径向缩放会让屏幕中心目标甩偏/跳跃 ——
-    // 改为沿视线推拉（dolly）；目标在手势起点锁定一次，整个手势绝不换靶（R9-1b：
-    // 旧实现每帧按屏幕中心实时重定目标，视线漂移扫过近处天体时参考深度突变 → 瞬间猛冲）。
-    const offAxis = this.panOffset.lengthSq() > 0 || Math.abs(this.tilt) > 0.02;
-    if (!offAxis) {
+    // 决定采用径向缩放还是视线推拉（dolly）：
+    // - 有平移：径向缩放（保持 panOffset / look-at 点固定，不会甩回焦点方向）。
+    // - 无平移且用户未倾斜：径向缩放（经典轨道 + 着陆语义）。
+    // - 无平移但用户倾斜：只有实际视线仍指向径向时才用径向缩放；否则用 dolly。
+    // 旧实现把"有 panOffset"一律判为 offAxis 并走 dolly，dolly 在视线径向时
+    // 会改写 panOffset，导致右键平移后滚轮缩放 look-at 点甩回焦点方向
+    //（用户反馈"跳回原空间"）。
+    const cl = Math.cos(this.lat);
+    _v3.set(cl * Math.cos(this.lon), Math.sin(this.lat), -cl * Math.sin(this.lon))
+      .applyQuaternion(this.frameQuat(f)); // 焦点径向（世界）
+    _va.set(0, 0, -1).applyQuaternion(this.quat); // 当前视线方向（世界）
+    const viewRadial = Math.abs(_va.dot(_v3) + 1) < 0.03; // 视线 ≈ −径向
+    // 判断平移是否以"横向环绕"为主（垂直于径向）：典型右键拖拽都是这种，
+    // 径向缩放可保持 look-at 点固定；若平移带明显径向分量，则走 dolly。
+    const panLen = this.panOffset.length();
+    _vm.set(cl * Math.cos(this.lon), Math.sin(this.lat), -cl * Math.sin(this.lon));
+    const panDotRadial = panLen > 0 ? this.panOffset.dot(_vm) : 0;
+    const panMostlyPerp = panLen > 0 && Math.abs(panDotRadial) < panLen * 0.25;
+    // 手势锁定：已经开始的 dolly（_dolly ≠ 1）必须继续走 dolly；已经开始的径向手势
+    //（_radialGesture）必须继续走径向，否则近地 auto-tilt 使 viewRadial 变假后会
+    // 中途中断切 dolly，导致 look-at 点甩回焦点方向。新手势则按状态选择：
+    // - 无平移且用户未倾斜：径向缩放（经典轨道 + 着陆/起飞语义，auto-tilt 由表示层处理）。
+    // - 有横向平移且视线仍径向：径向缩放（保持 look-at 点不甩回焦点方向）。
+    // - 否则：dolly（倾斜或平移带径向分量导致视线偏离径向时，沿视线推拉保持屏幕中心目标居中）。
+    const zoomActive = input.wheel !== 0 || zoomK !== 0;
+    const inDollyGesture = Math.abs(this._dolly - 1) > 1e-5;
+    const shouldBeRadial = (this.panOffset.lengthSq() === 0 && Math.abs(this.tilt) <= 0.02) ||
+      (panMostlyPerp && viewRadial);
+    const canStartRadial = zoomActive && !inDollyGesture && !this._radialGesture && shouldBeRadial;
+    // 外部设置 distTarget 后（如起飞/返回探索的抬升），即使没有缩放输入也要平滑过渡到目标
+    const needsRadialSmooth = !inDollyGesture && !this._radialGesture &&
+      Math.abs(this.dist - this.distTarget) > 1e-6 && shouldBeRadial;
+    if (canStartRadial) this._radialGesture = true;
+    const useRadial = this._radialGesture || canStartRadial || needsRadialSmooth;
+    if (useRadial) {
       this._dolly = 1;
       this._dollyTargetId = null;
       const minD = this.minDist(f);
@@ -445,6 +474,15 @@ export class OrbitCamera {
         this._dollyDepth = null;
         this._dollyTargetId = null;
       }
+    }
+
+    // 缩放手势结束：连续 0.35s 没有任何缩放输入且不在 dolly 中时，才清空径向手势标记。
+    // 这样滚轮连续多格之间（包括每格之间的短暂停顿）不会误判为新手势，避免
+    // mid-gesture 从径向切到 dolly 导致 look-at 点漂移。
+    if (input.wheel === 0 && zoomK === 0 && Math.abs(this._dolly - 1) < 1e-4 && this._streakIdle > 0.35) {
+      this._radialGesture = false;
+      this._dollyDepth = null;
+      this._dollyTargetId = null;
     }
 
     this.compute(env);

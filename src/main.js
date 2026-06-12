@@ -320,6 +320,13 @@ function switchToOrbit() {
   document.exitPointerLock?.();
   const focus = nearestCache?.id ?? selectedId ?? 'sun';
   orbitCam.adoptPosition(orbitEnv, focus, ship.posKm, ship.quat); // 视向连续（R7 #7）
+  // 从行走/飞行切回探索时把相机抬升一段，避免贴地时 GE 键盘平移速率过低、
+  // 滚轮已到下限，让用户感觉"操控失效"（R10 后用户反馈）。
+  // 同时把用户倾斜复位：adoptPosition 为保留原视向会把 this.tilt 设为 -autoTilt，
+  // 抬升后 auto-tilt 消失，负 tilt 会让视线指向地平线下方，导致径向缩放条件失效、
+  // 滚轮进入 dolly。复位后由 auto-tilt 在抬升过程中自然接管。
+  orbitCam.tilt = 0;
+  orbitCam.distTarget = orbitCam.dist + Math.max(orbitCam.dist * 0.002, 0.05);
 }
 
 function switchToFly() {
