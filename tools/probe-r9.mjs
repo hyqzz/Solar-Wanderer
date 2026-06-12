@@ -62,32 +62,55 @@ await sleep(2000);
   });
   check('找到地球海洋方向', !!oceanLL, '');
   if (oceanLL) {
+    // R10 语义：滚轮拉近到底 → 默认登陆"水面"（站立）；继续滚轮下才下潜
     await page.evaluate((ll) => {
       const g = window.__game;
       g.orbitCam.lat = ll.lat; g.orbitCam.lon = ll.lon;
-      g.orbitCam.distTarget = 6371 - 0.3; // 压到海面下 300m（相机下限=海床+1.7m）
+      g.orbitCam.distTarget = 1; // 压到底 → 下限=水面+1.7m → 自动登陆水面
     }, oceanLL);
+    let mode = 'orbit';
+    for (let i = 0; i < 40 && mode !== 'walk'; i++) { await sleep(400); mode = await page.evaluate(() => window.__game.getMode()); }
+    const surf = await page.evaluate(() => ({
+      mode: window.__game.getMode(),
+      diving: window.__game.ship.walk.diving,
+      alt: window.__game.ship.walk.localPos.length() - 6371,
+    }));
+    check('滚轮到底 → 默认登陆水面站立（不下潜）',
+      surf.mode === 'walk' && !surf.diving && surf.alt > 0, JSON.stringify(surf));
+    // 继续滚轮下 → 下潜
+    await page.evaluate(() => { window.__game.input.wheel -= 1; });
     let st = null;
     for (let i = 0; i < 40; i++) {
       await sleep(400);
       st = await page.evaluate(() => ({
-        mode: window.__game.getMode(),
+        diving: window.__game.ship.walk.diving,
         imm: parseFloat(document.getElementById('immersion').style.opacity || '0'),
-        fog: window.__game.ship.posKm ? true : true,
+        r: window.__game.ship.walk.localPos.length(),
       }));
-      if (st.imm > 0.2) break;
+      if (st.diving && st.imm > 0.2) break;
     }
-    check('下潜后水下浸没层渐显（opacity > 0.2）', st.imm > 0.2, `imm=${st?.imm}`);
+    check('继续滚轮下 → 下潜（水下浸没层渐显）', st.diving && st.imm > 0.2, JSON.stringify(st));
     await page.screenshot({ path: OUT + 'r9-01-underwater.png' });
-    // 继续压到底：相机下限 = 海床 + 1.7m → 触发自动转行走
-    await page.evaluate(() => { window.__game.orbitCam.distTarget = 1; });
-    let mode = st.mode;
-    for (let i = 0; i < 30 && mode !== 'walk'; i++) { await sleep(400); mode = await page.evaluate(() => window.__game.getMode()); }
-    check('继续下潜 → 海床自动转行走（水下行走）', mode === 'walk', `mode=${mode}`);
+    // 主动滚轮下潜加深（中性浮力：不滚动即悬停），后截图
+    for (let i = 0; i < 25; i++) {
+      await page.evaluate(() => { window.__game.input.wheel -= 1; });
+      await sleep(120);
+    }
     await page.screenshot({ path: OUT + 'r9-02-seafloor-walk.png' });
-    // 起飞离开
+    // 水下滚轮上 = 上游浮出 → 恢复站立水面
+    for (let i = 0; i < 120; i++) {
+      await page.evaluate(() => { window.__game.input.wheel += 1; });
+      await sleep(150);
+      const d = await page.evaluate(() => window.__game.ship.walk.diving);
+      if (!d) break;
+    }
+    const resurfaced = await page.evaluate(() => !window.__game.ship.walk.diving);
+    check('水下滚轮上 → 浮出水面恢复站立', resurfaced, '');
+    // 水面滚轮上 = 起飞
     await page.evaluate(() => { window.__game.input.wheel += 1; });
     await sleep(500);
+    mode = await page.evaluate(() => window.__game.getMode());
+    check('水面滚轮上 → 无缝起飞', mode === 'orbit', `mode=${mode}`);
     await page.evaluate(() => { window.__game.orbitCam.distTarget = 6371 * 4; });
     await sleep(2000);
   }

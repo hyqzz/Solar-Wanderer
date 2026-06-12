@@ -481,8 +481,13 @@ export class TerrainManager {
     return f;
   }
 
-  /** 行走碰撞/相机下限用：固体表面（海洋处为海床——水可潜入，R9-2b） */
+  /** 行走碰撞/相机下限/自动登陆用：表面高度（海洋 = 水面，默认登陆水面，R10） */
   heightAt(bodyId, dirLocal) {
+    return this.field(bodyId).height(dirLocal);
+  }
+
+  /** 固体表面（海洋处为海床）——下潜中的行走碰撞用（R10） */
+  heightSolidAt(bodyId, dirLocal) {
     return this.field(bodyId).heightSolid(dirLocal);
   }
 

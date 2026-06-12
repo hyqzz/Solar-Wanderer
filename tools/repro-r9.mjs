@@ -83,14 +83,16 @@ console.log('\n[R9-1b] 平移后滚轮接近：目标深度在天体间交替不
   cam.update(0.016, mkInput(), env);
   cam.panOffset.set(R_E * 3, R_E * 2, 0); // 已右键平移
   cam.update(0.016, mkInput(), env);
-  // 视线对准太阳（模拟用户平移后太阳居中）
-  const toSun = new THREE.Vector3(AU - cam.posKm[0], -cam.posKm[1], -cam.posKm[2]).normalize();
-  const mm = new THREE.Matrix4().lookAt(new THREE.Vector3(), toSun, new THREE.Vector3(0, 1, 0));
-  cam.quat.setFromRotationMatrix(mm);
+  // 视线对准太阳（推拉沿视线，太阳保持居中——居中性由 R8 断言保障）
+  const toSun = new THREE.Vector3();
+  const mm = new THREE.Matrix4();
   const dSun = () => Math.hypot(cam.posKm[0] - AU, cam.posKm[1], cam.posKm[2]) - R_SUN;
   let worstRel = 0, regress = 0;
   let prevD = dSun();
   for (let i = 0; i < 240; i++) {
+    toSun.set(AU - cam.posKm[0], -cam.posKm[1], -cam.posKm[2]).normalize();
+    mm.lookAt(new THREE.Vector3(), toSun, new THREE.Vector3(0, 1, 0));
+    cam.quat.setFromRotationMatrix(mm);
     cam.update(0.016, mkInput({ wheel: i % 4 === 0 && i < 200 ? -1 : 0 }), env);
     const d = dSun();
     const step = Math.abs(prevD - d);
@@ -117,47 +119,7 @@ console.log('\n[R9-1c] 远离上限：持续缩出不得超过日球层全景距
     `实际可达 = ${maxAU.toFixed(0)} AU`);
 }
 
-console.log('\n[R9-1d] 焦点交接：平移把太阳居中 + 滚轮收敛 → 焦点应交接为太阳');
-{
-  const bodies = {
-    earth: { posKm: new Float64Array(3), radiusKm: R_E, quat: IDENTITY_Q },
-    sun: { posKm: new Float64Array([AU, 0, 0]), radiusKm: R_SUN, quat: IDENTITY_Q, minDistKm: R_SUN * 1.02 },
-  };
-  const env = {
-    get: (id) => bodies[id] ?? bodies.earth,
-    centerHit(posKm, dir) {
-      let best = null;
-      for (const [id, b] of Object.entries(bodies)) {
-        const ox = b.posKm[0] - posKm[0], oy = b.posKm[1] - posKm[1], oz = b.posKm[2] - posKm[2];
-        const k = ox * dir.x + oy * dir.y + oz * dir.z;
-        if (k <= 0) continue;
-        const det = k * k - (ox * ox + oy * oy + oz * oz - (b.radiusKm * 1.01) ** 2);
-        if (det < 0) continue;
-        const t = k - Math.sqrt(det);
-        if (t > 1e-6 && (!best || t < best.depth)) best = { id, depth: t };
-      }
-      return best;
-    },
-    centerDepth(posKm, dir) { return this.centerHit(posKm, dir)?.depth ?? null; },
-  };
-  const cam = new OrbitCamera();
-  cam.init(env, 'earth', 60);
-  cam.update(0.016, mkInput(), env);
-  // 平移使太阳进入屏幕中心视线
-  const toSun = new THREE.Vector3(AU - cam.posKm[0], -cam.posKm[1], -cam.posKm[2]).normalize();
-  const view = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quat);
-  // 构造 panOffset 让视线恰好指向太阳方向（直接旋转过去等价于平移居中后的状态）
-  cam.panOffset.set(0, R_E * 2, 0);
-  cam.update(0.016, mkInput(), env);
-  // 强制视线对准太阳（模拟用户平移后太阳居中）：直接设置四元数
-  const m = new THREE.Matrix4().lookAt(new THREE.Vector3(), toSun, new THREE.Vector3(0, 1, 0));
-  cam.quat.setFromRotationMatrix(m);
-  for (let i = 0; i < 1200; i++) {
-    cam.update(0.032, mkInput({ wheel: i % 3 === 0 ? -1 : 0 }), env);
-  }
-  check('滚轮持续接近后 focusId === "sun"（焦点交接）', cam.focusId === 'sun',
-    `实际 focusId = ${cam.focusId}（语义仍绑定原焦点，无法触达登陆链路）`);
-}
+console.log('\n[R9-1d] (R10 修订) 滚轮不再隐式交接焦点——见 tools/repro-r10.mjs');
 
 console.log('\n[R9-2a] 地形顶点 Float32 精度：体本地坐标在行星半径模长下量化 ≥ 0.25 m');
 {

@@ -100,7 +100,15 @@ Three.js 0.165 + Vite 5 + 原生 ESM（无 TypeScript）。纯浏览器 WebGL2�
 - **登陆闪烁根治**：地形顶点改"级原点相对坐标"（旧实现顶点模≈R，fp32 在 6400km 模长下量化 0.5m 与眼高同量级）——每 LOD 级独立 origin（fround 取 fp32 精确值）+ uPatchRel（CPU 双精度差值）供片元噪声；LOD 环带重叠区按级 polygonOffset 后推消 z-fight；新增最内 30m 级（格距 ~1m）
 - **海洋可下潜**（R9-2b）：`heightSolid`=海床（水非固体），相机/行走碰撞用之；水面顶点 water attribute → 低粗糙度+时变波纹法线；水下深海雾+光照指数衰减+浸没层；行走浮力 g×0.12、Space 上浮、终端下沉 2.5 m/s；穿云薄纱（云甲板高度白雾）
 - **天体真实性**：火卫一/二三轴椭球（27×22×18 / 15×12×11 km，`shape.dims`+HeightField 变形网格=碰撞视觉同源）；pluto.jpg 原为 HTML 错误页→换新视野号真实拼图（心形平原可见）；titan/callisto 真实贴图补齐；小天体地形激活半径改按半径比例（火卫一远处不再见地形色块）
-- 验证：`node tools/repro-r9.mjs`（11 断言）+ `node tools/probe-r9.mjs`（水下/惯性/形态端到端）；全回归 repro-r7 6/6、repro-r8 5/5、单元 33/33
+- 验证：`node tools/repro-r9.mjs` + `node tools/probe-r9.mjs`（水下/惯性/形态端到端）；全回归 repro-r7 6/6、repro-r8 5/5、单元 33/33
+
+### R10：焦点显式化 + 任意高度/深度定位 + 按键修复（2026-06-12）
+- **焦点只显式切换**（撤销 R9 滚轮隐式交接）：单击天体 = 锁定焦点（pickBody 屏幕拾取 ~0.7° 容差，adoptPosition 位置/视向连续）；滚轮/PageUp/Down 严格沿屏幕中心推拉；推拉目标=焦点时下限用地形高度 → 点击后滚轮一路直达自动登陆
+- **高度等比缩放**：缩放步长 ∝ 离地高度（base=minDist−2m），贴地米级精度可悬停任意高度（旧实现按中心距等比，贴地一格外推 700 km）；键盘平移/旋转按住渐加速（0.45→1.65）
+- **水体交互**：默认登陆水面站立；水面滚轮下/PageDown = 下潜；水中**中性浮力**——滚轮低灵敏度升降（浅 0.4m/格、深处按深度 12%），停止即悬停任意深度；浮出水面自动恢复（submerged 状态消 1.7m 死区）；水面滚轮上 = 起飞
+- **GE 按键失效修复**：指针锁定切换会 clear 按键集，按住的键被 `e.repeat` 早退丢弃 → repeat 事件重新 add（登陆/起飞后按住的 WASD 立即恢复）
+- **V 键跳跃根治**：`groundRadiusOf` 惯性换算曾复用 `_qf`，覆盖 setInertial 待恢复视向（仅可登陆天体触发——地球/火星/冥王星跳、木星正常的原因）→ 专用 `_qg`
+- 验证：`node tools/repro-r10.mjs`（12 断言）+ `node tools/probe-r10.mjs`（起飞后按键/点击拾取/V 连续性端到端）
 
 - **计算**：日心黄道 J2000，单位 km。
 - **→ Three 世界**：`(x, y, z)_ecl → (x, z, -y)_three`（黄道北极 = +Y）。
@@ -129,6 +137,8 @@ node tools/repro-r7.mjs        # R7 缺陷复现/修复验证（量化断言，N
 node tools/repro-r8.mjs        # R8 屏幕中心缩放验证（倾斜/平移/常规三场景）
 node tools/repro-r9.mjs        # R9 镜头/地形/天体真实性验证（11 断言，Node 无浏览器）
 node tools/probe-r9.mjs        # R9 运行时探针（海洋下潜/海床行走/惯性模式/形态截图）
+node tools/repro-r10.mjs       # R10 焦点/缩放/水体/V 连续性验证（12 断言）
+node tools/probe-r10.mjs       # R10 运行时探针（起飞后按键/点击拾取/V 连续性）
 node tools/probe-r7.mjs        # R7 运行时探针（自动登陆/起飞/气巨入气，需 dev server）
 node tools/probe-r7-visual.mjs # R7 高画质档外行星近景视检截图
 ```

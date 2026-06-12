@@ -14,7 +14,10 @@ const _vm = new THREE.Vector3(); // minDist/groundRadius/光标锚点专用（�
 const _va = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
-const _qf = new THREE.Quaternion(); // frame/handover 专用（不与 _q 串用）
+const _qf = new THREE.Quaternion(); // setInertial/交接快照专用（不与 _q 串用）
+const _qg = new THREE.Quaternion(); // groundRadiusOf 专用（R10：不得复用 _qf——
+                                    // setInertial 经 adoptPosition→minDist→groundRadiusOf
+                                    // 会覆盖待恢复视向，曾导致可登陆天体按 V 镜头跳跃）
 const IDENTITY_Q = new THREE.Quaternion();
 
 const EYE_KM = 0.0017;          // 行走视高 1.7 m（与 ship.js 一致）
@@ -48,6 +51,7 @@ export class OrbitCamera {
     this._streak = 0;      // 滚轮连滚加速度（轻拨精细 → 连滚加速，R9-1c）
     this._streakIdle = 0;
     this._zoomHold = 0;    // PageUp/Down 按住渐加速
+    this._navHold = 0;     // 键盘平移/旋转按住渐加速（R10：所有操作低→高灵敏度）
   }
 
   /** 锚定参考系：体固（默认，随自转）或惯性（观赏绕转） */
@@ -141,7 +145,7 @@ export class OrbitCamera {
     const cl = Math.cos(this.lat);
     _vm.set(cl * Math.cos(this.lon), Math.sin(this.lat), -cl * Math.sin(this.lon));
     // 惯性模式下 lat/lon 在惯性系：转为体固系再查地形（地形高度场是体固的）
-    if (this.inertial) _vm.applyQuaternion(_qf.copy(f.quat).invert());
+    if (this.inertial) _vm.applyQuaternion(_qg.copy(f.quat).invert());
     return f.groundRadius(_vm);
   }
 
@@ -240,18 +244,21 @@ export class OrbitCamera {
     const dn = (input.down('KeyS') || input.down('ArrowDown')) ? 1 : 0;
     const lf = (input.down('KeyA') || input.down('ArrowLeft')) ? 1 : 0;
     const rt = (input.down('KeyD') || input.down('ArrowRight')) ? 1 : 0;
+    // 键盘操作灵敏度由低到高（R10）：按下瞬间精细，持续按住渐加速（0.45→1.65 倍）
+    this._navHold = (up || dn || lf || rt) ? Math.min(this._navHold + dt, 2) : 0;
+    const navMul = 0.45 + this._navHold * 0.6;
     if (!shift) {
       // 平移（屏幕空间，随航向旋转；↑北 ↓南 ←西 →东；纬度可穿越极点连续环绕）
       const sN = up - dn, sE = rt - lf;
       const ch = Math.cos(this.heading), sh = Math.sin(this.heading);
-      this.lat += (sN * ch - sE * sh) * panRate * dt;
-      this.lon += ((sN * sh + sE * ch) * panRate * dt) /
+      this.lat += (sN * ch - sE * sh) * panRate * navMul * dt;
+      this.lon += ((sN * sh + sE * ch) * panRate * navMul * dt) /
         Math.max(Math.abs(Math.cos(this.lat)), 0.15);
     } else {
       // Shift+A/D 旋转航向；Shift+W/S 倾斜 —— 均为 360° 无限循环
       //（设计原则：一切视角自由循环，纬度经极点穿越翻转实现）
-      this.heading += (lf - rt) * 1.1 * dt;
-      this.tilt += (up - dn) * 0.9 * dt;
+      this.heading += (lf - rt) * 1.1 * navMul * dt;
+      this.tilt += (up - dn) * 0.9 * navMul * dt;
       if (this.tilt > Math.PI) this.tilt -= 2 * Math.PI;
       if (this.tilt < -Math.PI) this.tilt += 2 * Math.PI;
       if (this.heading > Math.PI) this.heading -= 2 * Math.PI;
@@ -319,20 +326,12 @@ export class OrbitCamera {
       zoomMul *= Math.pow(1.12 + 0.26 * this._streak, THREE.MathUtils.clamp(input.wheel, -3, 3));
     }
 
-    // 焦点交接（R9-1d）：拉近手势起点若屏幕中心命中其他天体 → 立即把焦点交给它。
-    // 此后所有语义（拖拽灵敏度、minDist、自动倾斜、自动登陆链路）都绑定新焦点 ——
-    // 右键平移 + 滚轮即可一路接近并登陆任何天体；也根治了"绕旧锚点猛甩"类跳跃（R9-1b）。
-    const offAxis0 = this.panOffset.lengthSq() > 0 || Math.abs(this.tilt) > 0.02;
-    if (zoomMul < 1 && this._dolly === 1 && offAxis0 && env.centerHit) {
-      _va.set(0, 0, -1).applyQuaternion(this.quat);
-      const hit = env.centerHit(this.posKm, _va);
-      if (hit && hit.id !== this.focusId) {
-        this.adoptPosition(env, hit.id, this.posKm, _qf.copy(this.quat));
-        f = env.get(this.focusId);
-      }
-    }
+    // （R10 修订）滚轮/PageUp/Down 不再隐式切换焦点 —— 严格沿屏幕中心前进/后退；
+    // 焦点只通过点击天体 / 搜索 / 双击标签显式切换（main.js pickBody）。
 
     // 无倾斜无平移：视线轴 = 焦点径向 → 经典径向缩放（着陆流程依赖的语义，保持不变）。
+    // 缩放按"离地高度"等比（R10）：贴地时步长米级、高空步长公里级 ——
+    // 可精确定位到任何高度（旧实现按中心距等比，贴地一格外推 700 km）。
     // 有倾斜或平移：视线不再指向轨道锚点，径向缩放会让屏幕中心目标甩偏/跳跃 ——
     // 改为沿视线推拉（dolly）；目标在手势起点锁定一次，整个手势绝不换靶（R9-1b：
     // 旧实现每帧按屏幕中心实时重定目标，视线漂移扫过近处天体时参考深度突变 → 瞬间猛冲）。
@@ -340,8 +339,10 @@ export class OrbitCamera {
     if (!offAxis) {
       this._dolly = 1;
       this._dollyTargetId = null;
-      this.distTarget *= zoomMul;
-      this.distTarget = THREE.MathUtils.clamp(this.distTarget, this.minDist(f), MAX_DIST);
+      const minD = this.minDist(f);
+      const base = minD - 0.002; // 基准 = 下限略下方（贴地时高度步长 ≥ 2m 起步）
+      const a = Math.max(this.distTarget - base, 0.0008);
+      this.distTarget = THREE.MathUtils.clamp(base + a * zoomMul, minD, MAX_DIST);
       this.dist += (this.distTarget - this.dist) * Math.min(dt * 7, 1);
     } else {
       this.distTarget = this.dist; // 冻结径向缩放通道
@@ -368,7 +369,9 @@ export class OrbitCamera {
         if (this._dollyTargetId && env.get) {
           const tb = env.get(this._dollyTargetId);
           if (tb) {
-            const margin = tb.minDistKm ?? tb.radiusKm * 1.004 + 1;
+            // 目标=焦点（用户点击锁定）→ 用地形感知下限，可一路推进到地表触发自动登陆
+            const margin = this._dollyTargetId === this.focusId
+              ? this.minDist(tb) : (tb.minDistKm ?? tb.radiusKm * 1.004 + 1);
             _v2.set(
               tb.posKm[0] - this.posKm[0], tb.posKm[1] - this.posKm[1], tb.posKm[2] - this.posKm[2]
             );

@@ -35,7 +35,8 @@ export class Input {
       if (isTyping(e)) return;
       if (['Space', 'BracketLeft', 'BracketRight', 'Tab', 'PageUp', 'PageDown',
         'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-      if (e.repeat) return;
+      if (e.repeat) { this.keys.add(e.code); return; } // R10：锁定切换会清空按键集，
+      // 仍被按住的键靠 repeat 事件找回——否则登陆/起飞后按住的 GE 键失效
       this.keys.add(e.code);
       this.justPressed.add(e.code);
     });
@@ -115,7 +116,7 @@ export class Ship {
     this.effSpeed = 0;              // 实际限速后的目标速度（HUD 显示）
     this.damping = true;
     // 行走状态（smx/smy = 视角输入指数平滑状态）
-    this.walk = { bodyId: null, localPos: new THREE.Vector3(), yaw: 0, pitch: 0, vAlt: 0, grounded: false, smx: 0, smy: 0 };
+    this.walk = { bodyId: null, localPos: new THREE.Vector3(), yaw: 0, pitch: 0, vAlt: 0, grounded: false, smx: 0, smy: 0, diving: false, submerged: false };
   }
 
   /** 当前速度大小 km/s */
@@ -243,6 +244,7 @@ export class Ship {
     w.yaw = Math.atan2(_v3.dot(e), _v3.dot(nrt));
     w.pitch = Math.asin(THREE.MathUtils.clamp(_v3.dot(upv), -1, 1));
     w.smx = 0; w.smy = 0;
+    w.diving = false; w.submerged = false; // 默认登陆水面（R10：继续滚轮下才下潜）
     this.vel.set(0, 0, 0);
   }
 
@@ -310,25 +312,51 @@ export class Ship {
     if (input.down('KeyS')) move.sub(fwd);
     if (input.down('KeyD')) move.add(right);
     if (input.down('KeyA')) move.sub(right);
-    // 水中（R9-2b）：浮力抵消大部分重力，移动迟缓，下沉有终端速度，Space=向上游
+    // 水体（R10）：默认站在水面；滚轮下/PageDown = 下潜，水下滚轮上 = 向上游，
+    // 浮出水面自动恢复站立（起飞只在水面/陆地由滚轮上触发，见 main.js）
     const dirNow = w.localPos.clone().normalize();
-    const inWater = !!env.isWater?.(w.bodyId, dirNow) &&
-      r < phys.radiusKm + 0.001;
+    const surfR = phys.radiusKm + 0.001;
+    const onWater = !!env.isWater?.(w.bodyId, dirNow);
+    if (onWater && !w.diving && (input.wheel <= -0.5 || input.down('PageDown'))) {
+      w.diving = true;
+      w.grounded = false;
+      w.vAlt = 0;
+    }
+    const inWater = onWater && w.diving && r < surfR + 1e-7;
     let speed = (input.down('ShiftLeft') ? 0.009 : 0.003); // 9 / 3 m/s
     if (inWater) speed *= 0.45;
     if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed * dt);
     w.localPos.add(move);
 
-    // 重力与跳跃（沿天顶）
+    // 水中垂直微动（R10）：滚轮低灵敏度升降——浅处 0.4m/格、深处按深度 12%，
+    // 停止滚动即中性浮力悬停 → 可精确定位水中任意深度
+    if (inWater && input.wheel !== 0) {
+      const depth = Math.max(surfR - w.localPos.length(), 0.0002);
+      const step = Math.max(0.0004, depth * 0.12);
+      w.localPos.addScaledVector(up, step * Math.max(-3, Math.min(3, input.wheel)));
+    }
+
+    // 重力与跳跃（沿天顶）；水中 = 中性浮力（阻尼悬停），Space 踩水上浮
     if (input.tapped('Space') && w.grounded) { w.vAlt = inWater ? 0.0024 : 0.0042; w.grounded = false; }
-    if (inWater && input.down('Space')) w.vAlt += g * 0.5 * dt; // 持续踩水上浮
-    w.vAlt -= (inWater ? g * 0.12 : g) * dt;
-    if (inWater) w.vAlt = Math.max(w.vAlt, -0.0025); // 水中终端下沉速度 2.5 m/s
+    if (inWater) {
+      if (input.down('Space')) w.vAlt += g * 0.5 * dt;
+      w.vAlt *= Math.exp(-dt * 2.5); // 水阻尼 → 静止时悬停于当前深度
+    } else {
+      w.vAlt -= g * dt;
+    }
     w.localPos.addScaledVector(up, w.vAlt * dt);
 
-    // 地面碰撞（地形高度）
+    // 地面碰撞：默认 = 表面（水面可站立）；下潜中 = 海床（固体面）
     const dir = w.localPos.clone().normalize();
-    const ground = env.heightFn(w.bodyId, dir) + WALK_EYE_KM;
+    // 出水判定：必须先真正没入（submerged），回升到水面即恢复站立——
+    // 否则水面与眼高之间存在 1.7m 死区（滚轮无效、重力又拉回，永远出不来）
+    if (w.diving) {
+      const rr = w.localPos.length();
+      if (rr < surfR - 0.001) w.submerged = true;
+      else if (w.submerged && rr >= surfR - 0.0001) { w.diving = false; w.submerged = false; w.vAlt = 0; }
+    }
+    const groundFn = w.diving ? (env.heightSolidFn ?? env.heightFn) : env.heightFn;
+    const ground = groundFn(w.bodyId, dir) + WALK_EYE_KM;
     if (w.localPos.length() <= ground) {
       w.localPos.copy(dir).multiplyScalar(ground);
       w.vAlt = 0;

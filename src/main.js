@@ -145,17 +145,29 @@ async function init() {
   select('earth');
 
   document.getElementById('start-btn').addEventListener('click', () => hud.hideStart());
-  canvas.addEventListener('click', () => {
+  let downX = 0, downY = 0;
+  canvas.addEventListener('mousedown', (e) => { downX = e.clientX; downY = e.clientY; });
+  canvas.addEventListener('click', (e) => {
     // fly/walk 需要指针锁定；orbit 模式自由光标
     if ((appMode === 'fly' || appMode === 'walk') && !input.locked) canvas.requestPointerLock();
     else if (input.locked && labels.aimedId) select(labels.aimedId);
+    else if (appMode === 'orbit' && !input.locked && !orbitCam.flight &&
+      Math.hypot(e.clientX - downX, e.clientY - downY) < 6) {
+      // 点击天体 = 锁定焦点（R10：焦点只显式切换；位置/视向严格连续）
+      const id = pickBody(e.clientX, e.clientY);
+      if (id && id !== orbitCam.focusId) {
+        orbitCam.adoptPosition(orbitEnv, id, ship.posKm, ship.quat);
+        select(id);
+        focusTipUntil = performance.now() + 2600;
+      }
+    }
   });
   input.onLockChange = (locked) => {
     if (!locked && appMode === 'fly') switchToOrbit(); // Esc 解锁 → 回探索模式
   };
   window.addEventListener('resize', onResize);
   hud.loadingDone();
-  window.__game = { ship, simClock, select, flyTo, orbitCam, builder, registry, input, terrainMgr, getMode: () => appMode };
+  window.__game = { ship, simClock, select, flyTo, orbitCam, builder, registry, input, terrainMgr, camera, getMode: () => appMode };
   renderer.setAnimationLoop(loop);
 }
 
@@ -253,6 +265,30 @@ function setupLabels() {
 
 function select(id) {
   selectedId = id;
+}
+
+/** 屏幕坐标拾取天体（点击设焦点用，~0.7° 容差，R10） */
+const _pickDir = new THREE.Vector3();
+const _pickP = new THREE.Vector3();
+let focusTipUntil = 0;
+function pickBody(cx, cy) {
+  _pickDir.set(
+    (cx / window.innerWidth) * 2 - 1, -((cy / window.innerHeight) * 2 - 1), 0.5
+  ).unproject(camera).normalize(); // 浮动原点：相机恒在原点，未归一向量即射线方向
+  let best = null;
+  for (const [id, t] of registry) {
+    const R = t.phys?.radiusKm ?? 0;
+    if (R < 1) continue;
+    _pickP.copy(t.relObj.position); // 相机相对位置
+    const b = _pickP.dot(_pickDir);
+    if (b <= 0) continue;
+    const margin = Math.max(R, b * 0.012); // 远小天体按 ~0.7° 角容差扩大可点面积
+    const det = b * b - (_pickP.lengthSq() - margin * margin);
+    if (det < 0) continue;
+    const tHit = b - Math.sqrt(det);
+    if (best === null || tHit < best.t) best = { id, t: Math.max(tHit, 0) };
+  }
+  return best?.id ?? null;
 }
 
 /** GE 式前往：任意模式 → 飞行动画 → 探索模式锚定目标 */
@@ -358,9 +394,10 @@ function loop() {
     }
     if (input.tapped('KeyF') && !orbitCam.flight) switchToFly();
   } else {
-    // 行走中滚轮后退 → 无缝起飞回探索模式（视向连续，R7 #1；
-    // 阈值 0.5 防触控板轻扫误触发——滚轮事件已按 deltaY 归一化）
-    if (appMode === 'walk' && input.wheel >= 0.5) {
+    // 行走中滚轮后退/PageUp → 无缝起飞回探索模式（视向连续，R7 #1；
+    // 阈值 0.5 防触控板轻扫误触发；下潜中滚轮上 = 向上游，不触发起飞，R10）
+    if (appMode === 'walk' && !ship.walk.diving &&
+      (input.wheel >= 0.5 || input.down('PageUp'))) {
       lastTakeoff = performance.now();
       document.exitPointerLock?.();
       orbitCam.adoptPosition(orbitEnv, ship.walk.bodyId, ship.posKm, ship.quat);
@@ -462,6 +499,7 @@ function makeEnv(nearest) {
     getBodyQuat: (id) => builder.bodies.get(id).mesh.quaternion,
     getBodyPos: (id) => builder.bodies.get(id).posKm,
     heightFn: (id, dir) => terrainMgr.heightAt(id, dir),
+    heightSolidFn: (id, dir) => terrainMgr.heightSolidAt(id, dir),
     isWater: (id, dir) => terrainMgr.isWater(id, dir),
     phys: (id) => builder.bodies.get(id).phys,
   };
@@ -499,7 +537,9 @@ function handleUIKeys() {
 
 function updateTip(nearest) {
   const atm = nearest ? builder.bodies.get(nearest.id)?.phys.atmosphere : null;
-  if (orbitCam.flight) {
+  if (performance.now() < focusTipUntil && appMode === 'orbit') {
+    hud.tip(`🎯 已锁定焦点：${registry.get(orbitCam.focusId)?.nameZh}（滚轮拉近可直达登陆）`);
+  } else if (orbitCam.flight) {
     hud.tip(`✈ 正在前往 ${registry.get(orbitCam.flight.toId)?.nameZh} …（拖拽可中断）`);
   } else if (appMode === 'walk') {
     hud.tip(input.locked
