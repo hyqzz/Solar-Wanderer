@@ -5,6 +5,7 @@ import { surfaceGravity, rotationPeriodHours } from '../astro/bodies.js';
 import { orbitalPeriodYears } from '../astro/planets.js';
 import { factsFor } from './eduFacts.js';
 import { t, bodyName, LANG } from './i18n.js';
+import { DESC_EN } from './contentEn.js';
 
 const WARP_LADDER = [1, 10, 60, 600, 3600, 21600, 86400, 604800, 2592000, 31557600, 315576000];
 
@@ -161,10 +162,11 @@ export function targetInfo(id, registry, dist, dSun = null) {
   // 英文界面：主名用英文、副名用中文；中文界面反之。
   const primary = bodyName(e);
   const secondary = LANG === 'zh' ? (e.nameEn ?? '') : e.nameZh;
+  const descZh = e.desc ?? e.phys?.desc;
   const info = {
     id, nameZh: primary, nameEn: secondary, dist, dSun,
     radiusKm: e.phys?.radiusKm > 1 ? e.phys.radiusKm : null,
-    desc: e.desc ?? e.phys?.desc,
+    desc: LANG === 'en' ? (DESC_EN[id] ?? descZh) : descZh,
   };
   if (e.phys?.gm && e.phys?.radiusKm) info.gravity = surfaceGravity(e.phys);
   if (e.kind === 'planet') {

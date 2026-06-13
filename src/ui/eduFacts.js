@@ -97,6 +97,10 @@ export const FACTS = {
   ],
 };
 
+import { LANG } from '../config.js';
+import { FACTS_EN } from './contentEn.js';
+
 export function factsFor(id) {
+  if (LANG === 'en') return FACTS_EN[id] ?? FACTS_EN._generic;
   return FACTS[id] ?? FACTS._generic;
 }
