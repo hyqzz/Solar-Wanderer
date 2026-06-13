@@ -11,7 +11,6 @@ export class SearchUI {
     this.registry = registry;
     this.onGo = onGo;
     this.opts = opts;
-    this.buildSearch();
     this.buildDirectory();
   }
 
@@ -95,8 +94,8 @@ export class SearchUI {
 
   buildDirectory() {
     const panel = document.getElementById('directory');
-    const toggle = document.getElementById('dir-toggle');
-    toggle.addEventListener('click', () => {
+    const head = panel.querySelector('.dir-head');
+    head.addEventListener('click', () => {
       panel.classList.toggle('open');
     });
 

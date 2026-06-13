@@ -47,7 +47,7 @@ html, body {
   line-height: 1.7;
   backdrop-filter: blur(6px);
 }
-#hud-time { top: 14px; left: 14px; min-width: 260px; }
+#hud-time { min-width: 240px; }
 #hud-nav { bottom: 14px; left: 14px; min-width: 280px; }
 #hud-target { top: 14px; right: 14px; width: 300px; }
 #hud-tip {
@@ -89,50 +89,34 @@ html, body {
 }
 .fact-next:hover { text-decoration: underline; }
 
-/* ---------- 搜索框（Google Earth 式） ---------- */
-#search-box {
-  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
-  width: 380px; z-index: 20;
+/* ---------- 左侧列（时间框 + 目录） ---------- */
+#left-col {
+  position: fixed; top: 14px; left: 14px; z-index: 20;
+  width: 260px; display: flex; flex-direction: column; gap: 8px;
+  max-height: calc(100vh - 130px);
+  pointer-events: none;
 }
-#search-input {
-  width: 100%; padding: 9px 14px; font-size: 14px; font-family: inherit;
-  background: rgba(8, 16, 28, 0.78); color: #e8f4ff;
-  border: 1px solid rgba(110, 160, 210, 0.35); border-radius: 22px;
-  outline: none; backdrop-filter: blur(6px);
+#left-col .panel {
+  position: static;
+  pointer-events: auto;
 }
-#search-input:focus { border-color: #5fa8e0; }
-#search-results {
-  margin-top: 6px; border-radius: 10px; overflow: hidden;
-  background: rgba(8, 16, 28, 0.92); border: 1px solid rgba(110, 160, 210, 0.3);
-}
-.search-item {
-  padding: 8px 14px; cursor: pointer; font-size: 13px; color: #cfe3f5;
-  display: flex; gap: 8px; align-items: baseline;
-}
-.search-item span { opacity: 0.55; font-size: 12px; }
-.search-item em { margin-left: auto; font-style: normal; font-size: 11px; color: #6f96bc; }
-.search-item:hover, .search-item.active { background: rgba(60, 110, 170, 0.35); }
 
 /* ---------- 天体目录 ---------- */
-#dir-toggle {
-  position: fixed; top: 14px; left: 290px; z-index: 21;
-  padding: 8px 14px; cursor: pointer; font-family: inherit; font-size: 13px;
-  background: rgba(8, 16, 28, 0.78); color: #cfe3f5;
-  border: 1px solid rgba(110, 160, 210, 0.35); border-radius: 18px;
-  backdrop-filter: blur(6px);
-}
-#dir-toggle:hover { border-color: #5fa8e0; }
 #directory {
-  position: fixed; top: 56px; left: 14px; bottom: 110px; width: 250px; z-index: 19;
+  width: 260px;
   background: rgba(8, 16, 28, 0.82); border: 1px solid rgba(110, 160, 210, 0.28);
   border-radius: 10px; backdrop-filter: blur(8px);
-  display: none; flex-direction: column;
+  display: flex; flex-direction: column;
+  min-height: 0; pointer-events: auto;
 }
-#directory.open { display: flex; }
+#dir-body { display: none; }
+#directory.open #dir-body { display: flex; flex-direction: column; }
 .dir-head {
   padding: 10px 14px; font-size: 14px; font-weight: bold; color: #e8f4ff;
   border-bottom: 1px solid rgba(110, 160, 210, 0.2);
+  cursor: pointer; user-select: none;
 }
+.dir-head:hover { background: rgba(60, 110, 170, 0.15); border-radius: 10px 10px 0 0; }
 #dir-body { overflow-y: auto; padding: 6px 8px; flex: 1; }
 #dir-body details { margin-bottom: 4px; }
 #dir-body summary {

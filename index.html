@@ -14,19 +14,15 @@
 
   <div id="labels"></div>
 
-  <div id="search-box" style="display:none">
-    <input id="search-input" type="text" placeholder="🔍 搜索天体并前往（如：月球 / mars / 哈雷 / 旅行者）" autocomplete="off" />
-    <div id="search-results"></div>
-  </div>
-
-  <button id="dir-toggle" title="天体目录">🪐 目录</button>
-  <div id="directory">
-    <div class="dir-head">天体目录 <span class="dim">点击即前往</span></div>
-    <div id="dir-body"></div>
+  <div id="left-col">
+    <div id="hud-time" class="panel"></div>
+    <div id="directory" class="open">
+      <div class="dir-head">🪐 天体目录 <span class="dim">点击即前往</span></div>
+      <div id="dir-body"></div>
+    </div>
   </div>
 
   <div id="hud">
-    <div id="hud-time" class="panel"></div>
     <div id="hud-nav" class="panel"></div>
     <div id="hud-target" class="panel"></div>
     <div id="hud-tip"></div>
@@ -61,7 +57,7 @@
             <tr><td>滚轮拉近到底</td><td><b>无缝降落地表</b>（自动转入行走）；海洋默认降落水面</td></tr>
             <tr><td>V</td><td>惯性观察模式（相机不随自转 · 配合时间加速看卫星绕转）</td></tr>
             <tr><td>R</td><td>复位视角（北朝上、俯视）</td></tr>
-            <tr><td>顶部搜索框 / 🪐 目录</td><td>输入或点选天体 → 飞行动画前往</td></tr>
+            <tr><td>🪐 天体目录</td><td>点选天体 → 飞行动画前往（左侧，默认展开）</td></tr>
             <tr><td>双击标签 / T / 1–9,0</td><td>GE 式动态前往（目标居中）</td></tr>
             <tr><td>拖拽（飞行中）</td><td>中断飞行动画</td></tr>
             <tr><td>G</td><td>贴近地表时登陆行走</td></tr>
