@@ -105,27 +105,45 @@ function makeOortShell({ count, rMinAU, rMaxAU, inclSigmaDeg, spherical, color, 
   });
   const pts = new THREE.Points(geo, mat);
   pts.frustumCulled = false;
+  pts.userData.baseOpacity = opacity;
   return pts;
 }
 
+/**
+ * 奥尔特云：真实的奥尔特云极其稀疏（万亿天体散布于巨大球壳，肉眼密度近乎为零）。
+ * 因此用稀疏、暗淡的粒子做"存在感"暗示，而非密集星场；并随相机进入其内部而淡出，
+ * 避免在最外层右键平移时看到"一大片随视角移动的星点"（#5）。
+ * 返回 { group, update(dSunAU) }。
+ */
 export function createOortCloud() {
   const group = new THREE.Group();
+  const shells = [];
 
   // 内奥尔特云（Hills Cloud）：2000–20000 AU，轻度扁化、倾角集中在 ±30°
-  // 目前已观测到 Sedna/2012VP113 等延伸散射盘天体可能就在此区域内缘
-  group.add(makeOortShell({
-    count: 6000, rMinAU: 2000, rMaxAU: 20000,
+  const inner = makeOortShell({
+    count: 1400, rMinAU: 2000, rMaxAU: 20000,
     inclSigmaDeg: 30, spherical: false,
-    color: 0x8ca8c8, size: 1.4, opacity: 0.38, seed: 31415,
-  }));
-
-  // 外奥尔特云：20000–100000 AU，近球形，各向同性——来自数十亿年引力扰动
-  group.add(makeOortShell({
-    count: 10000, rMinAU: 20000, rMaxAU: 100000,
+    color: 0x8ca8c8, size: 1.1, opacity: 0.20, seed: 31415,
+  });
+  // 外奥尔特云：20000–100000 AU，近球形，各向同性
+  const outer = makeOortShell({
+    count: 2600, rMinAU: 20000, rMaxAU: 100000,
     spherical: true,
-    color: 0x7090b0, size: 1.2, opacity: 0.28, seed: 27183,
-  }));
-
+    color: 0x7090b0, size: 1.0, opacity: 0.14, seed: 27183,
+  });
+  group.add(inner); group.add(outer);
+  shells.push(inner, outer);
   group.frustumCulled = false;
-  return group;
+
+  function update(dSunAU) {
+    // 在云外（内太阳系）远观时正常显示；进入云内部后逐渐减弱到很低（真实极稀疏），
+    // 使最外层不再呈现"密集且随平移移动的星场"。
+    let f;
+    if (dSunAU < 1000) f = 1;
+    else if (dSunAU < 60000) f = 1 - 0.78 * ((dSunAU - 1000) / 59000);
+    else f = 0.22;
+    for (const sh of shells) sh.material.opacity = sh.userData.baseOpacity * f;
+  }
+
+  return { group, update };
 }

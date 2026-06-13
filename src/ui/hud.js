@@ -4,6 +4,7 @@ import { formatSpeed, formatDist, KM_PER_AU } from '../config.js';
 import { surfaceGravity, rotationPeriodHours } from '../astro/bodies.js';
 import { orbitalPeriodYears } from '../astro/planets.js';
 import { factsFor } from './eduFacts.js';
+import { t, bodyName, LANG } from './i18n.js';
 
 const WARP_LADDER = [1, 10, 60, 600, 3600, 21600, 86400, 604800, 2592000, 31557600, 315576000];
 
@@ -39,13 +40,16 @@ export class HUD {
   warpReset() { this.warpIndex = 0; this.warpSign = 1; }
 
   fmtWarp(clock) {
-    if (clock.paused) return '⏸ 已暂停';
+    if (clock.paused) return t('time.paused');
     const r = this.warpSign * WARP_LADDER[this.warpIndex];
-    if (r === 1) return '1×（实时）';
+    if (r === 1) return t('time.realtime');
     const a = Math.abs(r);
-    const units = [[31557600, '年'], [2592000, '月'], [604800, '周'], [86400, '天'], [3600, '小时'], [60, '分钟']];
+    const units = [
+      [31557600, t('u.year')], [2592000, t('u.month')], [604800, t('u.week')],
+      [86400, t('u.day')], [3600, t('u.hour')], [60, t('u.min')],
+    ];
     for (const [s, u] of units) {
-      if (a >= s) return `${r < 0 ? '−' : ''}${(a / s).toFixed(a % s ? 1 : 0)} ${u}/秒`;
+      if (a >= s) return `${r < 0 ? '−' : ''}${(a / s).toFixed(a % s ? 1 : 0)} ${u}${t('u.perSec')}`;
     }
     return `${r}×`;
   }
@@ -56,49 +60,49 @@ export class HUD {
     const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
       `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     const warn = clock.inHighAccuracyRange() ? '' :
-      '<div class="warn">⚠ 超出星历高精度范围(1800–2050)</div>';
+      `<div class="warn">${t('time.outOfRange')}</div>`;
     this.elTime.innerHTML =
       `<div class="big">${local}</div>` +
-      `<div class="dim">时间倍率 ${this.fmtWarp(clock)}　<span class="key">[</span>减 <span class="key">]</span>加 <span class="key">P</span>暂停 <span class="key">N</span>现在</div>` + warn;
+      `<div class="dim">${t('time.rate')} ${this.fmtWarp(clock)}　<span class="key">[</span>${t('time.k.minus')} <span class="key">]</span>${t('time.k.plus')} <span class="key">P</span>${t('time.k.pause')} <span class="key">N</span>${t('time.k.now')}</div>` + warn;
   }
 
   updateNav({ mode, flight, speed, speedSetting, focusName, nearest, gravity }) {
-    const modeTxt = flight ? '✈ 飞行动画' :
-      mode === 'orbit' ? '🌐 探索（拖拽·滚轮·双击前往）' :
-      mode === 'walk' ? '🚶 地表行走' : '🚀 自由飞行';
+    const modeTxt = flight ? t('nav.flight') :
+      mode === 'orbit' ? t('nav.orbit') :
+      mode === 'walk' ? t('nav.walk') : t('nav.fly');
     const rows = [`<div class="big">${modeTxt}</div>`];
     if (flight) {
-      rows.push(`<div class="accent">前往 ${flight.toName}　${Math.round(flight.t * 100)}%</div>`);
+      rows.push(`<div class="accent">${t('hud.flightTo', { name: flight.toName, p: Math.round(flight.t * 100) })}</div>`);
     } else if (mode === 'orbit') {
-      if (focusName) rows.push(`<div>环绕焦点：${focusName}</div>`);
+      if (focusName) rows.push(`<div>${t('hud.orbitFocus', { name: focusName })}</div>`);
     } else {
-      rows.push(`<div>速度 ${formatSpeed(speed)}${mode === 'fly' ? `　档位 ${formatSpeed(speedSetting)}（滚轮调节）` : ''}</div>`);
+      rows.push(`<div>${t('hud.speed', { v: formatSpeed(speed) })}${mode === 'fly' ? t('hud.gear', { v: formatSpeed(speedSetting) }) : ''}</div>`);
     }
     if (nearest) {
-      rows.push(`<div>最近天体：${nearest.nameZh}　高度 ${formatDist(Math.max(nearest.distSurface, 0))}</div>`);
+      rows.push(`<div>${t('hud.nearest', { name: nearest.name, alt: formatDist(Math.max(nearest.distSurface, 0)) })}</div>`);
     }
     if (mode === 'walk' && gravity != null) {
-      rows.push(`<div>表面重力 ${gravity.toFixed(2)} m/s²</div>`);
+      rows.push(`<div>${t('hud.surfaceGravity', { g: gravity.toFixed(2) })}</div>`);
     }
     if (mode === 'orbit' && !flight) {
-      rows.push(`<div class="dim"><span class="key">F</span> 自由飞行　<span class="key">T</span> 前往所选</div>`);
+      rows.push(`<div class="dim"><span class="key">F</span> ${t('hud.hintFly')}　<span class="key">T</span> ${t('hud.hintGoto')}</div>`);
     }
     this.elNav.innerHTML = rows.join('');
   }
 
   updateTarget(info) {
     if (!info) {
-      this.elTarget.innerHTML = '<div class="dim">未选择目标 — 单击标签选中，双击/搜索/目录前往<br>数字键 1-9/0 直达行星</div>';
+      this.elTarget.innerHTML = `<div class="dim">${t('tgt.none')}</div>`;
       return;
     }
     const rows = [];
     rows.push(`<div class="tname">${info.nameZh} <span class="dim">${info.nameEn}</span></div>`);
-    rows.push(`<div>距你 ${formatDist(info.dist)}　<span class="dim">光行 ${lightTime(info.dist)}</span></div>`);
-    if (info.dSun != null) rows.push(`<div>距太阳 ${(info.dSun / KM_PER_AU).toFixed(3)} AU</div>`);
-    if (info.radiusKm) rows.push(`<div>半径 ${Math.round(info.radiusKm).toLocaleString()} km</div>`);
-    if (info.gravity) rows.push(`<div>表面重力 ${info.gravity.toFixed(2)} m/s²</div>`);
-    if (info.period) rows.push(`<div>公转周期 ${info.period}</div>`);
-    if (info.rotation) rows.push(`<div>自转周期 ${info.rotation}</div>`);
+    rows.push(`<div>${t('tgt.dist', { d: formatDist(info.dist), lt: lightTime(info.dist) })}</div>`);
+    if (info.dSun != null) rows.push(`<div>${t('tgt.dSun', { au: (info.dSun / KM_PER_AU).toFixed(3) })}</div>`);
+    if (info.radiusKm) rows.push(`<div>${t('tgt.radius', { r: Math.round(info.radiusKm).toLocaleString() })}</div>`);
+    if (info.gravity) rows.push(`<div>${t('tgt.gravity', { g: info.gravity.toFixed(2) })}</div>`);
+    if (info.period) rows.push(`<div>${t('tgt.period', { p: info.period })}</div>`);
+    if (info.rotation) rows.push(`<div>${t('tgt.rotation', { p: info.rotation })}</div>`);
     if (info.desc) rows.push(`<div class="desc">${info.desc}</div>`);
     // 科教知识卡片
     this._curId = info.id;
@@ -106,12 +110,12 @@ export class HUD {
       const facts = factsFor(info.id);
       const idx = (this.factIdx.get(info.id) ?? 0) % facts.length;
       rows.push(
-        `<div class="fact">📚 <b>你知道吗</b>　${facts[idx]}` +
-        (facts.length > 1 ? ` <span class="fact-next" data-nextfact>换一条 ↻</span>` : '') +
+        `<div class="fact">${t('tgt.fact')}${facts[idx]}` +
+        (facts.length > 1 ? ` <span class="fact-next" data-nextfact>${t('tgt.factNext')}</span>` : '') +
         `</div>`
       );
     }
-    rows.push(`<div class="accent"><span class="key">T</span> 前往（GE 式飞行）</div>`);
+    rows.push(`<div class="accent">${t('tgt.goto')}</div>`);
     this.elTarget.innerHTML = rows.join('');
   }
 
@@ -130,7 +134,7 @@ export class HUD {
 
   setLoading(done, total) {
     const el = document.getElementById('loading-progress');
-    if (el) el.textContent = `加载真实行星贴图… ${done}/${total}`;
+    if (el) el.textContent = t('start.loadingTex', { done, total });
   }
 
   loadingDone() {
@@ -144,27 +148,30 @@ export class HUD {
 /** 光行时间格式化（求知向：让用户直观感受太阳系尺度） */
 function lightTime(km) {
   const s = km / 299792.458;
-  if (s < 1) return `${(s * 1000).toFixed(0)} 毫秒`;
-  if (s < 90) return `${s.toFixed(1)} 秒`;
-  if (s < 5400) return `${(s / 60).toFixed(1)} 分钟`;
-  return `${(s / 3600).toFixed(1)} 小时`;
+  if (s < 1) return `${(s * 1000).toFixed(0)} ${t('hud.lightMs')}`;
+  if (s < 90) return `${s.toFixed(1)} ${t('hud.lightSec')}`;
+  if (s < 5400) return `${(s / 60).toFixed(1)} ${t('hud.lightMin')}`;
+  return `${(s / 3600).toFixed(1)} ${t('hud.lightHour')}`;
 }
 
 /** 目标信息组装 */
 export function targetInfo(id, registry, dist, dSun = null) {
-  const t = registry.get(id);
-  if (!t) return null;
+  const e = registry.get(id);
+  if (!e) return null;
+  // 英文界面：主名用英文、副名用中文；中文界面反之。
+  const primary = bodyName(e);
+  const secondary = LANG === 'zh' ? (e.nameEn ?? '') : e.nameZh;
   const info = {
-    id, nameZh: t.nameZh, nameEn: t.nameEn ?? '', dist, dSun,
-    radiusKm: t.phys?.radiusKm > 1 ? t.phys.radiusKm : null,
-    desc: t.desc ?? t.phys?.desc,
+    id, nameZh: primary, nameEn: secondary, dist, dSun,
+    radiusKm: e.phys?.radiusKm > 1 ? e.phys.radiusKm : null,
+    desc: e.desc ?? e.phys?.desc,
   };
-  if (t.phys?.gm && t.phys?.radiusKm) info.gravity = surfaceGravity(t.phys);
-  if (t.kind === 'planet') {
+  if (e.phys?.gm && e.phys?.radiusKm) info.gravity = surfaceGravity(e.phys);
+  if (e.kind === 'planet') {
     const y = orbitalPeriodYears(id);
-    info.period = y < 2 ? `${(y * 365.25).toFixed(1)} 天` : `${y.toFixed(1)} 年`;
+    info.period = y < 2 ? `${(y * 365.25).toFixed(1)} ${t('u.day')}` : `${y.toFixed(1)} ${t('u.year')}`;
     const rh = rotationPeriodHours(id);
-    if (rh) info.rotation = Math.abs(rh) > 48 ? `${(rh / 24).toFixed(1)} 天` : `${rh.toFixed(1)} 小时`;
+    if (rh) info.rotation = Math.abs(rh) > 48 ? `${(rh / 24).toFixed(1)} ${t('u.day')}` : `${rh.toFixed(1)} ${t('u.hour')}`;
   }
   return info;
 }

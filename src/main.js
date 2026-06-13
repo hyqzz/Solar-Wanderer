@@ -28,6 +28,7 @@ import { HUD, targetInfo } from './ui/hud.js';
 import { SearchUI } from './ui/search.js';
 import { eclToWorldArr, KM_PER_AU } from './config.js';
 import { initQuality, makeFpsGuard, QUALITY } from './engine/quality.js';
+import { t, bodyName, LANG, applyDomI18n } from './ui/i18n.js';
 
 const canvas = document.getElementById('app');
 // powerPreference: 多显卡系统由浏览器选高性能独显（R7 #8）
@@ -62,7 +63,7 @@ const fpsGuard = makeFpsGuard(renderer, () => {
   for (const [, e] of builder.bodies) {
     if (e.mat?.userData.uniforms?.uDetailMode) e.mat.userData.uniforms.uDetailMode.value = 0;
   }
-  hud.tip('已自动降低画质以保证流畅运行');
+  hud.tip(t('tip.quality'));
 });
 
 const hud = new HUD();
@@ -88,7 +89,8 @@ const LABEL_CLICK_WINDOW = 250;
 init();
 
 async function init() {
-  builder = await buildSolarSystem(scene, world, (d, t) => hud.setLoading(d, t));
+  applyDomI18n();
+  builder = await buildSolarSystem(scene, world, (d, total) => hud.setLoading(d, total));
 
   sky = createStarfield(builder.cache.get('milkyway.jpg'));
   scene.add(sky.group); // 背景程序化星空固定相机（零视差）
@@ -103,9 +105,9 @@ async function init() {
   world.register(new Float64Array(3), belts);
 
   // R11：奥尔特云统计粒子层（2000–100000 AU）
-  oortCloud = createOortCloud();
-  scene.add(oortCloud);
-  world.register(new Float64Array(3), oortCloud);
+  oortCloud = createOortCloud(); // { group, update(dSunAU) }
+  scene.add(oortCloud.group);
+  world.register(new Float64Array(3), oortCloud.group);
   const helio = createHeliosphere();
   scene.add(helio);
   world.register(new Float64Array(3), helio);
@@ -232,6 +234,20 @@ function buildRegistry() {
       phys: { radiusKm: 1 }, posKm: b.posKm, relObj: b.group, viewDist: 2.5 * KM_PER_AU,
     });
   }
+  // 星带与全景区域条目（目录分组 + 远距标签，#7）。kind:'region' 在 pickBody/centerHit 中
+  // 被排除（无固体表面、不可点击拾取/缩放收敛），仅用于目录前往与远距科教标注。
+  // radiusKm 决定标签隐藏阈值（dist < radiusKm×1.6 时隐藏）：取各结构的代表尺度，
+  // 使标签仅在足够远、整个结构入画时才出现，避免贴近行星时挡在太阳前方。
+  registry.set('belts', {
+    nameZh: '小行星带与柯伊伯带', nameEn: 'Asteroid & Kuiper Belts', kind: 'region',
+    desc: '太阳系的主要盘状结构：主小行星带（2.1–3.4 AU）与柯伊伯带（30–50 AU）。',
+    phys: { radiusKm: 3 * KM_PER_AU }, posKm: new Float64Array(3), relObj: belts, viewDist: 9 * KM_PER_AU,
+  });
+  registry.set('oortcloud', {
+    nameZh: '奥尔特云', nameEn: 'Oort Cloud', kind: 'region',
+    desc: '太阳系最外层的球状彗星云团，距太阳约 2 000–100 000 AU，是长周期彗星的家园。',
+    phys: { radiusKm: 200 * KM_PER_AU }, posKm: new Float64Array(3), relObj: oortCloud.group, viewDist: 6000 * KM_PER_AU,
+  });
 }
 
 /** OrbitCamera 环境访问器 */
@@ -252,6 +268,7 @@ const orbitEnv = {
   centerHit(posKm, dir) {
     let best = null;
     for (const [id, t] of registry) {
+      if (t.kind === 'region') continue; // 区域条目（星带/奥尔特云）不作为缩放收敛目标
       const R = t.phys?.radiusKm ?? 0;
       if (R < 1) continue; // 探测器/边界点不作为缩放收敛目标
       const margin = R * 1.004 + 1; // 收敛下限留在表面略上方
@@ -276,7 +293,9 @@ function setupLabels() {
   // 双击仍从原始焦点起飞。用短时窗口记录同一标签双击前的焦点，避免第一次点击切焦点
   // 后第二次点击把 fromId 覆盖成新焦点。
   labels.onSelect = (id) => {
-    if (appMode === 'orbit' && !orbitCam.flight && !id.startsWith('star_')) {
+    // 恒星与区域条目（星带/奥尔特云）无固体表面，不作延迟焦点目标——仅选中显示信息。
+    if (appMode === 'orbit' && !orbitCam.flight && !id.startsWith('star_') &&
+        registry.get(id)?.kind !== 'region') {
       if (!labelClickTimer || lastLabelClickId !== id) {
         lastLabelClickFocus = orbitCam.focusId;
       }
@@ -299,8 +318,9 @@ function setupLabels() {
   };
   for (const [id, t] of registry) {
     labels.add({
-      id, nameZh: t.nameZh,
-      kind: t.kind === 'moon' ? 'moon' : t.kind === 'planet' || t.kind === 'star' ? 'planet' : 'poi',
+      id, name: bodyName(t),
+      kind: t.kind === 'moon' ? 'moon' : t.kind === 'planet' || t.kind === 'star' ? 'planet'
+        : t.kind === 'region' ? 'region' : 'poi',
       radiusKm: t.phys?.radiusKm ?? 1,
       getRelPos: (v) => v.copy(t.relObj.position),
     });
@@ -308,9 +328,10 @@ function setupLabels() {
   // 真实亮星标签（恒星视为无穷远，方向固定；显示真实光年距离——科教）
   for (const s of BRIGHT_STARS) {
     if (!s.dirWorld) continue;
+    const name = LANG === 'zh' ? s.zh : (s.en || s.zh);
     labels.add({
-      id: 'star_' + s.en, nameZh: s.zh, kind: 'fixstar', radiusKm: 0.001,
-      distText: s.ly + ' 光年',
+      id: 'star_' + s.en, name, kind: 'fixstar', radiusKm: 0.001,
+      distText: s.ly + ' ' + t('u.ly'),
       getRelPos: (v) => v.copy(s.dirWorld).multiplyScalar(SKY_R * 0.97),
     });
   }
@@ -332,6 +353,7 @@ function pickBody(cx, cy) {
   ).unproject(camera).normalize(); // 浮动原点：相机恒在原点，未归一向量即射线方向
   let best = null;
   for (const [id, t] of registry) {
+    if (t.kind === 'region') continue; // 区域条目不可点击拾取
     const R = t.phys?.radiusKm ?? 0;
     if (R < 1) continue;
     _pickP.copy(t.relObj.position); // 相机相对位置
@@ -517,11 +539,11 @@ function loop() {
   const flight = orbitCam.flight;
   hud.updateNav({
     mode: appMode,
-    flight: flight ? { toName: registry.get(flight.toId)?.nameZh, t: flight.t } : null,
+    flight: flight ? { toName: bodyName(registry.get(flight.toId)), t: flight.t } : null,
     speed: ship.vel.length(),
     speedSetting: ship.speedSetting,
-    focusName: appMode === 'orbit' ? registry.get(orbitCam.focusId)?.nameZh : null,
-    nearest: nearest ? { nameZh: registry.get(nearest.id).nameZh, distSurface: nearest.distSurface } : null,
+    focusName: appMode === 'orbit' ? bodyName(registry.get(orbitCam.focusId)) : null,
+    nearest: nearest ? { name: bodyName(registry.get(nearest.id)), distSurface: nearest.distSurface } : null,
     gravity: appMode === 'walk' ? surfaceGravity(builder.bodies.get(ship.walk.bodyId).phys) : null,
   });
   updateTip(nearest);
@@ -544,6 +566,27 @@ function loop() {
   labels.update(selectedId, occluder);
   document.getElementById('crosshair').style.display =
     appMode === 'orbit' ? 'none' : '';
+
+  // 自适应近平面：保证近平面始终略小于最近天体表面，最大化深度精度。
+  // 修复（#8）：5e-7 km 的极小近平面 + 1e15 km far 使深度缓冲精度不足，远处天体会
+  // "穿透"近处天体（如土卫一未遮挡土星）。行走时保持极小近平面（贴地无裁切），在
+  // 空间中按最近表面距离放大近平面（始终 < 最近表面，绝不裁切）。
+  {
+    let dNear = nearest ? nearest.distSurface : Infinity;
+    for (const [, e] of tnoScene.entries) {
+      const d = Math.hypot(
+        e.posKm[0] - ship.posKm[0], e.posKm[1] - ship.posKm[1], e.posKm[2] - ship.posKm[2]
+      ) - e.phys.radiusKm;
+      if (d < dNear) dNear = d;
+    }
+    const want = appMode === 'walk'
+      ? 5e-7
+      : THREE.MathUtils.clamp(Math.max(dNear, 0) * 0.3, 5e-7, 1e10);
+    if (Math.abs(want - camera.near) > camera.near * 0.02) {
+      camera.near = want;
+      camera.updateProjectionMatrix();
+    }
+  }
 
   fpsGuard(dtReal);
   input.endFrame();
@@ -592,12 +635,17 @@ const PLANET_KEYS = {
 };
 
 let orbitLinesOn = true;
+let tnoOrbitsOn = false; // 海外天体（TNO）轨道线默认关闭（#4：数量多且远，避免画面杂乱）
 
 function handleUIKeys() {
   for (const [key, id] of Object.entries(PLANET_KEYS)) {
     if (input.tapped(key)) flyTo(id); // GE 风格：快捷键直接前往
   }
   if (input.tapped('KeyO')) orbitLinesOn = !orbitLinesOn;
+  if (input.tapped('KeyK')) { // K：海外天体轨道线独立开关（#4）
+    tnoOrbitsOn = !tnoOrbitsOn;
+    hud.tip(tnoOrbitsOn ? t('tip.tnoOrbitsOn') : t('tip.tnoOrbitsOff'));
+  }
   // V：惯性观察模式（相机不随天体自转——配合时间加速观赏卫星/行星绕转，R9-1e）
   if (input.tapped('KeyV') && appMode === 'orbit' && !orbitCam.flight) {
     orbitCam.setInertial(!orbitCam.inertial, orbitEnv);
@@ -605,9 +653,10 @@ function handleUIKeys() {
   // 行走模式自动隐藏轨道辅助线（沉浸真实星空）
   const showOrbits = orbitLinesOn && appMode !== 'walk';
   for (const line of Object.values(builder.orbitLines.userData)) line.visible = showOrbits;
-  // TNO 轨道线同步显隐
+  // 海外天体（TNO）轨道线：独立开关（K），默认关闭（#4）
+  const showTnoOrbits = tnoOrbitsOn && appMode !== 'walk';
   for (const [, e] of tnoScene.entries) {
-    if (e.orbitLine) e.orbitLine.visible = showOrbits;
+    if (e.orbitLine) e.orbitLine.visible = showTnoOrbits;
   }
   if (input.tapped('KeyL')) labels.setVisible(!labels.visible);
   if (input.tapped('KeyH')) hud.toggleHelp();
@@ -617,33 +666,31 @@ function updateTip(nearest) {
   const atm = nearest ? builder.bodies.get(nearest.id)?.phys.atmosphere : null;
   if (performance.now() < focusTipUntil && appMode === 'orbit') {
     const tipId = orbitCam.pendingFocusId ?? selectedId ?? orbitCam.focusId;
-    const tipName = registry.get(tipId)?.nameZh ?? '目标';
+    const tipName = bodyName(registry.get(tipId)) || t('word.target');
     if (orbitCam.pendingFocusId && orbitCam.pendingFocusId !== orbitCam.focusId) {
-      hud.tip(`🎯 已选择目标：${tipName}（滚动鼠标或 PageUp/Down 平滑接近/远离）`);
+      hud.tip(t('tip.pendingFocus', { name: tipName }));
     } else {
-      hud.tip(`🎯 已锁定焦点：${tipName}（滚轮拉近可直达登陆）`);
+      hud.tip(t('tip.lockedFocus', { name: tipName }));
     }
   } else if (orbitCam.flight) {
-    hud.tip(`✈ 正在前往 ${registry.get(orbitCam.flight.toId)?.nameZh} …（拖拽可中断）`);
+    hud.tip(t('tip.flyingTo', { name: bodyName(registry.get(orbitCam.flight.toId)) }));
   } else if (appMode === 'walk') {
-    hud.tip(input.locked
-      ? '滚轮后退起飞 · G 返回探索 · Space 跳跃 · Shift 奔跑 · 抬头看看天空'
-      : '单击画面锁定鼠标环视（或按住左键拖拽）· 滚轮后退起飞');
+    hud.tip(input.locked ? t('tip.walkLocked') : t('tip.walkUnlocked'));
   } else if (nearest && nearest.landable &&
     nearest.distSurface < Math.max(20, nearest.radiusKm * 0.05)) {
-    hud.tip(`滚轮继续拉近 = 直接降落 ${registry.get(nearest.id).nameZh}（或按 G 立即登陆）`);
+    hud.tip(t('tip.landNear', { name: bodyName(registry.get(nearest.id)) }));
   } else if (appMode === 'orbit' && nearest && nearest.landable &&
     nearest.distSurface < nearest.radiusKm * 0.6) {
-    hud.tip('滚轮一路拉近即可无缝降落地表');
+    hud.tip(t('tip.landAny'));
   } else if (nearest && !nearest.landable && nearest.id !== 'sun' && atm &&
     nearest.distSurface < atm.heightKm) {
-    hud.tip(`☁ 正在进入 ${registry.get(nearest.id).nameZh} 大气层（无固体表面，滚轮后退离开）`);
+    hud.tip(t('tip.enterAtmo', { name: bodyName(registry.get(nearest.id)) }));
   } else if (nearest && !nearest.landable && nearest.id !== 'sun' && nearest.distSurface < nearest.radiusKm * 0.5) {
-    hud.tip('⚠ 气态/冰巨行星无固体表面：可下潜入大气层，无法降落');
+    hud.tip(t('tip.gasGiant'));
   } else if (nearest && nearest.id === 'sun' && nearest.distSurface < nearest.radiusKm * 2) {
-    hud.tip('⚠ 接近太阳：表面温度 5772 K');
+    hud.tip(t('tip.sun'));
   } else if (appMode === 'orbit' && orbitCam.inertial) {
-    hud.tip(`🛰 惯性观察模式：相机不随自转，加速时间（]键）可观赏 ${registry.get(orbitCam.focusId)?.nameZh ?? ''} 的卫星绕转 · V 切回`);
+    hud.tip(t('tip.inertial', { name: bodyName(registry.get(orbitCam.focusId)) }));
   } else {
     hud.tip(null);
   }
@@ -759,7 +806,8 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   scene.fog.density = fogDensity;
   sky.setFade(skyFade);
   belts.visible = skyFade > 0.4;      // 带点云为统计表示，白昼天空中不可见
-  oortCloud.visible = skyFade > 0.4; // 奥尔特云同理
+  oortCloud.group.visible = skyFade > 0.4; // 奥尔特云同理
+  oortCloud.update(dSunAU);            // 进入云内部按距离淡出（#5）
   document.getElementById('labels').classList.toggle('daysky', skyFade < 0.5);
 
   // 行走在夜面时的微环境光（地照/星光下的暗适应，保证夜间探索可见性）

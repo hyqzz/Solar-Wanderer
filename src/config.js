@@ -6,6 +6,12 @@ import * as THREE from 'three';
 export const KM_PER_AU = 149597870.7;
 export const C_KM_S = 299792.458;
 
+// 界面语言：浏览器为中文→'zh'，其他→'en'；Node（无 navigator）默认 'zh' 以保持离线工具/测试行为。
+export const LANG = (typeof navigator !== 'undefined')
+  ? (/^zh/i.test(navigator.language || navigator.userLanguage || '') ? 'zh' : 'en')
+  : 'zh';
+const _u = (zh, en) => (LANG === 'zh' ? zh : en);
+
 /** 黄道坐标 {x,y,z} → three 世界 Vector3 */
 export function eclToWorld(p, out = new THREE.Vector3()) {
   return out.set(p.x, p.z, -p.y);
@@ -43,7 +49,7 @@ export function eclMatrixToWorldQuat(m9, out = new THREE.Quaternion()) {
 export function formatSpeed(kmS) {
   if (kmS >= KM_PER_AU) return (kmS / KM_PER_AU).toFixed(2) + ' AU/s';
   if (kmS >= 0.01 * C_KM_S) return (kmS / C_KM_S).toFixed(2) + ' c';
-  if (kmS >= 1) return kmS >= 1000 ? (kmS / 1000).toFixed(1) + ' 千km/s' : kmS.toFixed(1) + ' km/s';
+  if (kmS >= 1) return kmS >= 1000 ? (kmS / 1000).toFixed(1) + _u(' 千km/s', ' Mm/s') : kmS.toFixed(1) + ' km/s';
   return (kmS * 1000).toFixed(1) + ' m/s';
 }
 
@@ -51,9 +57,9 @@ export const LY_KM = 9460730472580.8; // 1 光年（km）
 
 /** 距离格式化 */
 export function formatDist(km) {
-  if (km >= LY_KM * 0.01) return (km / LY_KM).toFixed(4) + ' 光年';
+  if (km >= LY_KM * 0.01) return (km / LY_KM).toFixed(4) + _u(' 光年', ' ly');
   if (km >= 0.05 * KM_PER_AU) return (km / KM_PER_AU).toFixed(3) + ' AU';
-  if (km >= 1e6) return (km / 1e6).toFixed(2) + ' 百万km';
+  if (km >= 1e6) return (km / 1e6).toFixed(2) + _u(' 百万km', ' Mkm');
   if (km >= 1) return Math.round(km).toLocaleString() + ' km';
   return Math.round(km * 1000) + ' m';
 }

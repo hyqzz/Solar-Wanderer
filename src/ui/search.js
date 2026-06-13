@@ -1,6 +1,13 @@
 // Google Earth 式地点搜索（中/英文自动补全）+ 分类天体目录侧栏。
 // 选中即触发 flyTo 飞行动画，满足"输入地点动态快速到达"的探索体验。
 
+import { t, bodyName, LANG } from './i18n.js';
+
+/** 副名：与主名相对的另一种语言（中文界面显示英文副名，反之显示中文）。 */
+function altName(e) {
+  return LANG === 'zh' ? (e.nameEn ?? '') : e.nameZh;
+}
+
 export class SearchUI {
   /**
    * @param registry Map<id, {nameZh, nameEn, kind, phys, parentId?}>
@@ -34,16 +41,16 @@ export class SearchUI {
         div.className = 'search-item' + (i === sel ? ' active' : '');
         if (it.special === 'orbits') {
           const on = this.opts.getOrbits?.() ?? true;
-          div.innerHTML = `<b>🛤 轨道线</b> <span>当前：${on ? '显示' : '隐藏'}</span><em>点击切换</em>`;
+          div.innerHTML = `<b>${t('search.orbits')}</b> <span>${t('search.cur')}：${on ? t('search.on') : t('search.off')}</span><em>${t('search.toggle')}</em>`;
           div.addEventListener('mousedown', (e) => {
             e.preventDefault();
             this.opts.toggleOrbits?.();
             render(); // 刷新状态文字，保持下拉打开
           });
         } else {
-          const t = this.registry.get(it.id);
-          div.innerHTML = `<b>${t.nameZh}</b> <span>${t.nameEn ?? ''}</span><em>${KIND_ZH[t.kind] ?? ''}</em>`;
-          div.addEventListener('mousedown', (e) => { e.preventDefault(); go(it.id); });
+          const e = this.registry.get(it.id);
+          div.innerHTML = `<b>${bodyName(e)}</b> <span>${altName(e)}</span><em>${KIND_LABEL[e.kind] ?? ''}</em>`;
+          div.addEventListener('mousedown', (ev) => { ev.preventDefault(); go(it.id); });
         }
         list.appendChild(div);
       });
@@ -99,39 +106,41 @@ export class SearchUI {
       panel.classList.toggle('open');
     });
 
+    const PLANET_GROUP = t('grp.planet');
     const groups = [
-      { title: '☀️ 恒星', filter: (t) => t.kind === 'star' },
-      { title: '🪐 行星', filter: (t) => t.kind === 'planet' && t.phys?.type !== 'dwarf' },
-      { title: '🧊 矮行星', filter: (t) => t.kind === 'planet' && t.phys?.type === 'dwarf' },
-      { title: '🌙 卫星', filter: (t) => t.kind === 'moon', groupByParent: true },
-      { title: '☄️ 彗星', filter: (t) => t.kind === 'comet' },
-      { title: '🌑 海外天体（TNO）', filter: (t) => t.kind === 'tno' },
-      { title: '🛰 探测器', filter: (t) => t.kind === 'probe' },
-      { title: '🌌 日球层边界', filter: (t) => t.kind === 'boundary' },
+      { title: t('grp.star'), filter: (e) => e.kind === 'star' },
+      { title: PLANET_GROUP, filter: (e) => e.kind === 'planet' && e.phys?.type !== 'dwarf' },
+      { title: t('grp.dwarf'), filter: (e) => e.kind === 'planet' && e.phys?.type === 'dwarf' },
+      { title: t('grp.moon'), filter: (e) => e.kind === 'moon', groupByParent: true },
+      { title: t('grp.comet'), filter: (e) => e.kind === 'comet' },
+      { title: t('grp.tno'), filter: (e) => e.kind === 'tno' },
+      { title: t('grp.probe'), filter: (e) => e.kind === 'probe' },
+      { title: t('grp.boundary'), filter: (e) => e.kind === 'boundary' },
+      { title: t('grp.region'), filter: (e) => e.kind === 'region' },
     ];
 
     const body = document.getElementById('dir-body');
     body.innerHTML = '';
     for (const g of groups) {
-      const ents = [...this.registry.entries()].filter(([, t]) => g.filter(t));
+      const ents = [...this.registry.entries()].filter(([, e]) => g.filter(e));
       if (!ents.length) continue;
       const det = document.createElement('details');
-      det.open = g.title.includes('行星') && !g.title.includes('矮');
+      det.open = g.title === PLANET_GROUP;
       const sum = document.createElement('summary');
-      sum.textContent = `${g.title}（${ents.length}）`;
+      sum.textContent = LANG === 'zh' ? `${g.title}（${ents.length}）` : `${g.title} (${ents.length})`;
       det.appendChild(sum);
       let lastParent = null;
-      for (const [id, t] of ents) {
-        if (g.groupByParent && t.parentId !== lastParent) {
-          lastParent = t.parentId;
+      for (const [id, e] of ents) {
+        if (g.groupByParent && e.parentId !== lastParent) {
+          lastParent = e.parentId;
           const ph = document.createElement('div');
           ph.className = 'dir-parent';
-          ph.textContent = this.registry.get(t.parentId)?.nameZh ?? t.parentId;
+          ph.textContent = bodyName(this.registry.get(e.parentId)) || e.parentId;
           det.appendChild(ph);
         }
         const btn = document.createElement('button');
         btn.className = 'dir-item';
-        btn.innerHTML = `${t.nameZh} <span>${t.nameEn ?? ''}</span>`;
+        btn.innerHTML = `${bodyName(e)} <span>${altName(e)}</span>`;
         btn.addEventListener('click', () => this.onGo(id));
         det.appendChild(btn);
       }
@@ -140,7 +149,8 @@ export class SearchUI {
   }
 }
 
-const KIND_ZH = {
-  star: '恒星', planet: '行星', moon: '卫星', comet: '彗星',
-  probe: '探测器', boundary: '边界', poi: '地标', tno: '海外天体',
+const KIND_LABEL = {
+  star: t('kind.star'), planet: t('kind.planet'), moon: t('kind.moon'), comet: t('kind.comet'),
+  probe: t('kind.probe'), boundary: t('kind.boundary'), poi: t('kind.poi'),
+  tno: t('kind.tno'), region: t('kind.region'),
 };

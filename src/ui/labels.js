@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { formatDist } from '../config.js';
 
 const _v = new THREE.Vector3();
+const _fwd = new THREE.Vector3();
 
 export class Labels {
   constructor(container, camera) {
@@ -24,7 +25,7 @@ export class Labels {
     el.className = 'body-label' + (target.kind === 'moon' ? ' label-moon' : '') +
       (target.kind === 'poi' ? ' label-poi' : '') +
       (target.kind === 'fixstar' ? ' label-star' : '');
-    el.innerHTML = `<span class="ln">${target.nameZh}</span><span class="ld"></span>`;
+    el.innerHTML = `<span class="ln">${target.name ?? target.nameZh}</span><span class="ld"></span>`;
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       this.onSelect?.(target.id);
@@ -49,32 +50,40 @@ export class Labels {
     if (!this.visible) return;
     const w = window.innerWidth, h = window.innerHeight;
     let bestAim = null, bestAng = 0.09; // ~5°
-    for (const { el, target } of this.items.values()) {
+    // 相机前向（世界）：用于稳定的"是否在相机前方"判定，替代易抖动的 ndc.z>1
+    this.camera.getWorldDirection(_fwd);
+    for (const item of this.items.values()) {
+      const { el, target } = item;
       const rel = target.getRelPos(_v);
       const dist = rel.length();
+
+      // 在相机后方？用视线方向点积判定（稳定，不受 far=1e15 时 ndc.z≈1 浮点抖动影响）
+      // —— 这是远处标签持续闪烁的根因（#3）：原 ndc.z>1 在远平面附近来回跳变。
+      const vz = rel.x * _fwd.x + rel.y * _fwd.y + rel.z * _fwd.z;
+      if (vz <= 0) { el.style.display = 'none'; item._hideStreak = 0; continue; }
+
       // 球体遮挡测试：视线与近旁天体相交且目标在交点之后 → 隐藏
+      let wantHide = false;
       if (occluder && dist > 1) {
         const tc = (rel.x * occluder.pos.x + rel.y * occluder.pos.y + rel.z * occluder.pos.z) / dist;
         if (tc > 0 && tc < dist - occluder.r * 0.5) {
           const d2 = occluder.pos.lengthSq() - tc * tc;
-          if (d2 < occluder.r * occluder.r * 0.96) {
-            el.style.display = 'none';
-            continue;
-          }
+          if (d2 < occluder.r * occluder.r * 0.96) wantHide = true;
         }
       }
-      // 视线方向角（用于准星瞄准）
       const ndc = rel.clone().project(this.camera);
-      const behind = ndc.z > 1 || ndc.z < -1;
-      if (behind || ndc.x < -1.05 || ndc.x > 1.05 || ndc.y < -1.05 || ndc.y > 1.05) {
-        el.style.display = 'none';
-        continue;
-      }
+      if (ndc.x < -1.08 || ndc.x > 1.08 || ndc.y < -1.08 || ndc.y > 1.08) wantHide = true;
       // 太近（已充满视野）时隐藏标签
-      if (dist < target.radiusKm * 1.6) {
-        el.style.display = 'none';
-        continue;
+      if (dist < target.radiusKm * 1.6) wantHide = true;
+
+      // 迟滞：连续 2 帧想隐藏才真正隐藏；想显示则立即显示（消除边界单帧抖动）
+      if (wantHide) {
+        item._hideStreak = (item._hideStreak || 0) + 1;
+        if (item._hideStreak >= 2) { el.style.display = 'none'; continue; }
+      } else {
+        item._hideStreak = 0;
       }
+
       el.style.display = '';
       const x = ((ndc.x + 1) / 2) * w;
       const y = ((1 - ndc.y) / 2) * h;

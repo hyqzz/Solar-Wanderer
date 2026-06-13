@@ -60,7 +60,7 @@
   <div id="left-col">
     <div id="hud-time" class="panel"></div>
     <div id="directory" class="open">
-      <div class="dir-head">🪐 天体目录 <span class="dim">点击即前往</span></div>
+      <div class="dir-head"><span data-i18n="dir.title">🪐 天体目录</span> <span class="dim" data-i18n="dir.sub">点击即前往</span></div>
       <div id="dir-body"></div>
     </div>
   </div>
@@ -74,18 +74,18 @@
 
   <div id="start">
     <div class="start-inner">
-      <h1>遨游太阳系 <span>SOLAR WANDERER</span></h1>
-      <p class="sub">太阳系 1:1 实时模拟 · 基于 NASA JPL 星历还原此刻太阳系 · 自由探索整个日球层</p>
-      <div id="loading"><div class="spinner"></div><div id="loading-progress">加载中…</div></div>
-      <button id="start-btn" style="display:none">点击进入太阳系</button>
-      <p class="hint">进入后单击画面锁定鼠标 · H 查看完整操作说明</p>
+      <h1><span data-i18n="start.title">遨游太阳系</span> <span>SOLAR WANDERER</span></h1>
+      <p class="sub" data-i18n="start.sub">太阳系 1:1 实时模拟 · 基于 NASA JPL 星历还原此刻太阳系 · 自由探索整个太阳系</p>
+      <div id="loading"><div class="spinner"></div><div id="loading-progress" data-i18n="start.loading">加载中…</div></div>
+      <button id="start-btn" style="display:none" data-i18n="start.enter">点击进入太阳系</button>
+      <p class="hint" data-i18n="start.hint">进入后单击画面锁定鼠标 · H 查看完整操作说明</p>
       <a id="github-star" href="https://github.com/hyqzz/Solar-Wanderer" target="_blank" rel="noopener">⭐ Star on GitHub</a>
     </div>
   </div>
 
   <div id="help" style="display:none">
     <div class="help-inner">
-      <h2>操作说明（H 关闭）</h2>
+      <h2 data-i18n="help.toggle">操作说明（H 关闭）</h2>
       <div class="help-cols">
         <div>
           <h3>🌐 探索模式（默认 · Google Earth 式）</h3>
@@ -133,6 +133,7 @@
           <h3>🖥 显示</h3>
           <table>
             <tr><td>O / L / H</td><td>轨道线 / 标签 / 本帮助</td></tr>
+            <tr><td>K</td><td>海外天体（TNO）轨道线开关（默认关闭）</td></tr>
           </table>
         </div>
       </div>

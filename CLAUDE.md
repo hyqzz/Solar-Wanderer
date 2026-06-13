@@ -166,6 +166,16 @@ Three.js 0.165 + Vite 5 + 原生 ESM（无 TypeScript）。纯浏览器 WebGL2�
 - **轨道根数纠错**（高离心率近日点雷区）：Sedna L 值由 86.5→92.91（M=-2.4° 对应 2076 年近日点，给出 86 AU ✓）；Farout L 由 67.3→56.5（给出 120 AU ✓）；FarFarOut L 由 4.9→353.6（给出 128 AU ✓）。
 - 全量回归：33/33 单元测试通过；构建 631 kB。
 
+### R12：界面国际化 + 远距标注 + 遮挡/闪烁/奥尔特云修复（2026-06-13）
+- **完整 i18n（`src/ui/i18n.js`）**：浏览器中文（`/^zh/i.test(navigator.language)`）→ 简体中文，其他 → 英文。字典 `D` + `t(key,vars)` 占位符替换 + `bodyName(entry)` 天体本地化名；`applyDomI18n()` 处理 `index.html` 静态 `data-i18n` 文本并在英文界面注入完整英文帮助 `HELP_EN`。HUD（时间/导航/目标/提示）、目录、搜索、单位（`formatDist`/`formatSpeed` 光年=ly、百万km=Mkm 等）全部接入。Node 无 navigator → 默认 'zh' 保持离线工具行为。冒烟双语零运行时错误（`tools/smoke-i18n.mjs`）。
+- **#8 土卫一未遮挡土星（根治）**：根因是 `camera.near=5e-7 km` + `far=1e15 km` 深度比 2e21，对数深度仍不足以区分土卫一（~700 km）与其后土星（~183000 km）。修复：**自适应近平面**——空间中按最近天体表面距离放大近平面 `clamp(dNear×0.3, 5e-7, 1e10)`（行走时保持 5e-7 贴地不裁切），TNO 距离一并纳入 dNear。验证：贴近土卫一时 near≈148 km（远大于基线），深度精度足以彻底遮挡，不再透明。
+- **#3 远处标签持续闪烁（根治）**：原"是否在相机后方"用 `ndc.z>1` 判定，far=1e15 时远天体 `ndc.z` 收敛到 1.0 附近浮点抖动 → 来回跳变。改用相机前向点积 `rel·forward<=0`（几何稳定，与深度范围无关）+ 2 帧迟滞（连续 2 帧想隐藏才隐藏，想显示即显示）。
+- **#7 最外层全标注**：新增 `kind:'region'` 区域条目（小行星带与柯伊伯带、奥尔特云），注册浮动原点标签 + 目录分组"🪐 星带与全景"；区域 `radiusKm` 设为代表尺度（3 AU / 200 AU）使标签仅在结构整体入画时出现，不会贴近行星时挡在太阳前。region 条目在 `pickBody`/`centerHit`/onSelect 中排除（无固体表面，不可拾取/缩放收敛/设焦点）。验证：400 AU 处 71/90 标签可见，含全部 28 TNO + 区域 + 恒星（`tools/probe-maxdist.mjs`）。
+- **#6 TNO 彗星式渲染**：球体网格 + 彗星式两层加性辉光精灵（外弥散光晕按调色板着色 + 内白色亮核），`depthWrite:false`，远距常驻 ~恒定屏幕尺寸、近距淡出让球体接管（`src/scene/tnoScene.js`）。
+- **#5 奥尔特云稀疏化**：粒子数 6000/10000→1400/2600，不透明度 0.20/0.14；新增 `update(dSunAU)` 按离日距离淡出（<1000 AU 全亮，1000–60000 AU 渐隐至 0.22×），更贴近"稀疏的太阳系边界"。
+- **#4 TNO 轨道线独立 K 键**（默认关闭）；**#1 开始页副标题** 改"自由探索整个太阳系"。
+- 全量回归：33/33 单元测试通过；构建 643 kB；双语冒烟零错误。
+
 - **计算**：日心黄道 J2000，单位 km。
 - **→ Three 世界**：`(x, y, z)_ecl → (x, z, -y)_three`（黄道北极 = +Y）。
 - **体固系 → 世界**：体固基矢经相同映射（本初子午线=本地+X，北极=+Y）。
@@ -200,6 +210,9 @@ node tools/repro-issue2.mjs    # R10-fix：右键平移后滚轮缩放不跳回�
 node tools/repro-label-focus.mjs # R10-fix-2：点击标签切换焦点后滚轮以新焦点缩放验证
 node tools/probe-r7.mjs        # R7 运行时探针（自动登陆/起飞/气巨入气，需 dev server）
 node tools/probe-r7-visual.mjs # R7 高画质档外行星近景视检截图
+node tools/smoke-i18n.mjs      # R12 中/英双语冒烟（UI 文本本地化 + 零运行时错误，需 dev server）
+node tools/probe-maxdist.mjs   # R12 最外层标注验证（400 AU 处 TNO/区域/恒星标签可见，需 dev server）
+node tools/repro-occlusion.mjs # R12 土卫一遮挡土星截图复现（自适应近平面，需 dev server）
 ```
 
 ## 如果测试失败

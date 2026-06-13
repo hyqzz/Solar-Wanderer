@@ -1,5 +1,5 @@
-// 海王星外天体（TNO）场景：小球体网格 + 远距光点 + 轨道线，每帧从 tno.js 星历驱动。
-// 与行星使用相同的 createPlanetMaterial 以获得太阳方向光照暗适应补偿（R7 #4）。
+// 海王星外天体（TNO）场景：彗星式柔光头（远距主视觉，调色板着色）+ 近距球体网格 + 轨道线。
+// 每帧从 tno.js 星历驱动；与彗星渲染逻辑一致（柔和加性辉光精灵），远距始终可见（#6）。
 
 import * as THREE from 'three';
 import { TNO_IDS, TNO_DATA, tnoPosition, tnoOrbitPoints } from '../astro/tno.js';
@@ -10,23 +10,41 @@ import { QUALITY } from '../engine/quality.js';
 
 const KM_PER_AU = 149597870.7;
 
-/** 远距光点：TNO 在 AU 尺度看是点光源 */
-function makeGlint(color) {
+/** 调色板 → 辉光 RGB（0–255）。冷暗天体偏蓝灰，红色天体偏橙。 */
+const PALETTE_GLOW = {
+  mars:   [255, 170, 110], // 红橙（Sedna、共工星等）
+  pluto:  [235, 205, 185], // 粉白（创神星）
+  ice:    [170, 215, 255], // 冰蓝（妊神星、亡神星）
+  triton: [185, 230, 255], // 青白
+  dark:   [190, 170, 140], // 暗棕红（鸟神星、变形星）
+  gray:   [200, 205, 220], // 中性冷白（默认）
+};
+
+/** 彗星式柔光头：内亮核 + 外扩弥散光晕（加性混合），按调色板着色。 */
+function makeGlowSprite(palette) {
+  const [r, g, b] = PALETTE_GLOW[palette] ?? PALETTE_GLOW.gray;
   const c = document.createElement('canvas');
-  c.width = c.height = 32;
+  c.width = c.height = 64;
   const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.35, 'rgba(255,255,255,0.35)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 32, 32);
+  // 外层弥散光晕（类彗发）
+  const g1 = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g1.addColorStop(0, `rgba(${r},${g},${b},0.85)`);
+  g1.addColorStop(0.22, `rgba(${r},${g},${b},0.45)`);
+  g1.addColorStop(0.5, `rgba(${r},${g},${b},0.12)`);
+  g1.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx.fillStyle = g1;
+  ctx.fillRect(0, 0, 64, 64);
+  // 内亮核（白色高光，模拟反射太阳光的点源）
+  const g2 = ctx.createRadialGradient(32, 32, 0, 32, 32, 7);
+  g2.addColorStop(0, 'rgba(255,255,255,0.95)');
+  g2.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g2;
+  ctx.fillRect(0, 0, 64, 64);
   const tex = new THREE.CanvasTexture(c);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: tex, color, transparent: true, opacity: 0.7,
+  return new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, opacity: 0.85,
     blending: THREE.AdditiveBlending, depthWrite: false,
   }));
-  return sp;
 }
 
 /** 轨道颜色：冷蓝灰，区别于行星橙黄轨道 */
@@ -34,10 +52,6 @@ const ORBIT_COLOR = 0x6680aa;
 
 /**
  * 创建所有 TNO 场景实体，注册浮动原点，返回 entries 与每帧 update。
- * @param {THREE.Scene} scene
- * @param {World} world  浮动原点管理器
- * @param {THREE.Group} orbitLinesGroup  轨道线组（sun.group 子级，含日心坐标）
- * @returns {{ entries: Map<id, entry>, update(jdTT, shipPosKm) }}
  */
 export function createTNOScene(scene, world, orbitLinesGroup) {
   const entries = new Map();
@@ -55,8 +69,8 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
     const mesh = new THREE.Mesh(geo, mat);
     group.add(mesh);
 
-    // 远距光点
-    const glint = makeGlint(0xb0c8e0);
+    // 彗星式柔光头（远距主视觉，始终叠加在球体之上）
+    const glint = makeGlowSprite(d.palette ?? 'gray');
     group.add(glint);
 
     const posKm = new Float64Array(3);
@@ -79,6 +93,7 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
       }));
       orbitLine.userData.isOrbit = true;
       orbitLine.frustumCulled = false;
+      orbitLine.visible = false; // 默认关闭（由 main.js KeyK 控制，#4）
       orbitLinesGroup.add(orbitLine);
     }
 
@@ -104,13 +119,17 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
       u.uSunDir.value.copy(_sunDir);
       u.uSunI.value = sunI;
 
-      // 远距光点尺寸与淡出
+      // 彗星式辉光头：保持 ~恒定屏幕尺寸，远距始终可见，近距淡出让球体接管
       const dist = Math.hypot(
         e.posKm[0] - shipPosKm[0], e.posKm[1] - shipPosKm[1], e.posKm[2] - shipPosKm[2]
       );
-      e.glint.scale.setScalar(dist * 0.004);
+      // 尺度：视角尺寸约 0.6°（dist*0.006），并保证不小于天体本身视半径的若干倍以形成光晕
+      e.glint.scale.setScalar(Math.max(dist * 0.006, e.phys.radiusKm * 6));
+      // 不透明度：远距常驻（0.85），接近天体（< 半径×60）时淡出，避免糊住表面
       e.glint.material.opacity =
-        THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 300) - 1) * 0.7, 0, 0.8);
+        THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 60) - 0.3), 0, 1) * 0.85;
+      // 球体：仅在较近时渲染（远距纯辉光头，省填充率且更像彗星点光）
+      e.mesh.visible = dist < e.phys.radiusKm * 900;
     }
   }
 
