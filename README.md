@@ -19,16 +19,24 @@ Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 
 <table>
 <tr>
-<td><img src="docs/sdlc/screenshots/07-moonwalk-earthrise.png" alt="Earthrise from the Moon"/></td>
-<td><img src="docs/sdlc/screenshots/10-saturn-rings-color.png" alt="Saturn's rings up close"/></td>
+<td><img src="docs/sdlc/screenshots/example/01.png" alt=""/></td>
+<td><img src="docs/sdlc/screenshots/example/02.png" alt=""/></td>
 </tr>
 <tr>
-<td><img src="docs/sdlc/screenshots/r7-03-jupiter-entry.png" alt="Entering Jupiter's atmosphere"/></td>
-<td><img src="docs/sdlc/screenshots/r9-01-underwater.png" alt="Underwater on Earth"/></td>
+<td><img src="docs/sdlc/screenshots/example/03.png" alt=""/></td>
+<td><img src="docs/sdlc/screenshots/example/04.png" alt=""/></td>
 </tr>
 <tr>
-<td><img src="docs/sdlc/screenshots/r7-05-pluto-closeup.png" alt="Pluto – New Horizons mosaic"/></td>
-<td><img src="docs/sdlc/screenshots/08-heliopause.png" alt="The heliopause – edge of the solar system"/></td>
+<td><img src="docs/sdlc/screenshots/example/05.png" alt=""/></td>
+<td><img src="docs/sdlc/screenshots/example/06.png" alt=""/></td>
+</tr>
+<tr>
+<td><img src="docs/sdlc/screenshots/example/07.png" alt=""/></td>
+<td><img src="docs/sdlc/screenshots/example/08.png" alt=""/></td>
+</tr>
+<tr>
+<td><img src="docs/sdlc/screenshots/example/09.png" alt=""/></td>
+<td></td>
 </tr>
 </table>
 
