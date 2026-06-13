@@ -53,6 +53,9 @@ export class OrbitCamera {
     this._streakIdle = 0;
     this._zoomHold = 0;    // PageUp/Down 按住渐加速
     this._navHold = 0;     // 键盘平移/旋转按住渐加速（R10：所有操作低→高灵敏度）
+    this.pendingFocusId = null; // 点击目标后延迟到滚动时才切换的焦点（R10-fix-3）
+    this.pendingTargetLocal = null; // 目标本地偏移（可选，用于精确瞄准表面点击点）
+    this.transition = null; // 焦点切换过渡状态
   }
 
   /** 锚定参考系：体固（默认，随自转）或惯性（观赏绕转） */
@@ -112,7 +115,167 @@ export class OrbitCamera {
     this._dollyDepth = null;
     this._dollyTargetId = null;
     this._radialGesture = false;
+    this.pendingFocusId = null;
+    this.pendingTargetLocal = null;
+    this.transition = null;
     if (quat) this.adoptOrientation(f, _v2, quat);
+  }
+
+  /** 记录当前完整状态，供焦点过渡时临时计算目标后恢复 */
+  _snapshot() {
+    return {
+      focusId: this.focusId,
+      lat: this.lat, lon: this.lon, dist: this.dist, distTarget: this.distTarget,
+      heading: this.heading, tilt: this.tilt,
+      panOffset: this.panOffset.clone(),
+      vLat: this.vLat, vLon: this.vLon,
+      inertial: this.inertial,
+      _dolly: this._dolly, _dollyDepth: this._dollyDepth,
+      _dollyTargetId: this._dollyTargetId, _radialGesture: this._radialGesture,
+    };
+  }
+  _restore(s) {
+    this.focusId = s.focusId;
+    this.lat = s.lat; this.lon = s.lon;
+    this.dist = s.dist; this.distTarget = s.distTarget;
+    this.heading = s.heading; this.tilt = s.tilt;
+    this.panOffset.copy(s.panOffset);
+    this.vLat = s.vLat; this.vLon = s.vLon;
+    this.inertial = s.inertial;
+    this._dolly = s._dolly; this._dollyDepth = s._dollyDepth;
+    this._dollyTargetId = s._dollyTargetId; this._radialGesture = s._radialGesture;
+  }
+
+  /** 设置延迟焦点：点击目标后先不切换，等滚动时再平滑过渡
+   * @param targetLocalDir 目标体固系中的方向（可选，点击表面时精确瞄准该点）
+   * @param targetLocalDist 该方向上的距离（通常为半径）
+   */
+  setPendingFocus(id, targetLocalDir = null, targetLocalDist = 0) {
+    this.pendingFocusId = id;
+    this.pendingTargetLocal = targetLocalDir
+      ? { dir: targetLocalDir.clone().normalize(), dist: targetLocalDist }
+      : null;
+  }
+
+  /** 启动焦点过渡：记录当前位姿并计算目标初始距离 */
+  _startTransition(env) {
+    if (!this.pendingFocusId || this.pendingFocusId === this.focusId) {
+      this.transition = null;
+      return;
+    }
+    const toId = this.pendingFocusId;
+    const snap = this._snapshot();
+    this.adoptPosition(env, toId, this.posKm, this.quat);
+    const targetDist = this.dist;
+    this._restore(snap);
+    this.transition = {
+      toId,
+      fromPos: Float64Array.from(this.posKm),
+      fromQuat: this.quat.clone(),
+      targetDist,
+      targetLocal: this.pendingTargetLocal
+        ? { dir: this.pendingTargetLocal.dir.clone(), dist: this.pendingTargetLocal.dist }
+        : null,
+      t: 0,
+      faceT: 0, // 独立朝向进度：滚动后平滑转向目标，与位置进度解耦
+    };
+  }
+
+  /** 更新焦点过渡：输入驱动，滚轮/PageUpDown 同时推进过渡并改变目标距离。
+   * 关键：相机位姿由目标世界点实时 lookAt 计算，确保目标始终被移动到屏幕中心
+   * 并随接近/远离保持居中；过程中停止输入即暂停，可点击其他目标重新定位。 */
+  _updateTransition(dt, input, env) {
+    const tr = this.transition;
+    const toF = env.get(tr.toId);
+
+    // 实时目标世界位置（中心 + 可选表面点击点，随天体自转/公转更新）
+    _v1.set(toF.posKm[0], toF.posKm[1], toF.posKm[2]);
+    if (tr.targetLocal) {
+      _v2.copy(tr.targetLocal.dir).applyQuaternion(toF.quat).multiplyScalar(tr.targetLocal.dist);
+      _v1.add(_v2);
+    }
+    const targetWorldPos = _v1; // alias
+
+    // ---- 缩放输入（与正常轨道模式同参数）----
+    let zoomK = 0;
+    if (input.down('PageUp') || input.down('Equal') || input.down('NumpadAdd')) zoomK -= 1;
+    if (input.down('PageDown') || input.down('Minus') || input.down('NumpadSubtract')) zoomK += 1;
+
+    if (input.wheel !== 0) {
+      this._streak = Math.min(this._streak + Math.abs(input.wheel) * 0.18, 1);
+      this._streakIdle = 0;
+    } else {
+      this._streakIdle += dt;
+      if (this._streakIdle > 0.35) this._streak = Math.max(this._streak - dt * 2, 0);
+    }
+    this._zoomHold = zoomK !== 0 ? Math.min(this._zoomHold + dt, 2.5) : 0;
+
+    const zoomActive = input.wheel !== 0 || zoomK !== 0;
+    if (zoomActive) {
+      let zoomMul = 1;
+      if (zoomK !== 0) zoomMul *= Math.exp(zoomK * (0.55 + this._zoomHold * 0.65) * dt);
+      if (input.wheel !== 0) {
+        zoomMul *= Math.pow(1.12 + 0.26 * this._streak, THREE.MathUtils.clamp(input.wheel, -3, 3));
+      }
+      tr.targetDist *= zoomMul;
+      // 下限用目标半径做安全距离（过渡期间不查询地形，避免 lat/lon 未就绪）
+      const minD = toF.minDistKm ?? toF.radiusKm * 1.004 + 1;
+      tr.targetDist = THREE.MathUtils.clamp(tr.targetDist, minD, MAX_DIST);
+      // 过渡进度由缩放方向驱动：滚轮下/PageDown = 接近（t↑），滚轮上/PageUp = 远离（t↓）
+      const advance = Math.abs(input.wheel) * 0.12 + Math.abs(zoomK) * dt * 0.9;
+      const dir = (input.wheel < 0 || zoomK < 0) ? 1 : -1;
+      tr.t = THREE.MathUtils.clamp(tr.t + dir * advance, 0, 1);
+      // 朝向目标独立推进：滚动后 0.35s 内平滑转向目标
+      tr.faceT = Math.min(1, tr.faceT + dt / 0.35);
+    }
+    // 一旦开始接近，即使停止滚动也让朝向继续收敛到目标，避免停在不朝向目标的状态
+    if (tr.t > 0 && tr.faceT < 1) {
+      tr.faceT = Math.min(1, tr.faceT + dt / 0.35);
+    }
+
+    const u = smoother(tr.t);
+    const uLook = smoother(tr.faceT);
+
+    // 从目标中心指向初始相机位置的方向（不变路径方向，保证路径可预测）
+    _v2.set(tr.fromPos[0] - toF.posKm[0], tr.fromPos[1] - toF.posKm[1], tr.fromPos[2] - toF.posKm[2]);
+    const startDist = _v2.length();
+    if (startDist > 1e-9) _v2.normalize(); else _v2.set(0, 0, 1);
+
+    // 目标到达位置：沿同一方向、按当前 targetDist 定位
+    _v3.copy(targetWorldPos).addScaledVector(_v2, tr.targetDist);
+
+    // 当前位置插值
+    this.posKm[0] = tr.fromPos[0] + (_v3.x - tr.fromPos[0]) * u;
+    this.posKm[1] = tr.fromPos[1] + (_v3.y - tr.fromPos[1]) * u;
+    this.posKm[2] = tr.fromPos[2] + (_v3.z - tr.fromPos[2]) * u;
+
+    // 上方向：从初始上方向平滑过渡到目标天体北极（用 uLook 同步）
+    _va.set(0, 1, 0).applyQuaternion(tr.fromQuat);
+    _vm.set(0, 1, 0).applyQuaternion(this.frameQuat(toF));
+    const upX = _va.x + (_vm.x - _va.x) * uLook;
+    const upY = _va.y + (_vm.y - _va.y) * uLook;
+    const upZ = _va.z + (_vm.z - _va.z) * uLook;
+    const upLen = Math.hypot(upX, upY, upZ) || 1;
+
+    // 移除未使用的 lookAt 插值变量；直接由当前位置看向目标世界点
+    // 朝向：直接 slerp 到“从当前位置看向目标世界点”的四元数，确保目标始终在向心
+    // 方向移动并被尽快居中；比插值 lookAt 点更稳定，尤其当初始视线与目标方向大角分离时。
+    _m.lookAt(
+      new THREE.Vector3(this.posKm[0], this.posKm[1], this.posKm[2]),
+      targetWorldPos,
+      new THREE.Vector3(upX / upLen, upY / upLen, upZ / upLen)
+    );
+    const targetQuat = new THREE.Quaternion().setFromRotationMatrix(_m);
+    this.quat.slerpQuaternions(tr.fromQuat, targetQuat, uLook);
+
+    if (tr.t >= 1 && tr.faceT >= 0.99) {
+      // 过渡完成：提交新焦点并恢复一致的轨道参数
+      this.focusId = tr.toId;
+      this.adoptPosition(env, tr.toId, this.posKm, this.quat);
+      this.pendingFocusId = null;
+      this.pendingTargetLocal = null;
+      this.transition = null;
+    }
   }
 
   /** 由相机四元数反解 heading/tilt（u = 径向单位向量，世界系） */
@@ -195,10 +358,13 @@ export class OrbitCamera {
     return Math.max(t.radiusKm * 3.5, 3);
   }
 
-  /** GE 式飞行动画启动 */
-  flyTo(env, toId) {
+  /** GE 式飞行动画启动（fromIdOverride 用于从上一焦点起飞，如标签双击） */
+  flyTo(env, toId, fromIdOverride = null) {
+    this.pendingFocusId = null;
+    this.pendingTargetLocal = null;
+    this.transition = null;
     const to = env.get(toId);
-    const from = env.get(this.focusId);
+    const from = env.get(fromIdOverride ?? this.focusId);
     const sep = Math.hypot(
       to.posKm[0] - from.posKm[0], to.posKm[1] - from.posKm[1], to.posKm[2] - from.posKm[2]
     );
@@ -214,7 +380,7 @@ export class OrbitCamera {
     // 时长：距离对数缩放（同星球微调 ~2s，跨日球层 ~7s）
     const dur = THREE.MathUtils.clamp(1.6 + Math.log10(Math.max(sep + h0, 10) / 1e4) * 0.55, 1.8, 7);
     // 墙钟驱动（GE 行为：固定真实时长，低帧率下跳帧前进）
-    this.flight = { toId, fromId: this.focusId, t: 0, dur, h0, h1, dir0, dir1, start: performance.now() };
+    this.flight = { toId, fromId: fromIdOverride ?? this.focusId, t: 0, dur, h0, h1, dir0, dir1, start: performance.now() };
   }
 
   cancelFlight(env) {
@@ -228,6 +394,16 @@ export class OrbitCamera {
   update(dt, input, env) {
     if (this.flight) {
       this.updateFlight(dt, env);
+      return;
+    }
+    // 延迟焦点：点击目标后先不动，滚动/PageUpDown 才平滑切换焦点（R10-fix-3）
+    if (this.pendingFocusId && this.pendingFocusId !== this.focusId) {
+      if (!this.transition || this.transition.toId !== this.pendingFocusId) {
+        this._startTransition(env);
+      }
+    }
+    if (this.transition) {
+      this._updateTransition(dt, input, env);
       return;
     }
     let f = env.get(this.focusId);

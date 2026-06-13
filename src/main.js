@@ -78,6 +78,10 @@ let selectedId = null;
 const voyagerEntries = [];
 const boundaryEntries = [];
 const IDENTITY_Q = new THREE.Quaternion();
+let lastLabelClickFocus = 'earth';
+let lastLabelClickId = null;
+let labelClickTimer = null;
+const LABEL_CLICK_WINDOW = 250;
 
 init();
 
@@ -153,11 +157,11 @@ async function init() {
     else if (input.locked && labels.aimedId) select(labels.aimedId);
     else if (appMode === 'orbit' && !input.locked && !orbitCam.flight &&
       Math.hypot(e.clientX - downX, e.clientY - downY) < 6) {
-      // 点击天体 = 锁定焦点（R10：焦点只显式切换；位置/视向严格连续）
-      const id = pickBody(e.clientX, e.clientY);
-      if (id && id !== orbitCam.focusId) {
-        orbitCam.adoptPosition(orbitEnv, id, ship.posKm, ship.quat);
-        select(id);
+      // 点击天体 = 选择延迟焦点（R10-fix-3：镜头先不动，滚动再平滑切换并居中目标）
+      const hit = pickBody(e.clientX, e.clientY);
+      if (hit && hit.id !== orbitCam.focusId) {
+        orbitCam.setPendingFocus(hit.id, hit.localDir, hit.localDist);
+        select(hit.id);
         focusTipUntil = performance.now() + 2600;
       }
     }
@@ -242,8 +246,31 @@ const orbitEnv = {
 
 function setupLabels() {
   labels = new Labels(document.getElementById('labels'), camera);
-  labels.onSelect = select;
-  labels.onFlyTo = (id) => flyTo(id);
+  // 标签点击：探索模式下设为延迟焦点（镜头先不动，滚动/PageUpDown 再平滑切换焦点）；
+  // 双击仍从原始焦点起飞。用短时窗口记录同一标签双击前的焦点，避免第一次点击切焦点
+  // 后第二次点击把 fromId 覆盖成新焦点。
+  labels.onSelect = (id) => {
+    if (appMode === 'orbit' && !orbitCam.flight && !id.startsWith('star_')) {
+      if (!labelClickTimer || lastLabelClickId !== id) {
+        lastLabelClickFocus = orbitCam.focusId;
+      }
+      lastLabelClickId = id;
+      clearTimeout(labelClickTimer);
+      labelClickTimer = setTimeout(() => { labelClickTimer = null; lastLabelClickId = null; }, LABEL_CLICK_WINDOW);
+      if (id !== orbitCam.focusId) {
+        orbitCam.setPendingFocus(id);
+        focusTipUntil = performance.now() + 2600;
+      }
+    }
+    select(id);
+  };
+  labels.onFlyTo = (id) => {
+    clearTimeout(labelClickTimer);
+    labelClickTimer = null;
+    lastLabelClickId = null;
+    const fromId = appMode === 'orbit' ? (lastLabelClickFocus ?? orbitCam.focusId) : null;
+    flyTo(id, fromId);
+  };
   for (const [id, t] of registry) {
     labels.add({
       id, nameZh: t.nameZh,
@@ -267,9 +294,11 @@ function select(id) {
   selectedId = id;
 }
 
-/** 屏幕坐标拾取天体（点击设焦点用，~0.7° 容差，R10） */
+/** 屏幕坐标拾取天体（点击设焦点用，~0.7° 容差，R10）。返回 { id, t, localDir, localDist } 或 null */
 const _pickDir = new THREE.Vector3();
 const _pickP = new THREE.Vector3();
+const _pickHit = new THREE.Vector3();
+const _pickQ = new THREE.Quaternion();
 let focusTipUntil = 0;
 function pickBody(cx, cy) {
   _pickDir.set(
@@ -286,13 +315,21 @@ function pickBody(cx, cy) {
     const det = b * b - (_pickP.lengthSq() - margin * margin);
     if (det < 0) continue;
     const tHit = b - Math.sqrt(det);
-    if (best === null || tHit < best.t) best = { id, t: Math.max(tHit, 0) };
+    if (best === null || tHit < best.t) best = { id, t: Math.max(tHit, 0), entry: t, p: _pickP.clone() };
   }
-  return best?.id ?? null;
+  if (!best) return null;
+  const R = best.entry.phys?.radiusKm ?? 1;
+  // 命中点相对天体中心（相机空间）
+  _pickHit.copy(_pickDir).multiplyScalar(best.t).sub(best.p);
+  // 转到体固系
+  _pickQ.copy(best.entry.quatRef ?? IDENTITY_Q).invert();
+  const localDist = Math.max(_pickHit.length(), R * 0.1);
+  const localDir = _pickHit.clone().applyQuaternion(_pickQ).normalize();
+  return { id: best.id, t: best.t, localDir, localDist };
 }
 
-/** GE 式前往：任意模式 → 飞行动画 → 探索模式锚定目标 */
-function flyTo(id) {
+/** GE 式前往：任意模式 → 飞行动画 → 探索模式锚定目标（fromId 仅用于 orbit 模式标签双击） */
+function flyTo(id, fromId = null) {
   if (!registry.has(id)) return;
   select(id);
   if (appMode !== 'orbit') {
@@ -303,7 +340,7 @@ function flyTo(id) {
     appMode = 'orbit';
     ship.mode = 'fly';
   }
-  orbitCam.flyTo(orbitEnv, id);
+  orbitCam.flyTo(orbitEnv, id, fromId);
 }
 
 function syncShipToOrbit() {
@@ -548,7 +585,13 @@ function handleUIKeys() {
 function updateTip(nearest) {
   const atm = nearest ? builder.bodies.get(nearest.id)?.phys.atmosphere : null;
   if (performance.now() < focusTipUntil && appMode === 'orbit') {
-    hud.tip(`🎯 已锁定焦点：${registry.get(orbitCam.focusId)?.nameZh}（滚轮拉近可直达登陆）`);
+    const tipId = orbitCam.pendingFocusId ?? selectedId ?? orbitCam.focusId;
+    const tipName = registry.get(tipId)?.nameZh ?? '目标';
+    if (orbitCam.pendingFocusId && orbitCam.pendingFocusId !== orbitCam.focusId) {
+      hud.tip(`🎯 已选择目标：${tipName}（滚动鼠标或 PageUp/Down 平滑接近/远离）`);
+    } else {
+      hud.tip(`🎯 已锁定焦点：${tipName}（滚轮拉近可直达登陆）`);
+    }
   } else if (orbitCam.flight) {
     hud.tip(`✈ 正在前往 ${registry.get(orbitCam.flight.toId)?.nameZh} …（拖拽可中断）`);
   } else if (appMode === 'walk') {

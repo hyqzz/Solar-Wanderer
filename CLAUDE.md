@@ -132,6 +132,32 @@ Three.js 0.165 + Vite 5 + 原生 ESM（无 TypeScript）。纯浏览器 WebGL2�
 - 新增验证：`tools/repro-issue1.mjs`（返回探索后 WASD/Shift+W/滚轮生效）+
   `tools/repro-issue2.mjs`（右键平移后滚轮缩放 look-at 点不漂移）。
 
+### R10-fix-2（2026-06-12）：点击目标后镜头先不动，滚动/PageUpDown 再平滑切换焦点并居中
+- **问题**：探索模式下点击天体（或标签）后，用户希望镜头保持不动；只有滚动鼠标滚轮
+  或按 PageUp/Down 接近/远离时，才平滑切换到新焦点并移动相机，同时把目标持续保持在
+  屏幕中心；过程中可随时停止，也能随时改点其他目标重新定位。
+- **根因**：原实现点击天体/标签后立即调用 `adoptPosition` 切换焦点，不符合
+  "先不动再平滑过渡" 的交互预期；早期过渡实现仅对相机位置/朝向做线性/slerp 插值，
+  目标在过渡过程中会偏离屏幕中心，导致接近时误差过大。
+- **修复**：
+  - 探索模式下单击天体/标签不再立即切换焦点，而是调用 `orbitCam.setPendingFocus(id,
+    localDir?, localDist?)` 设置延迟焦点，相机位置/朝向严格保持不动。
+  - `OrbitCamera` 新增 `pendingFocusId`、`pendingTargetLocal` 与 `transition` 状态。
+    当检测到缩放输入且存在延迟焦点时，启动世界位姿插值过渡：
+    - 起点 = 点击瞬间的 `posKm/quat`；
+    - 终点 = 沿初始方向、按当前缩放距离定位到目标附近；
+    - 位置进度 `t` 由缩放方向驱动（滚轮下/PageDown = 接近，滚轮上/PageUp = 远离），
+      停止输入即暂停；
+    - 朝向进度 `faceT` 独立推进：滚动后 0.35s 内平滑转向目标，且一旦开始接近即使停止
+      滚动也会继续收敛，确保目标在过渡中后期始终位于屏幕中心；
+    - 只有 `t >= 1` 且 `faceT >= 0.99` 时才提交新焦点，避免焦点已切换但相机还没对准目标。
+  - 点击天体本体时，`pickBody` 返回命中点的体固系方向 `localDir` 与距离 `localDist`，
+    过渡期间持续看向该表面点（随天体自转更新），实现精确瞄准；标签点击使用天体中心。
+  - 恒星标签（`star_*`）不设置延迟焦点；标签双击前往仍从原始焦点起飞（保留 250 ms
+    窗口记录双击前焦点；`OrbitCamera.flyTo` 支持 `fromIdOverride`）。
+- 新增验证：`node tools/repro-label-focus.mjs`（点击后不动、滚动平滑切焦点并居中、
+  停止后可重选）。
+
 - **计算**：日心黄道 J2000，单位 km。
 - **→ Three 世界**：`(x, y, z)_ecl → (x, z, -y)_three`（黄道北极 = +Y）。
 - **体固系 → 世界**：体固基矢经相同映射（本初子午线=本地+X，北极=+Y）。
@@ -163,6 +189,7 @@ node tools/repro-r10.mjs       # R10 焦点/缩放/水体/V 连续性验证（12
 node tools/probe-r10.mjs       # R10 运行时探针（起飞后按键/点击拾取/V 连续性）
 node tools/repro-issue1.mjs    # R10-fix：返回探索模式后 GE 操控生效验证
 node tools/repro-issue2.mjs    # R10-fix：右键平移后滚轮缩放不跳回原空间验证
+node tools/repro-label-focus.mjs # R10-fix-2：点击标签切换焦点后滚轮以新焦点缩放验证
 node tools/probe-r7.mjs        # R7 运行时探针（自动登陆/起飞/气巨入气，需 dev server）
 node tools/probe-r7-visual.mjs # R7 高画质档外行星近景视检截图
 ```
