@@ -3,8 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>遨游太阳系 Solar Wanderer — 太阳系 1:1 实时探索</title>
+  <title>Solar Wanderer · 遨游太阳系 — 1:1 Real-Time Solar System Explorer</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='7' fill='%23ffcc55'/><circle cx='26' cy='16' r='2' fill='%234a90d9'/></svg>" />
+
+  <!-- Open Graph / Social sharing -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://sw.icodestar.net/" />
+  <meta property="og:title" content="Solar Wanderer — Explore the Solar System 1:1 in Your Browser" />
+  <meta property="og:description" content="Real-time 1:1 solar system explorer powered by NASA JPL ephemerides. Land on planets, walk on the Moon, dive underwater on Earth. Zero install — pure WebGL2." />
+  <meta property="og:image" content="https://sw.icodestar.net/preview.png" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="720" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Solar Wanderer — 1:1 Real-Time Solar System in Your Browser" />
+  <meta name="twitter:description" content="Land on planets, walk the Moon, dive underwater on Earth. Powered by NASA JPL. Zero install." />
+  <meta name="twitter:image" content="https://sw.icodestar.net/preview.png" />
+
+  <meta name="description" content="Real-time 1:1 solar system explorer. Powered by NASA JPL ephemerides — planets are exactly where they are right now. Land, walk, fly. Pure WebGL2, no install." />
+  <meta name="keywords" content="solar system, space simulator, WebGL, Three.js, NASA, JPL, astronomy, planets, interactive" />
+
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
@@ -36,6 +55,7 @@
       <div id="loading"><div class="spinner"></div><div id="loading-progress">加载中…</div></div>
       <button id="start-btn" style="display:none">点击进入太阳系</button>
       <p class="hint">进入后单击画面锁定鼠标 · H 查看完整操作说明</p>
+      <a id="github-star" href="https://github.com/hyqzz/Solar-Wanderer" target="_blank" rel="noopener">⭐ Star on GitHub</a>
     </div>
   </div>
 

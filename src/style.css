@@ -135,6 +135,17 @@ html, body {
 #dir-body::-webkit-scrollbar { width: 6px; }
 #dir-body::-webkit-scrollbar-thumb { background: rgba(110, 160, 210, 0.3); border-radius: 3px; }
 
+/* ---------- GitHub Star 按钮 ---------- */
+#github-star {
+  display: inline-block; margin-top: 18px;
+  padding: 8px 20px; font-size: 13px; font-family: inherit;
+  color: #e6edf3; background: rgba(33,110,60,0.35);
+  border: 1px solid rgba(63,185,80,0.4); border-radius: 20px;
+  text-decoration: none; letter-spacing: 0.5px;
+  transition: background .2s, border-color .2s;
+}
+#github-star:hover { background: rgba(63,185,80,0.25); border-color: #3fb950; }
+
 /* ---------- 启动屏 ---------- */
 #start {
   position: fixed; inset: 0; z-index: 100;
