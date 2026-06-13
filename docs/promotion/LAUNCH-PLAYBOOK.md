@@ -60,22 +60,19 @@
 
 ---
 
-## 🔗 Awesome 清单提交（长期发现渠道）
+## 🔗 Awesome 清单提交（长期发现渠道）—— 已为你备好，差最后一点
 
-向以下清单提交 PR（按相关度排序）。**助手可代为自动开 PR**，或你手动 fork 提交：
+助手已分析各清单结构、选定**最契合**的两个旗舰清单、在你的 fork 里**建好分支并提交了正确格式/字母序的条目**。
+但你提供的是 **fine-grained PAT，无法对第三方仓库开 PR**，所以最后一步需你点击（页面已预填，点 **Create pull request** 即可）：
 
-| 清单 | 仓库 | 建议归类 |
-|------|------|----------|
-| awesome-threejs | `mrdoob/three.js` wiki / `made1ev1n/awesome-threejs` | Showcase / Examples |
-| awesome-webgl | `sjfricke/awesome-webgl` | Demos / Projects |
-| awesome-creative-coding | `terkelg/awesome-creative-coding` | Visualization |
-| awesome-space | `mbiarnes/awesome-space`（如存在） | Tools / Simulators |
+| 清单 | 归类 | 一键开 PR |
+|------|------|-----------|
+| `orbitalindex/awesome-space`（2.2k⭐，活跃） | Astronomy → **Visualization**（与 Celestia / Gaia Sky / NASA Eyes 并列，完美契合） | https://github.com/orbitalindex/awesome-space/compare/master...hyqzz:awesome-space:add-solar-wanderer?expand=1 |
+| `terkelg/awesome-creative-coding`（14.9k⭐，活跃） | **Inspiration** | https://github.com/terkelg/awesome-creative-coding/compare/main...hyqzz:awesome-creative-coding:add-solar-wanderer?expand=1 |
 
-**统一条目文案：**
-```markdown
-- [Solar Wanderer](https://sw.icodestar.net) — 1:1 real-time solar system explorer in the browser; NASA JPL ephemerides, seamless planet landing, ray-marched atmospheres. [[source](https://github.com/hyqzz/Solar-Wanderer)]
-```
-> ⚠️ 礼仪：一个清单只提一次；遵守该清单的格式与字母序；PR 描述里说明项目是什么、为何契合。0 star 阶段部分清单可能要求成熟度，被拒就换下一个，别催。
+> 跳过了 `awesome-webgl` / `awesome-threejs` / `jonathansick/awesome-astronomy`：经核查均为**纯学习资源清单，无项目展示节**，硬塞成品项目会被拒且像刷屏。
+> 若想让助手**全自动**开 PR：提供一个 **classic PAT（勾选 `public_repo`）** 即可，届时无需你手动点击。
+> ⚠️ 礼仪：一个清单只提一次；被拒就坦然接受别催。重跑命令：`node tools/submit-awesome-prs.mjs`。
 
 ---
 
