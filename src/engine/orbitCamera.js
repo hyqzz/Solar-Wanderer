@@ -357,7 +357,13 @@ export class OrbitCamera {
     // - 否则：dolly（倾斜或平移带径向分量导致视线偏离径向时，沿视线推拉保持屏幕中心目标居中）。
     const zoomActive = input.wheel !== 0 || zoomK !== 0;
     const inDollyGesture = Math.abs(this._dolly - 1) > 1e-5;
-    const shouldBeRadial = (this.panOffset.lengthSq() === 0 && Math.abs(this.tilt) <= 0.02) ||
+    // 径向缩放判定：
+    // - 无平移且用户未倾斜：经典轨道 / 着陆 / 起飞语义（auto-tilt 由表示层处理）。
+    // - 无平移但视线仍指向径向：显式点击切换焦点后可能保留 tilt 补偿，此时仍应以
+    //   焦点为中心进行远离/接近，而不是进入 dolly 导致目标偏移。
+    // - 有横向平移且视线仍径向：保持 look-at 点不甩回焦点方向。
+    const shouldBeRadial = (this.panOffset.lengthSq() === 0 &&
+      (Math.abs(this.tilt) <= 0.02 || viewRadial)) ||
       (panMostlyPerp && viewRadial);
     const canStartRadial = zoomActive && !inDollyGesture && !this._radialGesture && shouldBeRadial;
     // 外部设置 distTarget 后（如起飞/返回探索的抬升），即使没有缩放输入也要平滑过渡到目标
