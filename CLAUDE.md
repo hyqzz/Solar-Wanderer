@@ -158,6 +158,14 @@ Three.js 0.165 + Vite 5 + 原生 ESM（无 TypeScript）。纯浏览器 WebGL2�
 - 新增验证：`node tools/repro-label-focus.mjs`（点击后不动、滚动平滑切焦点并居中、
   停止后可重选）。
 
+### R11：模拟范围扩展至整个太阳系（2026-06-13）
+- **28 颗真实 TNO**（海外天体）：Eris、Sedna、Makemake、Haumea、Quaoar、Gonggong、Orcus 等，真实 JPL 轨道根数（`src/astro/tno.js`）；球体网格+程序化贴图+远距点精灵+轨道线；目录分类"🌑 海外天体（TNO）"；searchUI 支持搜索/飞往。距离验证：Eris 94.6 AU、Sedna 86.0 AU、Makemake 52.6 AU、Farout 120 AU、FarFarOut 128 AU（均与 JPL 现值吻合）。
+- **奥尔特云统计粒子**：内奥尔特云/Hills Cloud（2000–20000 AU，6000 粒，轻度扁化盘状）+ 外奥尔特云（20000–100000 AU，10000 粒，近球形各向同性）；AdditiveBlending 叠加；天球外才可见（`skyFade > 0.4`）。
+- **引擎距离扩展**：`camera.far = 1e15 km`（约 106 光年）；`MAX_DIST = 1.5e13 km`（10 万 AU）；`MAX_SUN_R` 匹配；`formatDist` 新增光年单位（≥0.01 ly 显示"X.XXXX 光年"）。
+- **恒星真实三维视差**：21 颗亮星以真实 3D 位置（日心系，`LY_KM` 精度）注册浮动原点（`brightGroup`），camera.far 保证 ≤94 ly 无截断；相机在太阳系内移动时恒星呈现真实视差；程序化背景星仍固定于相机（零视差）。
+- **轨道根数纠错**（高离心率近日点雷区）：Sedna L 值由 86.5→92.91（M=-2.4° 对应 2076 年近日点，给出 86 AU ✓）；Farout L 由 67.3→56.5（给出 120 AU ✓）；FarFarOut L 由 4.9→353.6（给出 128 AU ✓）。
+- 全量回归：33/33 单元测试通过；构建 631 kB。
+
 - **计算**：日心黄道 J2000，单位 km。
 - **→ Three 世界**：`(x, y, z)_ecl → (x, z, -y)_three`（黄道北极 = +Y）。
 - **体固系 → 世界**：体固基矢经相同映射（本初子午线=本地+X，北极=+Y）。

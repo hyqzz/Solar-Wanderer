@@ -1,12 +1,12 @@
-// 星空背景：真实银河全景贴图（按银道坐标系正确定向）+ 程序化恒星点。
-// 恒星视为无穷远：星空组恒挂在相机原点，不参与浮动原点平移（零视差，物理正确）。
+// 星空背景：真实银河全景贴图（按银道坐标系正确定向）+ 程序化恒星点 + 亮星真实视差。
+// 背景程序化恒星固定于相机（零视差），亮星以真实 3D 位置注册浮动原点（R11 星视差）。
 
 import * as THREE from 'three';
-import { raDecToWorld } from '../config.js';
+import { raDecToWorld, LY_KM } from '../config.js';
 import { makeNoise } from '../util/noise.js';
 
 const DEG = Math.PI / 180;
-const SKY_R = 4.5e9; // km，远小于 far，零视差
+const SKY_R = 4.5e9; // km，背景程序化星空球半径（固定相机，零视差）
 export { SKY_R };
 
 // 全天最亮恒星实测目录（J2000 RA小时/Dec度/视星等/色指数类别/中文名/距离光年）
@@ -102,7 +102,13 @@ export function createStarfield(milkywayTex) {
     group.add(pts);
   }
 
-  // 真实亮星（位置/亮度/色温按依巴谷实测；尺寸与强度按视星等）
+  group.frustumCulled = false;
+
+  // 真实亮星：以真实 3D 位置（日心系）创建独立 Points，注册浮动原点，
+  // 相机移动时恒星相对位置变化 → 产生真实视差效果（R11）。
+  // 距离超过 camera.far/LY_KM 的恒星截断到 94 ly（方向不变，视差小到不影响体验）。
+  const PARALLAX_LY_LIMIT = 94; // 约等于 camera.far(1e15 km)/LY_KM
+  const brightGroup = new THREE.Group(); // 注册浮动原点（posKm=[0,0,0]=日心）
   {
     const N = BRIGHT_STARS.length;
     const posArr = new Float32Array(N * 3);
@@ -110,12 +116,14 @@ export function createStarfield(milkywayTex) {
     const dir = new THREE.Vector3();
     BRIGHT_STARS.forEach((s, i) => {
       raDecToWorld(s.ra * 15 * DEG, s.dec * DEG, dir);
-      s.dirWorld = dir.clone(); // 供标签定位
-      posArr[i * 3] = dir.x * SKY_R * 0.97;
-      posArr[i * 3 + 1] = dir.y * SKY_R * 0.97;
-      posArr[i * 3 + 2] = dir.z * SKY_R * 0.97;
+      s.dirWorld = dir.clone(); // 供标签定位（方向不变）
+      // 真实 3D 位置（截断到 PARALLAX_LY_LIMIT 以内保证不超出 camera.far）
+      const distKm = Math.min(s.ly, PARALLAX_LY_LIMIT) * LY_KM;
+      posArr[i * 3] = dir.x * distKm;
+      posArr[i * 3 + 1] = dir.y * distKm;
+      posArr[i * 3 + 2] = dir.z * distKm;
       const c = STAR_COLORS[s.c];
-      const I = 1.45 * Math.pow(10, -0.22 * s.mag); // 星等→相对强度（压缩动态范围）
+      const I = 1.45 * Math.pow(10, -0.22 * s.mag); // 星等→相对强度
       colArr[i * 3] = c[0] * I; colArr[i * 3 + 1] = c[1] * I; colArr[i * 3 + 2] = c[2] * I;
     });
     const geo = new THREE.BufferGeometry();
@@ -128,17 +136,19 @@ export function createStarfield(milkywayTex) {
     fadeMats.push(mat);
     const pts = new THREE.Points(geo, mat);
     pts.renderOrder = -8;
-    group.add(pts);
+    brightGroup.add(pts);
   }
+  brightGroup.frustumCulled = false;
 
-  group.frustumCulled = false;
   return {
     group,
+    brightGroup,       // 需在 main.js 中 scene.add + world.register([0,0,0], brightGroup)
     /** f∈[0,1]：白昼大气内日光淹没星光（0=不可见） */
     setFade(f) {
       for (const m of fadeMats) m.opacity = f;
       if (milkyMat) milkyMat.opacity = f;
       group.visible = f > 0.01;
+      brightGroup.visible = f > 0.01;
     },
   };
 }

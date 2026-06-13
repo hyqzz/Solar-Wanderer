@@ -18,7 +18,8 @@ import { Ship, Input } from './engine/ship.js';
 import { OrbitCamera } from './engine/orbitCamera.js';
 import { buildSolarSystem } from './scene/builder.js';
 import { createStarfield, BRIGHT_STARS, SKY_R } from './scene/starfield.js';
-import { createBelts } from './scene/belts.js';
+import { createBelts, createOortCloud } from './scene/belts.js';
+import { createTNOScene } from './scene/tnoScene.js';
 import { createComets } from './scene/comets.js';
 import { createHeliosphere, VOYAGERS, voyagerPosition } from './scene/heliosphere.js';
 import { TerrainManager } from './scene/terrain.js';
@@ -41,7 +42,8 @@ renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x000000, 0); // 地形气溶胶透视（仅 fog:true 材质受影响）
-const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 5e-7, 8e10);
+// R11：far 扩展到 ~106 ly 以支持亮星真实 3D 位置（视差）+ 奥尔特云粒子（100000 AU=1.58 ly）
+const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 5e-7, 1e15);
 scene.add(camera);
 const ambient = new THREE.AmbientLight(0x404858, 0.02);
 scene.add(ambient);
@@ -71,7 +73,7 @@ const orbitCam = new OrbitCamera();
 const simClock = new SimClock();
 const clock = new THREE.Clock();
 
-let builder, comets, labels, searchUI, sky, belts;
+let builder, comets, labels, searchUI, sky, belts, oortCloud, tnoScene;
 let appMode = 'orbit'; // orbit | fly | walk
 const registry = new Map();
 let selectedId = null;
@@ -89,12 +91,21 @@ async function init() {
   builder = await buildSolarSystem(scene, world, (d, t) => hud.setLoading(d, t));
 
   sky = createStarfield(builder.cache.get('milkyway.jpg'));
-  scene.add(sky.group); // 恒星视为无穷远：不注册浮动原点（零视差，物理正确）
+  scene.add(sky.group); // 背景程序化星空固定相机（零视差）
+
+  // R11：亮星真实 3D 位置注册浮动原点（产生恒星视差效果）
+  scene.add(sky.brightGroup);
+  world.register(new Float64Array(3), sky.brightGroup);
 
   // 带/尘光/日球层壳为日心结构：必须注册浮动原点，否则会错误地以相机为中心
   belts = createBelts();
   scene.add(belts);
   world.register(new Float64Array(3), belts);
+
+  // R11：奥尔特云统计粒子层（2000–100000 AU）
+  oortCloud = createOortCloud();
+  scene.add(oortCloud);
+  world.register(new Float64Array(3), oortCloud);
   const helio = createHeliosphere();
   scene.add(helio);
   world.register(new Float64Array(3), helio);
@@ -132,6 +143,21 @@ async function init() {
     world.register(posKm, group);
     scene.add(group);
     boundaryEntries.push({ id, nameZh, nameEn, desc, posKm, group, rAU });
+  }
+
+  // R11：28 颗海外天体（TNO）— 柯伊伯带、散射盘、延伸散射盘
+  // 轨道线挂在 sun.group（日心，随浮动原点平移）
+  tnoScene = createTNOScene(scene, world, builder.sunEntry.group);
+  for (const [id, e] of tnoScene.entries) {
+    registry.set(id, {
+      nameZh: e.phys.nameZh, nameEn: e.phys.nameEn,
+      desc: e.phys.desc, kind: 'tno',
+      phys: { radiusKm: e.phys.radiusKm, type: 'dwarf' },
+      posKm: e.posKm, relObj: e.group, quatRef: null,
+      groundRadius: null,
+      minDistKm: e.phys.radiusKm * 1.5, // 防止穿进天体内部
+      viewDist: Math.max(e.phys.radiusKm * 12, 3e5),
+    });
   }
 
   buildRegistry();
@@ -400,6 +426,7 @@ function loop() {
   // 星历驱动
   builder.update(jdTT);
   comets.update(jdTT);
+  tnoScene.update(jdTT, ship.posKm);
   for (const v of voyagerEntries) {
     const p = voyagerPosition(v.vg, jdTT);
     const w = eclToWorldArr(p);
@@ -578,6 +605,10 @@ function handleUIKeys() {
   // 行走模式自动隐藏轨道辅助线（沉浸真实星空）
   const showOrbits = orbitLinesOn && appMode !== 'walk';
   for (const line of Object.values(builder.orbitLines.userData)) line.visible = showOrbits;
+  // TNO 轨道线同步显隐
+  for (const [, e] of tnoScene.entries) {
+    if (e.orbitLine) e.orbitLine.visible = showOrbits;
+  }
   if (input.tapped('KeyL')) labels.setVisible(!labels.visible);
   if (input.tapped('KeyH')) hud.toggleHelp();
 }
@@ -727,7 +758,8 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   scene.fog.color.copy(fogColor);
   scene.fog.density = fogDensity;
   sky.setFade(skyFade);
-  belts.visible = skyFade > 0.4; // 带点云为统计表示，白昼天空中不可见
+  belts.visible = skyFade > 0.4;      // 带点云为统计表示，白昼天空中不可见
+  oortCloud.visible = skyFade > 0.4; // 奥尔特云同理
   document.getElementById('labels').classList.toggle('daysky', skyFade < 0.5);
 
   // 行走在夜面时的微环境光（地照/星光下的暗适应，保证夜间探索可见性）

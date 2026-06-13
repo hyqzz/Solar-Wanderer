@@ -22,8 +22,8 @@ const IDENTITY_Q = new THREE.Quaternion();
 
 const EYE_KM = 0.0017;          // 行走视高 1.7 m（与 ship.js 一致）
 const AUTO_TILT_MAX = 80 * DEG; // 近地自动倾斜上限（俯视 → 近地平，GE/NMS 着陆观感）
-// 远离上限：121 AU 日球层顶完整入画（58° 视场 → ~250 AU），不再无限远离（R9-1c）
-const MAX_DIST = 3.74e10;
+// 远离上限：扩展到 100000 AU（奥尔特云外边界），1 ly ≈ 63241 AU（R11 范围扩展）
+const MAX_DIST = 1.5e13;
 
 const smoother = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 

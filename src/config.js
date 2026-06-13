@@ -47,8 +47,11 @@ export function formatSpeed(kmS) {
   return (kmS * 1000).toFixed(1) + ' m/s';
 }
 
+export const LY_KM = 9460730472580.8; // 1 光年（km）
+
 /** 距离格式化 */
 export function formatDist(km) {
+  if (km >= LY_KM * 0.01) return (km / LY_KM).toFixed(4) + ' 光年';
   if (km >= 0.05 * KM_PER_AU) return (km / KM_PER_AU).toFixed(3) + ' AU';
   if (km >= 1e6) return (km / 1e6).toFixed(2) + ' 百万km';
   if (km >= 1) return Math.round(km).toLocaleString() + ' km';

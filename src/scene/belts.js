@@ -1,4 +1,4 @@
-// 小行星主带与柯伊伯带（统计分布点云，确定性种子）+ 黄道尘光。
+// 小行星主带与柯伊伯带（统计分布点云，确定性种子）+ 黄道尘光 + 奥尔特云统计粒子层。
 
 import * as THREE from 'three';
 import { KM_PER_AU } from '../config.js';
@@ -63,5 +63,69 @@ export function createBelts() {
   dust.rotation.x = -Math.PI / 2; // 置于黄道面（世界 XZ）
   dust.renderOrder = -5;
   group.add(dust);
+  return group;
+}
+
+/**
+ * 奥尔特云统计粒子层（纯视觉，无精确轨道）。
+ * 内奥尔特云（Hills Cloud）：2000–20000 AU，轻度扁化（盘状）。
+ * 外奥尔特云：20000–100000 AU，近球形各向同性。
+ * 粒子以日心为中心，注册浮动原点（world.register 调用在 main.js）。
+ */
+function makeOortShell({ count, rMinAU, rMaxAU, inclSigmaDeg, spherical, color, size, opacity, seed }) {
+  const pos = new Float32Array(count * 3);
+  let s = seed >>> 0;
+  const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const gauss = () => (rnd() + rnd() + rnd() + rnd() - 2) / 2;
+  for (let i = 0; i < count; i++) {
+    // 半径：均匀分布于体积（cbrt(uniform) 给出体积均匀分布）
+    const r = (rMinAU + (rMaxAU - rMinAU) * Math.cbrt(rnd())) * KM_PER_AU;
+    if (spherical) {
+      // 球面均匀分布（外奥尔特云）
+      const cosT = rnd() * 2 - 1;
+      const sinT = Math.sqrt(1 - cosT * cosT);
+      const phi = rnd() * Math.PI * 2;
+      pos[i * 3] = r * sinT * Math.cos(phi);
+      pos[i * 3 + 1] = r * cosT;
+      pos[i * 3 + 2] = r * sinT * Math.sin(phi);
+    } else {
+      // 盘状分布（内奥尔特云 / Hills Cloud）：低倾角集中
+      const th = rnd() * Math.PI * 2;
+      const inc = gauss() * inclSigmaDeg * (Math.PI / 180);
+      pos[i * 3] = r * Math.cos(th) * Math.cos(inc);
+      pos[i * 3 + 1] = r * Math.sin(inc);
+      pos[i * 3 + 2] = r * Math.sin(th) * Math.cos(inc);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({
+    color, size, sizeAttenuation: false, transparent: true, opacity,
+    depthWrite: false, fog: false, blending: THREE.AdditiveBlending,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  return pts;
+}
+
+export function createOortCloud() {
+  const group = new THREE.Group();
+
+  // 内奥尔特云（Hills Cloud）：2000–20000 AU，轻度扁化、倾角集中在 ±30°
+  // 目前已观测到 Sedna/2012VP113 等延伸散射盘天体可能就在此区域内缘
+  group.add(makeOortShell({
+    count: 6000, rMinAU: 2000, rMaxAU: 20000,
+    inclSigmaDeg: 30, spherical: false,
+    color: 0x8ca8c8, size: 1.4, opacity: 0.38, seed: 31415,
+  }));
+
+  // 外奥尔特云：20000–100000 AU，近球形，各向同性——来自数十亿年引力扰动
+  group.add(makeOortShell({
+    count: 10000, rMinAU: 20000, rMaxAU: 100000,
+    spherical: true,
+    color: 0x7090b0, size: 1.2, opacity: 0.28, seed: 27183,
+  }));
+
+  group.frustumCulled = false;
   return group;
 }

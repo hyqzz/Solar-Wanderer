@@ -105,6 +105,7 @@ export class SearchUI {
       { title: '🧊 矮行星', filter: (t) => t.kind === 'planet' && t.phys?.type === 'dwarf' },
       { title: '🌙 卫星', filter: (t) => t.kind === 'moon', groupByParent: true },
       { title: '☄️ 彗星', filter: (t) => t.kind === 'comet' },
+      { title: '🌑 海外天体（TNO）', filter: (t) => t.kind === 'tno' },
       { title: '🛰 探测器', filter: (t) => t.kind === 'probe' },
       { title: '🌌 日球层边界', filter: (t) => t.kind === 'boundary' },
     ];
@@ -140,5 +141,6 @@ export class SearchUI {
 }
 
 const KIND_ZH = {
-  star: '恒星', planet: '行星', moon: '卫星', comet: '彗星', probe: '探测器', boundary: '边界', poi: '地标',
+  star: '恒星', planet: '行星', moon: '卫星', comet: '彗星',
+  probe: '探测器', boundary: '边界', poi: '地标', tno: '海外天体',
 };
