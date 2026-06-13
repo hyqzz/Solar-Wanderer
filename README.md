@@ -11,7 +11,13 @@ Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 [![Three.js](https://img.shields.io/badge/Three.js-0.165-black?style=for-the-badge&logo=three.js)](https://threejs.org)
 [![Stars](https://img.shields.io/github/stars/hyqzz/Solar-Wanderer?style=for-the-badge&color=yellow)](https://github.com/hyqzz/Solar-Wanderer/stargazers)
 
-*Zero install · Zero account · Zero backend · ~170 kB gzipped*
+*Zero install · Zero account · Zero backend · ~180 kB gzipped*
+
+<br>
+
+[![Solar Wanderer demo — Saturn, Earth, Jupiter](docs/promotion/demo.gif)](https://sw.icodestar.net)
+
+<sub>▲ Real-time, rendered live in the browser. [**Open the live demo →**](https://sw.icodestar.net)</sub>
 
 </div>
 
