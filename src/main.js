@@ -408,6 +408,9 @@ function loop() {
       lastTakeoff = performance.now();
       document.exitPointerLock?.();
       orbitCam.adoptPosition(orbitEnv, ship.walk.bodyId, ship.posKm, ship.quat);
+      // 滚轮起飞后复位 tilt 并抬升相机，避免 adoptPosition 留下的 -autoTilt 在 auto-tilt
+      // 消失后导致视线指向地平线下方，进而使径向缩放条件失效、滚轮进入 dolly。
+      orbitCam.tilt = 0;
       orbitCam.distTarget = orbitCam.dist + Math.max(orbitCam.dist * 0.002, 0.05);
       appMode = 'orbit';
       ship.mode = 'fly';
