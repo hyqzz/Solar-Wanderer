@@ -42,6 +42,10 @@ export function createRings(phys, ringTex) {
     side: THREE.DoubleSide,
     transparent: true,
     depthWrite: false,
+    // 模板测试：与大气层一致，在卫星（stencil=1）所占像素不绘制，避免环被画到前方卫星上（#R15）。
+    stencilWrite: false,
+    stencilRef: 0,
+    stencilFunc: THREE.EqualStencilFunc,
     vertexShader: /* glsl */ `
       #include <common>
       #include <logdepthbuf_pars_vertex>
