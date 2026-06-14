@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a problem with Solar Wanderer
+title: '[Bug] '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much detail as you can.
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      placeholder: 'e.g. Chrome 125 on Windows 11'
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU / Graphics backend (if known)
+      placeholder: 'e.g. NVIDIA RTX 3060, ANGLE backend'
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open https://sw.icodestar.net
+        2. Click ...
+        3. Scroll ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console errors
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-checks
+      options:
+        - label: I have refreshed the page and cleared cache
+        - label: I have tested on a different browser or device
+        - label: I have checked that WebGL2 is enabled

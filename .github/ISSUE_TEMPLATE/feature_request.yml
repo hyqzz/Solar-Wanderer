@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an idea for Solar Wanderer
+title: '[Feature] '
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      placeholder: 'e.g. I want to use this in a classroom but students get lost without a bookmark feature.'
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to see?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Who would benefit most?
+      options:
+        - General users
+        - Educators / classrooms
+        - Astronomy enthusiasts
+        - Developers / contributors
+        - Other

@@ -1,0 +1,28 @@
+{
+  "name": "Solar Wanderer · 遨游太阳系",
+  "short_name": "Solar Wanderer",
+  "description": "A 1:1 real-time solar system explorer powered by NASA JPL ephemerides, running entirely in your browser.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#05070f",
+  "theme_color": "#05070f",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/preview.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["education", "entertainment", "science"],
+  "lang": "zh-CN",
+  "screenshots": [
+    {
+      "src": "https://sw.icodestar.net/preview.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ]
+}
