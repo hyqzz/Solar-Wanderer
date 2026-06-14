@@ -53,6 +53,7 @@ export class TouchControls {
     document.body.appendChild(root);
     this.root = root;
 
+    this._buildBackdrop();
     // Top-left: hamburger menu
     this._buildMenu(root);
 
@@ -124,10 +125,11 @@ export class TouchControls {
     dispRow2.appendChild(this._btn(t('tc.inertial'), 'tc-inertial'));
     dispRow2.appendChild(this._btn(t('tc.help'),     'tc-help'));
 
-    // Wire menu toggle
+    // Wire menu toggle — close drawers when menu opens
     menuBtn.addEventListener('click', () => {
       this._menuOpen = !this._menuOpen;
       menu.hidden = !this._menuOpen;
+      if (this._menuOpen) this._closeDrawers(false);
     });
 
     // Close menu when clicking elsewhere
@@ -188,6 +190,16 @@ export class TouchControls {
       if (!dir) return;
       this._dirOpen = !this._dirOpen;
       dir.classList.toggle('open', this._dirOpen);
+      if (this._dirOpen) {
+        // 关闭目标抽屉和菜单
+        if (this._tgtOpen) {
+          this._tgtOpen = false;
+          document.getElementById('hud-target')?.classList.remove('tc-open');
+        }
+        this._menuOpen = false;
+        document.getElementById('tc-menu').hidden = true;
+      }
+      this._updateBackdrop();
       this._updateDrawerBtnState();
     });
 
@@ -196,6 +208,14 @@ export class TouchControls {
       if (!tgt) return;
       this._tgtOpen = !this._tgtOpen;
       tgt.classList.toggle('tc-open', this._tgtOpen);
+      if (this._tgtOpen) {
+        // 关闭目录抽屉
+        if (this._dirOpen) {
+          this._dirOpen = false;
+          document.getElementById('directory')?.classList.remove('open');
+        }
+      }
+      this._updateBackdrop();
       this._updateDrawerBtnState();
     });
   }
@@ -262,6 +282,7 @@ export class TouchControls {
 
     // Walk buttons
     const walkGroup = this._el('div', { id: 'tc-walk-btns' });
+    walkGroup.hidden = true;
     wrap.appendChild(walkGroup);
 
     const jumpBtn   = this._btn(t('tc.jump'),    'tc-jump',    'tc-right-btn');
@@ -280,6 +301,7 @@ export class TouchControls {
 
     // Fly buttons
     const flyGroup = this._el('div', { id: 'tc-fly-btns' });
+    flyGroup.hidden = true;
     wrap.appendChild(flyGroup);
 
     const ascBtn  = this._btn(t('tc.ascend'),  'tc-ascend',  'tc-right-btn');
@@ -314,6 +336,41 @@ export class TouchControls {
   _updateDrawerBtnState() {
     document.getElementById('tc-dir-btn')?.classList.toggle('active', this._dirOpen);
     document.getElementById('tc-tgt-btn')?.classList.toggle('active', this._tgtOpen);
+  }
+
+  _buildBackdrop() {
+    const bd = this._el('div', { id: 'tc-backdrop' });
+    bd.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this._closeDrawers();
+    }, { passive: false });
+    document.body.appendChild(bd);
+    this.backdrop = bd;
+  }
+
+  // closeMenu=false 时只关闭抽屉，不关闭菜单（菜单打开时用）
+  _closeDrawers(closeMenu = true) {
+    if (this._dirOpen) {
+      this._dirOpen = false;
+      document.getElementById('directory')?.classList.remove('open');
+    }
+    if (this._tgtOpen) {
+      this._tgtOpen = false;
+      document.getElementById('hud-target')?.classList.remove('tc-open');
+    }
+    if (closeMenu && this._menuOpen) {
+      this._menuOpen = false;
+      const menu = document.getElementById('tc-menu');
+      if (menu) menu.hidden = true;
+    }
+    this._updateBackdrop();
+    this._updateDrawerBtnState();
+  }
+
+  _updateBackdrop() {
+    if (this.backdrop) {
+      this.backdrop.classList.toggle('visible', this._dirOpen || this._tgtOpen);
+    }
   }
 
   // ── Per-frame update (called from main.js loop) ──────────────────────────

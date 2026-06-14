@@ -576,3 +576,87 @@ html, body {
   #hud-nav { width: 160px; top: 56px; }
   #hud-target { width: 170px; }
 }
+
+/* ================================================================
+   .touch — 仅移动端布局覆盖（IS_MOBILE=true 时 html.touch 存在）
+   桌面端永远不会匹配这些规则。
+   ================================================================ */
+
+/* 将 #left-col 缩为零尺寸透明容器，让 #directory 独立定位 */
+.touch #left-col {
+  width: 0; height: 0; overflow: visible;
+  top: 0; left: 0; padding: 0; gap: 0; max-height: none;
+}
+.touch #hud-time { display: none; }
+
+/* 目录：从左侧滑入的全高抽屉 */
+.touch #directory {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: min(260px, 82vw); max-height: 100dvh;
+  z-index: 33; border-radius: 0 12px 12px 0;
+  transform: translateX(-105%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+}
+.touch #directory.open { transform: translateX(0); }
+.touch #dir-body {
+  display: flex !important;   /* 抽屉内 body 始终展开 */
+  flex-direction: column;
+  max-height: calc(100dvh - 54px);
+  overflow-y: auto;
+}
+
+/* 遮罩层：抽屉打开时显示，点击关闭 */
+#tc-backdrop {
+  display: none;
+  position: fixed; inset: 0; z-index: 25;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+#tc-backdrop.visible { display: block; }
+
+/* HUD 导航：紧凑，置于菜单按钮下方 */
+.touch #hud-nav {
+  bottom: auto; left: auto;
+  top: 56px; right: 8px;
+  max-width: 200px; width: auto;
+  font-size: 11px; padding: 6px 8px; line-height: 1.5;
+}
+.touch #hud-nav .tname { font-size: 13px; }
+.touch #hud-nav .dim   { display: none; }
+
+/* HUD 目标：从右侧滑入的抽屉（目录下方） */
+.touch #hud-target {
+  position: fixed;
+  top: 130px; right: 0; left: auto; bottom: auto;
+  width: min(230px, 82vw); max-height: calc(100dvh - 250px);
+  overflow-y: auto;
+  display: block !important;   /* 覆盖 media query 里的 display:none */
+  transform: translateX(105%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 12px 0 0 12px;
+  z-index: 33;
+  font-size: 11px; padding: 8px 10px;
+}
+.touch #hud-target.tc-open { transform: translateX(0); }
+
+/* 动作按钮区：改为横排，节省纵向空间 */
+.touch #tc-actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 4px;
+}
+.touch .tc-action-btn {
+  flex: 1; min-width: 58px; height: 38px;
+  font-size: 12px; padding: 0 6px;
+}
+
+/* 摇杆 + 右侧按钮：底栏高度约 92px，留余量 */
+.touch #tc-joystick-wrap { bottom: 100px; }
+.touch #tc-right-btns    { bottom: 100px; }
+
+/* 提示条：避开底栏 */
+.touch #hud-tip { bottom: 108px; }
