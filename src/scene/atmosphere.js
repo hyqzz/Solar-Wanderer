@@ -34,7 +34,14 @@ export function createAtmosphere(phys) {
     side: THREE.BackSide,
     transparent: true,
     depthWrite: false,
+    // 保留 depthTest:false：大气散射需要覆盖在行星本体盘面上（地球晨昏/蓝雾），
+    // 开启深度测试会让行星本体裁掉大气，导致地球外观“失真”。
+    // 改用模板缓冲解决卫星遮挡：卫星在它所占据的像素写入 stencil=1，
+    // 大气只在 stencil=0 处绘制，从而被前方卫星正确遮挡。
     depthTest: false,
+    stencilWrite: false,
+    stencilRef: 0,
+    stencilFunc: THREE.EqualStencilFunc,
     blending: THREE.CustomBlending,
     blendSrc: THREE.OneFactor,
     blendDst: THREE.OneMinusSrcAlphaFactor,

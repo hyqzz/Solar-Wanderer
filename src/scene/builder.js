@@ -207,6 +207,13 @@ export async function buildSolarSystem(scene, world, onProgress) {
     const big = phys.radiusKm > 1000;
     const mesh = new THREE.Mesh(sphereGeo(phys.radiusKm, big), mat);
     if (phys.shape?.dims) deformIrregular(mesh, id, fullPhys);
+    // 卫星写入 stencil=1，大气层模板测试仅在 stencil=0 绘制 → 避免土星大气画在土卫一前方（#R15）。
+    mat.stencilWrite = true;
+    mat.stencilRef = 1;
+    mat.stencilFunc = THREE.AlwaysStencilFunc;
+    mat.stencilFail = THREE.KeepStencilOp;
+    mat.stencilZFail = THREE.KeepStencilOp;
+    mat.stencilZPass = THREE.ReplaceStencilOp;
     group.add(mesh);
 
     const entry = {
