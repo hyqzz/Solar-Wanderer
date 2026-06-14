@@ -17,22 +17,37 @@ function noseDirWorld() {
   return new THREE.Vector3(x, z, -y); // 黄道→世界
 }
 
-function makeShell(noseAU, color, opacity) {
-  const geo = new THREE.SphereGeometry(1, 96, 64);
+// sheath: 日球鞘填充强度（外侧面可见时的ENAs弥散辉光，终止激波外才有，日球层顶为0）
+function makeShell(noseAU, color, opacity, sheath = 0) {
+  // 256×160 消除远距观察时的多边形棱角
+  const geo = new THREE.SphereGeometry(1, 256, 160);
   const nose = new THREE.Vector3(0, 0, 1);
   const pos = geo.attributes.position;
   const v = new THREE.Vector3();
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i).normalize();
     const cosA = v.dot(nose);
-    const r = Math.min(Math.sqrt(2 / (1 + cosA + 1e-4)), 2.8); // 尾部截断 2.8R
+    // Parker 鼻向压缩模型（cosA→−0.55 前），之后用 smoothstep 渐融到抛物面尾
+    // 彻底消除硬截断 2.8R 造成的巨大平面圆盘（沉浸感破坏根因）。
+    const parkerR = Math.sqrt(2 / (1 + cosA + 1e-4));
+    const tailMax = 3.5; // 尾部最大延伸 3.5× 鼻距（约 315 / 424 AU）
+    // smoothstep 保证一阶导连续，消除 blend 边界处的形状折痕
+    const raw = Math.max(0, Math.min(1, (-cosA - 0.55) / 0.45));
+    const t = raw * raw * (3 - 2 * raw);
+    // 抛物面：r(cosA) = tailMax×(1−cosA)/2，尾部=tailMax，半球形光滑收口
+    const parabolR = tailMax * 0.5 * (1 - cosA);
+    const r = (1 - t) * Math.min(parkerR, tailMax) + t * Math.min(parabolR, tailMax);
     v.multiplyScalar(noseAU * KM_PER_AU * r);
     pos.setXYZ(i, v.x, v.y, v.z);
   }
   geo.computeVertexNormals();
 
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color(color) }, uOpacity: { value: opacity } },
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uOpacity: { value: opacity },
+      uSheath: { value: sheath },
+    },
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
@@ -55,13 +70,23 @@ function makeShell(noseAU, color, opacity) {
       #include <logdepthbuf_pars_fragment>
       uniform vec3 uColor;
       uniform float uOpacity;
+      uniform float uSheath;
       varying vec3 vN;
       varying vec3 vPosW;
       void main() {
         #include <logdepthbuf_fragment>
-        vec3 v = normalize(-vPosW);
-        float fres = pow(1.0 - abs(dot(normalize(vN), v)), 2.0);
-        gl_FragColor = vec4(uColor * (0.25 + fres), uOpacity * (0.3 + fres));
+        vec3 vDir = normalize(-vPosW);
+        // gl_FrontFacing 修正法向量方向（SphereGeometry 外侧为正面）
+        vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0);
+        float cosNV = max(0.0, dot(n, vDir));
+        // 纯菲涅耳边缘辉光：物理对应视线切线处ENAs柱密度最大 → 边缘最亮，中心完全透明
+        // 幂次5保证中心足够透明（星空清晰），边缘足够锐利
+        float fres = pow(1.0 - cosNV, 5.0);
+        // 日球鞘填充（仅外侧面）：终止激波外至日球层顶之间的ENAs弥散辉光，sin²近似柱密度分布
+        float fill = gl_FrontFacing ? uSheath * (1.0 - cosNV * cosNV) : 0.0;
+        float intensity = fres + fill;
+        // alpha 单独控制亮度；color 不随 intensity 缩放以保持色调纯净
+        gl_FragColor = vec4(uColor, uOpacity * intensity);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }
@@ -96,8 +121,10 @@ export function voyagerPosition(vg, jdTT) {
 
 export function createHeliosphere() {
   const group = new THREE.Group();
-  const ts = makeShell(90, 0xff9a55, 0.05);   // 终止激波
-  const hp = makeShell(121, 0x55c8ff, 0.06);  // 日球层顶
+  // 终止激波：暖橙边缘辉光 + 日球鞘极淡ENAs弥散填充（物理上日球鞘可见光透明，ENAs辐射极弱）
+  const ts = makeShell(90,  0xff9a55, 0.48, 0.06);
+  // 日球层顶：冷蓝边缘辉光，中心纯透明（ISM边界外无发光物质）
+  const hp = makeShell(121, 0x55c8ff, 0.52, 0.0);
   group.add(ts, hp);
   group.renderOrder = -6;
   return group;
