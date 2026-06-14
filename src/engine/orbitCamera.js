@@ -5,6 +5,7 @@
 //   到达时停于目标日照面上空，目标居中
 
 import * as THREE from 'three';
+import { IS_MOBILE } from './quality.js';
 
 const DEG = Math.PI / 180;
 const _v1 = new THREE.Vector3();
@@ -28,7 +29,8 @@ const MAX_DIST = 1.5e13;
 const smoother = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 
 export class OrbitCamera {
-  constructor() {
+  constructor(camera = null) {
+    this.camera = camera;
     this.focusId = 'earth';
     this.lat = 12 * DEG;
     this.lon = 0;
@@ -70,7 +72,7 @@ export class OrbitCamera {
     this.adoptPosition(env, this.focusId, pos, _qf);
   }
 
-  /** env.get(id) -> { posKm:Float64Array, radiusKm, quat:THREE.Quaternion(体固→世界), viewDist? } */
+  /** env.get(id) -> { posKm:Float64Array, radiusKm, ringsOuterKm?, quat:THREE.Quaternion(体固→世界), viewDist? } */
   init(env, focusId, distMul = 4) {
     this.focusId = focusId;
     const f = env.get(focusId);
@@ -355,7 +357,18 @@ export class OrbitCamera {
   arrivalDist(env, id) {
     const t = env.get(id);
     if (t.viewDist) return t.viewDist;
-    return Math.max(t.radiusKm * 3.5, 3);
+    // 有效半径：行星本体或环系外缘（土星、天王星），确保 Go/飞抵时整个天体入画
+    const r = Math.max(t.radiusKm, t.ringsOuterKm ?? 0);
+    // 桌面保持原有 3.5 倍半径行为；移动版按当前视口 FOV/宽高比计算安全距离
+    const fallback = Math.max(t.radiusKm * 3.5, 3);
+    if (!IS_MOBILE || !this.camera) return fallback;
+    const vFOV = this.camera.fov * DEG;
+    const aspect = this.camera.aspect;
+    const hFOV = 2 * Math.atan(Math.tan(vFOV / 2) * aspect);
+    const limiting = Math.min(vFOV, hFOV);
+    const margin = 1.18; // 18% 边距，避免贴边或被 UI 遮挡
+    const distFit = (r * margin) / Math.tan(limiting / 2);
+    return Math.max(distFit, fallback);
   }
 
   /** GE 式飞行动画启动（fromIdOverride 用于从上一焦点起飞，如标签双击） */

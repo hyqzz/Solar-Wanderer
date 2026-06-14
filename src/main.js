@@ -71,7 +71,7 @@ const hud = new HUD();
 const world = new World();
 const input = new Input(window, canvas);
 const ship = new Ship();
-const orbitCam = new OrbitCamera();
+const orbitCam = new OrbitCamera(camera);
 const simClock = new SimClock();
 const clock = new THREE.Clock();
 
@@ -168,6 +168,7 @@ async function init() {
   searchUI = new SearchUI(registry, (id) => flyTo(id), {
     getOrbits: () => orbitLinesOn,
     toggleOrbits: () => { orbitLinesOn = !orbitLinesOn; },
+    onSelect: () => { touchControls?.closeDirectory(); },
   });
 
   // Mobile on-screen controls — only created on touch devices (IS_MOBILE)
@@ -276,6 +277,7 @@ const orbitEnv = {
     return {
       posKm: t.posKm,
       radiusKm: t.phys?.radiusKm ?? 1,
+      ringsOuterKm: t.phys?.rings?.outerKm ?? null,
       quat: t.quatRef ?? IDENTITY_Q,
       viewDist: t.viewDist,
       groundRadius: t.groundRadius ?? null,

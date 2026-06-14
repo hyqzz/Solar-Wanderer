@@ -112,7 +112,7 @@ html, body {
 
 /* ---------- 天体目录 ---------- */
 #directory {
-  position: fixed; top: 14px; left: 14px; z-index: 20;
+  position: fixed; top: 110px; left: 14px; z-index: 20;
   width: 260px;
   background: rgba(8, 16, 28, 0.82); border: 1px solid rgba(110, 160, 210, 0.28);
   border-radius: 10px; backdrop-filter: blur(8px);
@@ -361,27 +361,29 @@ html[lang^="en"] .title-block .title-en { display: block; }
   backdrop-filter: blur(6px);
   pointer-events: auto;
 }
-#tc-menu {
+/* 时间展开面板（样式沿用旧 tc-menu） */
+#tc-time-panel[hidden] { display: none !important; }
+#tc-time-panel {
   display: flex; flex-direction: column; gap: 4px;
   background: rgba(8, 16, 28, 0.88); border: 1px solid rgba(110, 160, 210, 0.3);
   border-radius: 10px; padding: 8px;
   backdrop-filter: blur(8px);
   pointer-events: auto;
-  min-width: 140px;
+  min-width: 160px;
 }
-#tc-menu button {
+#tc-time-panel button {
   width: 100%; text-align: left; padding: 8px 12px;
   border-radius: 7px; font-size: 13px; color: #cfe3f5;
   background: transparent;
 }
-#tc-menu button:hover, #tc-menu button:active {
+#tc-time-panel button:hover, #tc-time-panel button:active {
   background: rgba(60, 110, 170, 0.35);
 }
-#tc-menu .tc-section-label {
+#tc-time-panel .tc-section-label {
   font-size: 11px; color: #5a7a9a; padding: 4px 12px 2px;
 }
-#tc-menu .tc-row { display: flex; gap: 4px; }
-#tc-menu .tc-row button { flex: 1; text-align: center; padding: 8px 4px; }
+#tc-time-panel .tc-row { display: flex; gap: 4px; }
+#tc-time-panel .tc-row button { flex: 1; text-align: center; padding: 8px 4px; }
 
 /* ---------- 底部操作栏 ---------- */
 #tc-bottom-bar {
@@ -468,6 +470,7 @@ html[lang^="en"] .title-block .title-en { display: block; }
 }
 
 /* ---------- 右侧动作按钮（行走/飞行模式） ---------- */
+#tc-right-btns[hidden] { display: none !important; }
 #tc-right-btns {
   position: absolute; right: 10px;
   bottom: 120px;
@@ -535,8 +538,8 @@ html[lang^="en"] .title-block .title-en { display: block; }
     max-width: 75vw; white-space: normal; text-align: center;
   }
 
-  /* 目录：左侧、可滚动 */
-  #directory { width: 220px; max-height: 60dvh; }
+  /* 目录：左侧、可滚动；top 继承桌面 110px，tablet 保持同偏移 */
+  #directory { top: 100px; width: 220px; max-height: 60dvh; }
   #dir-body { max-height: 50dvh; }
 
   /* 帮助弹窗：全屏可滚动 */
@@ -580,8 +583,7 @@ html[lang^="en"] .title-block .title-en { display: block; }
 
 /* 超小屏（手机竖屏） */
 @media (pointer: coarse) and (max-width: 430px) {
-  #left-col { width: 180px; top: 56px; } /* below tc-menu-btn */
-  #hud-nav { width: 160px; top: 56px; }
+  #left-col { width: 180px; }
   #hud-target { width: 170px; }
 }
 
@@ -598,7 +600,7 @@ html.touch .help-inner { touch-action: pan-y; }
 /* ── 左侧列：移动端完全隐藏 ── */
 .touch #left-col { display: none !important; }
 
-/* ── 遮罩层：抽屉/菜单打开时覆盖画布，点击关闭 ── */
+/* ── 遮罩层：抽屉打开时覆盖画布，点击关闭 ── */
 #tc-backdrop {
   display: none;
   position: fixed; inset: 0; z-index: 28;
@@ -607,6 +609,60 @@ html.touch .help-inner { touch-action: pan-y; }
   -webkit-tap-highlight-color: transparent;
 }
 #tc-backdrop.visible { display: block; }
+/* 移动版保持亮度不变：遮罩透明但仍可点击关闭抽屉 */
+.touch #tc-backdrop { background: transparent; }
+
+/* 顶栏在移动版为空（菜单按钮移至底部抽屉），直接隐藏 */
+.touch #tc-top-bar { display: none; }
+
+/* 常驻时间小部件：右上角，始终可见；宽度统一 */
+#tc-time-widget {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 34;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch; /* 让子元素都撑满同等宽度 */
+  width: 172px;
+  gap: 0;
+}
+/* 常驻时间按钮：与面板等宽，时间左对齐，箭头右对齐 */
+#tc-time-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: rgba(8, 16, 28, 0.82);
+  border: 1px solid rgba(110, 160, 210, 0.3);
+  border-radius: 8px;
+  padding: 5px 10px;
+  color: #e8f4ff;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  cursor: pointer;
+}
+#tc-time-btn:hover { background: rgba(20, 45, 80, 0.92); border-color: rgba(110, 180, 230, 0.5); }
+#tc-time-btn:active { background: rgba(30, 60, 120, 0.95); }
+#tc-time-chevron {
+  font-size: 15px;
+  color: #8fd9ff;
+  margin-left: 6px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+/* 展开面板：与按钮等宽，正下方展开 */
+#tc-time-panel {
+  width: 100%;
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  margin-top: 4px;
+  border-radius: 10px;
+}
 
 /* ── 目录：底部上拉抽屉（Bottom Sheet）── */
 .touch #directory {
@@ -651,22 +707,23 @@ html.touch .help-inner { touch-action: pan-y; }
   max-height: none;
 }
 
-/* ── HUD 导航：顶部紧凑状态条（菜单按钮右侧）── */
+/* ── HUD 导航：顶部紧凑状态条；右侧留 180px 给常驻时间标签 ── */
 .touch #hud-nav {
   position: fixed;
-  top: 8px; left: 58px; right: 8px;
+  top: 8px; left: 8px;
+  right: auto;
+  max-width: calc(100vw - 190px); /* 留出右侧时间小部件空间 */
   bottom: auto;
-  max-height: 42px;
+  max-height: 64px;
   overflow: hidden;
   font-size: 10px; padding: 4px 10px; line-height: 1.35;
-  border-radius: 21px;
+  border-radius: 10px;
   min-width: 0;
-  /* 只显示一行最核心信息 */
-  white-space: nowrap; text-overflow: ellipsis;
+  white-space: normal;
 }
 .touch #hud-nav .big   { font-size: 11px; }
 .touch #hud-nav .tname { font-size: 11px; }
-/* 隐藏次要行（快捷键提示、.warn、.dim） */
+/* 移动版保留关键状态、隐藏纯键盘提示与警告 */
 .touch #hud-nav .dim,
 .touch #hud-nav .warn,
 .touch #hud-nav br + *  { display: none; }
@@ -724,7 +781,8 @@ html.touch .help-inner { touch-action: pan-y; }
 
 /* 抽屉按钮：横向排列 */
 .touch #tc-drawer-btns { flex-direction: row; gap: 4px; }
-.touch .tc-drawer-btn {
+.touch .tc-drawer-btn,
+.touch #tc-menu-btn {
   width: 36px; height: 36px;
   font-size: 16px; border-radius: 9px;
 }
@@ -748,6 +806,9 @@ html.touch .help-inner { touch-action: pan-y; }
 
 /* ── 标签：增大触摸面积 ── */
 .touch .body-label { font-size: 13px; padding: 4px 8px; min-height: 26px; }
+
+/* ── 弹出帮助：移动版不降低背后亮度 ── */
+.touch #help { background: transparent; }
 
 /* ── 汉堡菜单：宽度适中 ── */
 .touch #tc-menu { min-width: 160px; max-width: 220px; }

@@ -114,15 +114,15 @@ const D = {
     'Click to lock the pointer after entering · press H for full controls'],
   'start.hintTouch': ['单指旋转 · 双指缩放 · 双击标签前往',
     'One-finger rotate · pinch to zoom · double-tap label to fly'],
-  'start.star': ['⭐ Star on GitHub', '⭐ Star on GitHub'],
+  'start.star': ['Star on GitHub', 'Star on GitHub'],
   'help.toggle': ['操作说明（H 关闭）', 'Controls (H to close)'],
 
   // ── 触摸操作面板 ─────────────────────────────────────────────────────
   'tc.menu':      ['☰', '☰'],
   'tc.zoomIn':    ['＋', '＋'],
   'tc.zoomOut':   ['－', '－'],
-  'tc.dir':       ['🪐', '🪐'],
-  'tc.target':    ['🎯', '🎯'],
+  'tc.dir':       ['🎯', '🎯'],
+  'tc.target':    ['ℹ️', 'ℹ️'],
   'tc.land':      ['🛬 降落', '🛬 Land'],
   'tc.fly':       ['🚀 飞行', '🚀 Fly'],
   'tc.orbit':     ['🌐 探索', '🌐 Explore'],
@@ -144,6 +144,7 @@ const D = {
   'tc.help':      ['❓ 帮助', '❓ Help'],
   'tc.timeTitle': ['⏱ 时间', '⏱ Time'],
   'tc.dispTitle': ['🖥 显示', '🖥 Display'],
+  'tc.dirTitle':  ['🎯 目录', '🎯 Directory'],
 
   // ── 触摸专属操作提示 ─────────────────────────────────────────────────
   'tip.walkTouch': ['拖拽屏幕环视 · 摇杆移动 · 双指后缩起飞',

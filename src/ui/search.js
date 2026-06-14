@@ -12,7 +12,7 @@ export class SearchUI {
   /**
    * @param registry Map<id, {nameZh, nameEn, kind, phys, parentId?}>
    * @param onGo (id) => void  飞往
-   * @param opts { getOrbits:()=>bool, toggleOrbits:()=>void }
+   * @param opts { getOrbits:()=>bool, toggleOrbits:()=>void, onSelect?:(id)=>void }
    */
   constructor(registry, onGo, opts = {}) {
     this.registry = registry;
@@ -141,7 +141,10 @@ export class SearchUI {
         const btn = document.createElement('button');
         btn.className = 'dir-item';
         btn.innerHTML = `${bodyName(e)} <span>${altName(e)}</span>`;
-        btn.addEventListener('click', () => this.onGo(id));
+        btn.addEventListener('click', () => {
+          this.onGo(id);
+          this.opts.onSelect?.(id);
+        });
         det.appendChild(btn);
       }
       body.appendChild(det);

@@ -66,8 +66,20 @@ async function run(lang) {
     return style.display !== 'none';
   });
 
+  // Directory should be closed by default on mobile
+  const dirClosedByDefault = await page.evaluate(() => {
+    const dir = document.getElementById('directory');
+    return dir && !dir.classList.contains('open');
+  });
+
   // Joystick DOM exists
   const joystickExists = await page.$('#tc-joystick-wrap') !== null;
+
+  // Orbit-mode action bar should NOT contain a fly button on mobile
+  const flyBtnInOrbit = await page.evaluate(() => {
+    const btn = document.getElementById('tc-fly-btn');
+    return !!btn;
+  });
 
   // Menu button exists
   const menuBtnExists = await page.$('#tc-menu-btn') !== null;
@@ -87,6 +99,8 @@ async function run(lang) {
 
   // Directory button: tap to open bottom sheet
   let dirVisible = false;
+  let dirAutoHides = false;
+  let backdropDimming = false;
   const dirBtnExists = await page.$('#tc-dir-btn') !== null;
   if (dirBtnExists) {
     await page.tap('#tc-dir-btn');
@@ -98,7 +112,21 @@ async function run(lang) {
       // Bottom sheet is visible when its top is inside viewport (transformed up)
       return dir.classList.contains('open') && rect.top < window.innerHeight && rect.bottom > 0;
     });
-    await page.tap('#tc-dir-btn'); // close
+    // Backdrop should not dim (transparent background)
+    backdropDimming = await page.evaluate(() => {
+      const bd = document.getElementById('tc-backdrop');
+      if (!bd || !bd.classList.contains('visible')) return false;
+      const bg = window.getComputedStyle(bd).backgroundColor;
+      // transparent / rgba(0,0,0,0) means no dimming
+      return bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
+    });
+    // Tap first planet item (Sun) and verify directory closes
+    dirAutoHides = await page.evaluate(() => {
+      const sunBtn = [...document.querySelectorAll('.dir-item')].find((b) => b.textContent.includes('太阳') || b.textContent.includes('Sun'));
+      if (sunBtn) sunBtn.click();
+      const dir = document.getElementById('directory');
+      return dir && !dir.classList.contains('open');
+    });
     await sleep(200);
   }
 
@@ -131,7 +159,8 @@ async function run(lang) {
   return {
     lang, errors, hint, hasKeyHint,
     tcVisible, joystickExists, menuBtnExists, menuVisible,
-    dirBtnExists, dirVisible,
+    dirBtnExists, dirVisible, dirClosedByDefault, dirAutoHides,
+    flyBtnInOrbit, backdropDimming,
     helpTouchContent, keyBadgeVisible, isMobileFlagSet,
     titleOrder, titleCorrect,
   };
@@ -153,7 +182,11 @@ for (const lang of ['zh', 'en']) {
     ['Menu button exists',         r.menuBtnExists],
     ['Menu opens on tap',          r.menuVisible],
     ['Directory button exists',    r.dirBtnExists],
+    ['Directory closed by default',r.dirClosedByDefault],
     ['Directory opens on tap',     r.dirVisible],
+    ['Directory auto-hides on go', r.dirAutoHides],
+    ['No orbit-mode fly button',   !r.flyBtnInOrbit],
+    ['Backdrop does not dim',      !r.backdropDimming],
     ['Help shows touch content',   r.helpTouchContent],
     ['.key badges hidden',         !r.keyBadgeVisible],
   ];

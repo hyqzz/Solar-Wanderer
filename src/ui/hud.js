@@ -65,6 +65,8 @@ export class HUD {
     this.elTime.innerHTML =
       `<div class="big">${local}</div>` +
       `<div class="dim">${t('time.rate')} ${this.fmtWarp(clock)}　<span class="key">[</span>${t('time.k.minus')} <span class="key">]</span>${t('time.k.plus')} <span class="key">P</span>${t('time.k.pause')} <span class="key">N</span>${t('time.k.now')}</div>` + warn;
+    const tcTimeEl = document.getElementById('tc-time-val');
+    if (tcTimeEl) tcTimeEl.textContent = local;
   }
 
   updateNav({ mode, flight, speed, speedSetting, focusName, nearest, gravity }) {

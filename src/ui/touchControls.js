@@ -41,8 +41,7 @@ export class TouchControls {
     // Drawer visibility
     this._dirOpen = false; // mirrored from #directory.open
     this._tgtOpen = false;
-
-    this._menuOpen = false;
+    this._timeOpen = false; // expandable time panel
 
     this._build();
   }
@@ -54,8 +53,7 @@ export class TouchControls {
     this.root = root;
 
     this._buildBackdrop();
-    // Top-left: hamburger menu
-    this._buildMenu(root);
+    this._buildTimeWidget(root);
 
     // Bottom bar: zoom | actions | drawers
     this._buildBottomBar(root);
@@ -66,8 +64,14 @@ export class TouchControls {
     // Right-side buttons (walk/fly only)
     this._buildRightBtns(root);
 
-    // Init directory state to match .open class
-    this._dirOpen = document.getElementById('directory')?.classList.contains('open') ?? false;
+    // 移动版默认收起星球目录，避免进入即遮挡画面
+    const dirPanel = document.getElementById('directory');
+    if (dirPanel) {
+      dirPanel.classList.remove('open');
+      this._dirOpen = false;
+    } else {
+      this._dirOpen = false;
+    }
     this._updateDrawerBtnState();
   }
 
@@ -84,63 +88,88 @@ export class TouchControls {
     return b;
   }
 
-  _buildMenu(root) {
-    const bar = this._el('div', { id: 'tc-top-bar' });
-    root.appendChild(bar);
+  _buildTimeWidget(root) {
+    // 右下角常驻时间按钮 + 点击展开的时间/显示控制面板
+    root.appendChild(this._el('div', { id: 'tc-top-bar' })); // hidden stub for CSS compat
 
-    const menuBtn = this._btn(t('tc.menu'), 'tc-menu-btn');
-    bar.appendChild(menuBtn);
+    const widget = this._el('div', { id: 'tc-time-widget' });
+    root.appendChild(widget);
+    this._timeWidget = widget;
 
-    const menu = this._el('div', { id: 'tc-menu' });
-    menu.hidden = true;
-    bar.appendChild(menu);
+    // 常驻时间按钮（右上角始终可见，点击后向下展开面板）
+    const timeBtn = this._el('button', { id: 'tc-time-btn' });
+    const timeSpan = this._el('span', { id: 'tc-time-val' });
+    timeSpan.textContent = '--:--:--';
+    const chevron = this._el('span', { id: 'tc-time-chevron' });
+    chevron.textContent = '▶';
+    timeBtn.appendChild(timeSpan);
+    timeBtn.appendChild(chevron);
+    widget.appendChild(timeBtn);
+
+    // 展开面板（默认隐藏，位于按钮下方）
+    const panel = this._el('div', { id: 'tc-time-panel' });
+    panel.hidden = true;
+    widget.appendChild(panel);
+    this._timePanelEl = panel;
 
     // Time section
     const timeLabel = this._el('div', { className: 'tc-section-label' });
     timeLabel.textContent = t('tc.timeTitle');
-    menu.appendChild(timeLabel);
+    panel.appendChild(timeLabel);
 
     const timeRow = this._el('div', { className: 'tc-row' });
-    menu.appendChild(timeRow);
+    panel.appendChild(timeRow);
     timeRow.appendChild(this._btn(t('tc.warpSlow'), 'tc-warp-down'));
     timeRow.appendChild(this._btn(t('tc.warpFast'), 'tc-warp-up'));
 
     const time2Row = this._el('div', { className: 'tc-row' });
-    menu.appendChild(time2Row);
-    time2Row.appendChild(this._btn(t('tc.pause'),   'tc-pause'));
-    time2Row.appendChild(this._btn(t('tc.now'),     'tc-now'));
+    panel.appendChild(time2Row);
+    time2Row.appendChild(this._btn(t('tc.pause'), 'tc-pause'));
+    time2Row.appendChild(this._btn(t('tc.now'),   'tc-now'));
 
     // Display section
     const dispLabel = this._el('div', { className: 'tc-section-label' });
     dispLabel.textContent = t('tc.dispTitle');
-    menu.appendChild(dispLabel);
+    panel.appendChild(dispLabel);
 
     const dispRow = this._el('div', { className: 'tc-row' });
-    menu.appendChild(dispRow);
+    panel.appendChild(dispRow);
     dispRow.appendChild(this._btn(t('tc.orbits'),   'tc-orbits'));
     dispRow.appendChild(this._btn(t('tc.labels'),   'tc-labels'));
 
     const dispRow2 = this._el('div', { className: 'tc-row' });
-    menu.appendChild(dispRow2);
+    panel.appendChild(dispRow2);
     dispRow2.appendChild(this._btn(t('tc.inertial'), 'tc-inertial'));
     dispRow2.appendChild(this._btn(t('tc.help'),     'tc-help'));
 
-    // Wire menu toggle — close drawers when menu opens
-    menuBtn.addEventListener('click', () => {
-      this._menuOpen = !this._menuOpen;
-      menu.hidden = !this._menuOpen;
-      if (this._menuOpen) this._closeDrawers(false);
+    timeBtn.addEventListener('click', () => {
+      this._timeOpen = !this._timeOpen;
+      panel.hidden = !this._timeOpen;
+      chevron.textContent = this._timeOpen ? '▼' : '▶';
+      if (this._timeOpen) {
+        if (this._dirOpen) {
+          this._dirOpen = false;
+          document.getElementById('directory')?.classList.remove('open');
+        }
+        if (this._tgtOpen) {
+          this._tgtOpen = false;
+          document.getElementById('hud-target')?.classList.remove('tc-open');
+        }
+        this._updateBackdrop();
+        this._updateDrawerBtnState();
+      }
     });
 
-    // Close menu when clicking elsewhere
+    // 点击面板外部时收起
     document.addEventListener('pointerdown', (e) => {
-      if (this._menuOpen && !bar.contains(e.target)) {
-        this._menuOpen = false;
-        menu.hidden = true;
+      if (this._timeOpen && !widget.contains(e.target)) {
+        this._timeOpen = false;
+        panel.hidden = true;
+        chevron.textContent = '▶';
       }
     }, { capture: true, passive: true });
 
-    // Wire menu buttons
+    // 接线按钮
     document.getElementById('tc-warp-up')  .addEventListener('click', () => { this.cb.warpUp?.();   });
     document.getElementById('tc-warp-down').addEventListener('click', () => { this.cb.warpDown?.(); });
     document.getElementById('tc-pause')    .addEventListener('click', () => { this.input.justPressed.add('KeyP'); });
@@ -150,8 +179,8 @@ export class TouchControls {
     document.getElementById('tc-inertial') .addEventListener('click', () => { this.input.justPressed.add('KeyV'); });
     document.getElementById('tc-help')     .addEventListener('click', () => {
       this.input.justPressed.add('KeyH');
-      this._menuOpen = false;
-      menu.hidden = true;
+      this._timeOpen = false;
+      panel.hidden = true;
     });
   }
 
@@ -180,28 +209,10 @@ export class TouchControls {
     const drawers = this._el('div', { id: 'tc-drawer-btns' });
     bar.appendChild(drawers);
 
-    const dirBtn = this._btn(t('tc.dir'),    'tc-dir-btn',  'tc-drawer-btn');
     const tgtBtn = this._btn(t('tc.target'), 'tc-tgt-btn',  'tc-drawer-btn');
-    drawers.appendChild(dirBtn);
+    const menuBtn = this._btn(t('tc.menu'),  'tc-menu-btn', 'tc-drawer-btn');
     drawers.appendChild(tgtBtn);
-
-    dirBtn.addEventListener('click', () => {
-      const dir = document.getElementById('directory');
-      if (!dir) return;
-      this._dirOpen = !this._dirOpen;
-      dir.classList.toggle('open', this._dirOpen);
-      if (this._dirOpen) {
-        // 关闭目标抽屉和菜单
-        if (this._tgtOpen) {
-          this._tgtOpen = false;
-          document.getElementById('hud-target')?.classList.remove('tc-open');
-        }
-        this._menuOpen = false;
-        document.getElementById('tc-menu').hidden = true;
-      }
-      this._updateBackdrop();
-      this._updateDrawerBtnState();
-    });
+    drawers.appendChild(menuBtn);
 
     tgtBtn.addEventListener('click', () => {
       const tgt = document.getElementById('hud-target');
@@ -209,11 +220,30 @@ export class TouchControls {
       this._tgtOpen = !this._tgtOpen;
       tgt.classList.toggle('tc-open', this._tgtOpen);
       if (this._tgtOpen) {
-        // 关闭目录抽屉
         if (this._dirOpen) {
           this._dirOpen = false;
           document.getElementById('directory')?.classList.remove('open');
         }
+        this._timeOpen = false;
+        if (this._timePanelEl) this._timePanelEl.hidden = true;
+      }
+      this._updateBackdrop();
+      this._updateDrawerBtnState();
+    });
+
+    // ☰ 作为目录按钮
+    menuBtn.addEventListener('click', () => {
+      const dir = document.getElementById('directory');
+      if (!dir) return;
+      this._dirOpen = !this._dirOpen;
+      dir.classList.toggle('open', this._dirOpen);
+      if (this._dirOpen) {
+        if (this._tgtOpen) {
+          this._tgtOpen = false;
+          document.getElementById('hud-target')?.classList.remove('tc-open');
+        }
+        this._timeOpen = false;
+        if (this._timePanelEl) this._timePanelEl.hidden = true;
       }
       this._updateBackdrop();
       this._updateDrawerBtnState();
@@ -334,8 +364,8 @@ export class TouchControls {
   }
 
   _updateDrawerBtnState() {
-    document.getElementById('tc-dir-btn')?.classList.toggle('active', this._dirOpen);
     document.getElementById('tc-tgt-btn')?.classList.toggle('active', this._tgtOpen);
+    document.getElementById('tc-menu-btn')?.classList.toggle('active', this._dirOpen);
   }
 
   _buildBackdrop() {
@@ -348,8 +378,7 @@ export class TouchControls {
     this.backdrop = bd;
   }
 
-  // closeMenu=false 时只关闭抽屉，不关闭菜单（菜单打开时用）
-  _closeDrawers(closeMenu = true) {
+  _closeDrawers() {
     if (this._dirOpen) {
       this._dirOpen = false;
       document.getElementById('directory')?.classList.remove('open');
@@ -358,13 +387,19 @@ export class TouchControls {
       this._tgtOpen = false;
       document.getElementById('hud-target')?.classList.remove('tc-open');
     }
-    if (closeMenu && this._menuOpen) {
-      this._menuOpen = false;
-      const menu = document.getElementById('tc-menu');
-      if (menu) menu.hidden = true;
+    if (this._timeOpen) {
+      this._timeOpen = false;
+      if (this._timePanelEl) this._timePanelEl.hidden = true;
+      const ch = document.getElementById('tc-time-chevron');
+      if (ch) ch.textContent = '▶';
     }
     this._updateBackdrop();
     this._updateDrawerBtnState();
+  }
+
+  /** 外部调用：关闭目录抽屉（选中天体后自动收起） */
+  closeDirectory() {
+    if (this._dirOpen) this._closeDrawers();
   }
 
   _updateBackdrop() {
@@ -429,11 +464,7 @@ export class TouchControls {
         el.appendChild(landBtn);
       }
 
-      // Fly mode button
-      const flyBtn = this._btn(t('tc.fly'), 'tc-fly-btn', 'tc-action-btn');
-      flyBtn.addEventListener('click', () => { this.cb.switchToFly?.(); });
-      el.appendChild(flyBtn);
-
+      // 移动版探索模式不显示飞行按钮；飞行模式入口保留在长按/键盘 F（R12）
       // Goto selected
       const gotoBtn = this._btn(t('tc.goto'), 'tc-goto-btn', 'tc-action-btn');
       gotoBtn.addEventListener('click', () => { this.input.justPressed.add('KeyT'); });
