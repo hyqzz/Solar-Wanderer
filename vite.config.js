@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
-  base: '/',
+  base: './',
   build: {
     chunkSizeWarningLimit: 1500,
     target: 'es2022',
