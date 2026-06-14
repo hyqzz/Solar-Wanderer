@@ -105,8 +105,7 @@ const D = {
   'search.cur': ['当前', 'now'], 'search.toggle': ['点击切换', 'click to toggle'],
 
   // ── 开始界面 ─────────────────────────────────────────────────────────
-  'start.title': ['遨游太阳系', 'Solar Wanderer'],
-  'start.sub': ['太阳系 1:1 实时模拟 · 基于 NASA JPL 星历还原此刻太阳系 · 自由探索整个太阳系',
+  'start.sub': ['太阳系 1:1 实时模拟 · 基于 NASA JPL 星历还原此刻太阳系 · 自由探索整个日球层',
     '1:1 real-time solar system · NASA JPL ephemerides recreate the system right now · explore the whole solar system'],
   'start.loading': ['加载中…', 'Loading…'],
   'start.loadingTex': ['加载真实行星贴图… {done}/{total}', 'Loading real planet textures… {done}/{total}'],
