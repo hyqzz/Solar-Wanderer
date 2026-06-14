@@ -259,10 +259,14 @@ html, body {
 }
 #start-btn:disabled {
   cursor: default;
-  opacity: 0.92;
+  /* 加载中视觉与完成态保持一致：不降低不透明度、不改文字颜色、保留静态发光 */
+  color: #d8ecff;
+  background: linear-gradient(180deg, rgba(29, 58, 95, 0.9), rgba(18, 39, 66, 0.9));
+  border-color: rgba(58, 110, 168, 0.6);
+  box-shadow: 0 0 26px rgba(58, 110, 168, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 #start-btn:disabled .btn-text {
-  color: #a8c8e8;
+  color: #d8ecff;
 }
 @keyframes btnPulse {
   0%, 100% { box-shadow: 0 0 20px rgba(58, 110, 168, 0.15), inset 0 1px 0 rgba(255,255,255,0.05); }
