@@ -198,15 +198,11 @@ html, body {
     0 0 40px rgba(0, 0, 0, 0.6),
     inset 0 0 60px rgba(110, 160, 210, 0.04),
     0 0 0 1px rgba(255, 255, 255, 0.03);
-  animation: cardFloat 6s ease-in-out infinite, cardFadeIn 1.2s ease-out both;
+  animation: cardFloat 6s ease-in-out infinite;
 }
 @keyframes cardFloat {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
-}
-@keyframes cardFadeIn {
-  from { opacity: 0; transform: scale(0.96) translateY(20px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 /* 标题：中文主标题 + 英文副标题 */
@@ -215,7 +211,7 @@ html, body {
   font-size: 64px; font-weight: 300; letter-spacing: 14px;
   color: #eaf4ff;
   text-shadow: 0 0 20px rgba(127, 196, 255, 0.25), 0 0 60px rgba(60, 130, 210, 0.15);
-  animation: titleGlow 4s ease-in-out infinite, titleFadeIn 1s ease-out 0.3s both;
+  animation: titleGlow 4s ease-in-out infinite;
 }
 @keyframes titleGlow {
   0%, 100% { text-shadow: 0 0 20px rgba(127, 196, 255, 0.25), 0 0 60px rgba(60, 130, 210, 0.15); }
@@ -225,21 +221,16 @@ html, body {
   display: block;
   font-size: 15px; letter-spacing: 20px; font-weight: 400;
   color: #6fa8d8; margin-top: 8px;
-  animation: subShimmer 5s ease-in-out infinite, titleFadeIn 1s ease-out 0.6s both;
+  animation: subShimmer 5s ease-in-out infinite;
 }
 @keyframes subShimmer {
   0%, 100% { opacity: 0.7; letter-spacing: 20px; }
   50% { opacity: 1; letter-spacing: 22px; }
 }
-@keyframes titleFadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 
 .start-inner .sub {
   margin: 24px 0 28px;
   color: #8db4d8; font-size: 15px; line-height: 1.6;
-  animation: fadeInUp 0.8s ease-out 0.9s both;
 }
 
 /* 进入按钮：加载与完成状态保持同一视觉框架，仅文字/填充变化 */
@@ -300,11 +291,6 @@ html, body {
 
 .start-inner .hint {
   margin-top: 20px; font-size: 13px; color: #5a7a9a;
-  animation: fadeInUp 0.8s ease-out 1.2s both;
-}
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 /* GitHub Star */
@@ -316,7 +302,6 @@ html, body {
   border: 1px solid rgba(63, 185, 80, 0.4); border-radius: 20px;
   text-decoration: none; letter-spacing: 0.5px;
   transition: background 0.25s, border-color 0.25s, transform 0.25s;
-  animation: fadeInUp 0.8s ease-out 1.5s both;
 }
 #github-star:hover {
   background: rgba(63, 185, 80, 0.25); border-color: #3fb950;
