@@ -1,49 +1,78 @@
 // GPU 自适应画质（R7 #8）：
 // - WebGLRenderer 以 powerPreference:'high-performance' 创建 → 多显卡系统由浏览器/驱动选独立显卡
 // - 经 WEBGL_debug_renderer_info 识别实际 GPU：软件渲染/核显 → lite 档；独显/未知 → high 档
-// - high 档对标 SpaceEngine 视觉（细节着色器/高步进大气/高网格），lite 档保流畅
+// - 移动端（pointer:coarse + maxTouchPoints）强制 lite，pixelRatio 上限 1.5
 // 必须在 buildSolarSystem 之前调用 initQuality（着色器步进数/网格密度在构建期固化）。
 
 export const QUALITY = {
   tier: 'high',
   gpuName: '(未检测)',
-  pixelRatio: 2,      // devicePixelRatio 上限
-  bloomDiv: 2,        // 泛光降采样分母
-  atmoN: 16,          // 大气视线步进数
-  atmoNL: 6,          // 大气光照步进数
-  terrainGrid: 64,    // 地形 LOD 网格边数
+  pixelRatio: 2,
+  bloomDiv: 2,
+  atmoN: 16,
+  atmoNL: 6,
+  terrainGrid: 64,
   anisotropy: 8,
-  segHi: [96, 64],    // 大天体球段数 [宽, 高]
+  segHi: [96, 64],
   segLo: [48, 32],
-  detail: true,       // 行星片元程序化细节
+  detail: true,
 };
+
+/** true when running on a touch-primary device (phone/tablet) */
+export let IS_MOBILE = false;
 
 const LOW_GPU = /SwiftShader|llvmpipe|Basic Render|Software|Mali-|Adreno|PowerVR|Intel(?:\(R\))?\s*(?:HD|UHD|Iris(?!\s*Xe\s*Max)|GMA)/i;
 const HIGH_GPU = /NVIDIA|GeForce|Quadro|RTX|GTX|Radeon\s*(?:RX|Pro|VII)|FirePro|Arc\s*A|Apple\s*M\d/i;
 
+function detectMobile() {
+  if (typeof window === 'undefined') return false;
+  const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+  const hasTouch = navigator.maxTouchPoints > 0;
+  const smallScreen = window.screen.width <= 1024 || window.screen.height <= 1024;
+  return (coarse && hasTouch) || (hasTouch && smallScreen);
+}
+
 export function initQuality(renderer) {
+  IS_MOBILE = detectMobile();
+
   let name = '';
   try {
     const gl = renderer.getContext();
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
     if (ext) name = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) ?? '');
-  } catch { /* 扩展不可用（隐私模式等）→ 保持 high + 运行时帧率兜底 */ }
+  } catch { /* 扩展不可用 → 保持 high + 运行时帧率兜底 */ }
   QUALITY.gpuName = name || '(不可识别)';
-  // URL 强制档位：?quality=high|lite（调试/用户手动覆盖自动检测）
+
   const force = new URLSearchParams(globalThis.location?.search ?? '').get('quality');
-  const lite = force ? force === 'lite' : (name && LOW_GPU.test(name) && !HIGH_GPU.test(name));
+  // 移动端强制 lite（无视 GPU 名，避免高分屏烤机）；桌面按 GPU 识别
+  const lite = force ? force === 'lite' : IS_MOBILE || (name && LOW_GPU.test(name) && !HIGH_GPU.test(name));
+
   if (lite) {
+    const pr = IS_MOBILE ? Math.min(window.devicePixelRatio || 1, 1.5) : 1;
     Object.assign(QUALITY, {
-      tier: 'lite', pixelRatio: 1, bloomDiv: 4, atmoN: 8, atmoNL: 3,
-      terrainGrid: 48, anisotropy: 2, segHi: [64, 42], segLo: [40, 28], detail: false,
+      tier: 'lite',
+      pixelRatio: pr,
+      bloomDiv: IS_MOBILE ? 6 : 4,
+      atmoN: IS_MOBILE ? 6 : 8,
+      atmoNL: IS_MOBILE ? 2 : 3,
+      terrainGrid: IS_MOBILE ? 32 : 48,
+      anisotropy: 2,
+      segHi: IS_MOBILE ? [48, 32] : [64, 42],
+      segLo: IS_MOBILE ? [32, 22] : [40, 28],
+      detail: false,
     });
   }
+
+  if (IS_MOBILE) {
+    document.documentElement.classList.add('touch');
+  }
+
   console.info(`[quality] GPU: ${QUALITY.gpuName} → ${QUALITY.tier} 档` +
-    (lite ? '（核显/软件渲染：已降档保流畅）' : '（独显/默认：SpaceEngine 级画质）'));
+    (IS_MOBILE ? '（移动端：强制 lite）' : lite ? '（核显/软件渲染：已降档）' : '（独显：高画质）'));
   return QUALITY;
 }
 
-/** 运行时帧率兜底：high 档但持续低帧 → 一次性降低像素比并关闭细节着色器 */
+/** 运行时帧率兜底：持续低帧 → 一次性降低像素比并关闭细节着色器 */
 export function makeFpsGuard(renderer, onDegrade) {
   let acc = 0, n = 0, lowSec = 0, done = false;
   return (dt) => {
@@ -52,8 +81,10 @@ export function makeFpsGuard(renderer, onDegrade) {
     if (acc >= 1) {
       const fps = n / acc;
       acc = 0; n = 0;
-      lowSec = fps < 28 ? lowSec + 1 : 0;
-      if (lowSec >= 4) {
+      // 移动端容忍更低帧率（25 fps）
+      const threshold = IS_MOBILE ? 25 : 28;
+      lowSec = fps < threshold ? lowSec + 1 : 0;
+      if (lowSec >= (IS_MOBILE ? 3 : 4)) {
         done = true;
         renderer.setPixelRatio(1);
         QUALITY.detail = false;

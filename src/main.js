@@ -27,7 +27,8 @@ import { Labels } from './ui/labels.js';
 import { HUD, targetInfo } from './ui/hud.js';
 import { SearchUI } from './ui/search.js';
 import { eclToWorldArr, KM_PER_AU } from './config.js';
-import { initQuality, makeFpsGuard, QUALITY } from './engine/quality.js';
+import { initQuality, makeFpsGuard, QUALITY, IS_MOBILE } from './engine/quality.js';
+import { TouchControls } from './ui/touchControls.js';
 import { t, bodyName, LANG, applyDomI18n } from './ui/i18n.js';
 
 const canvas = document.getElementById('app');
@@ -74,7 +75,7 @@ const orbitCam = new OrbitCamera();
 const simClock = new SimClock();
 const clock = new THREE.Clock();
 
-let builder, comets, labels, searchUI, sky, belts, oortCloud, tnoScene;
+let builder, comets, labels, searchUI, touchControls, sky, belts, oortCloud, tnoScene;
 let appMode = 'orbit'; // orbit | fly | walk
 const registry = new Map();
 let selectedId = null;
@@ -168,6 +169,18 @@ async function init() {
     getOrbits: () => orbitLinesOn,
     toggleOrbits: () => { orbitLinesOn = !orbitLinesOn; },
   });
+
+  // Mobile on-screen controls — only created on touch devices (IS_MOBILE)
+  if (IS_MOBILE) {
+    touchControls = new TouchControls(input, {
+      switchToFly:    switchToFly,
+      switchToOrbit:  switchToOrbit,
+      toggleOrbits:   () => { orbitLinesOn = !orbitLinesOn; },
+      warpUp:         () => hud.warpUp(),
+      warpDown:       () => hud.warpDown(),
+    });
+  }
+
   setupTerrainMgr();
 
   // 初始：GE 式俯瞰地球（无需指针锁定）
@@ -180,8 +193,8 @@ async function init() {
   let downX = 0, downY = 0;
   canvas.addEventListener('mousedown', (e) => { downX = e.clientX; downY = e.clientY; });
   canvas.addEventListener('click', (e) => {
-    // fly/walk 需要指针锁定；orbit 模式自由光标
-    if ((appMode === 'fly' || appMode === 'walk') && !input.locked) canvas.requestPointerLock();
+    // fly/walk 需要指针锁定（桌面）；移动端不请求锁定
+    if ((appMode === 'fly' || appMode === 'walk') && !input.locked && !IS_MOBILE) canvas.requestPointerLock();
     else if (input.locked && labels.aimedId) select(labels.aimedId);
     else if (appMode === 'orbit' && !input.locked && !orbitCam.flight &&
       Math.hypot(e.clientX - downX, e.clientY - downY) < 6) {
@@ -195,7 +208,8 @@ async function init() {
     }
   });
   input.onLockChange = (locked) => {
-    if (!locked && appMode === 'fly') switchToOrbit(); // Esc 解锁 → 回探索模式
+    // Esc 解锁 → 回探索模式（桌面专用；移动端无指针锁定）
+    if (!locked && appMode === 'fly' && !IS_MOBILE) switchToOrbit();
   };
   window.addEventListener('resize', onResize);
   hud.loadingDone();
@@ -424,7 +438,7 @@ function switchToFly() {
   appMode = 'fly';
   ship.mode = 'fly';
   syncShipToOrbit();
-  canvas.requestPointerLock();
+  if (!IS_MOBILE) canvas.requestPointerLock();
 }
 
 // ---------- 地形 ----------
@@ -488,7 +502,8 @@ function loop() {
       && !orbitCam.flight) {
       ship.enterWalk(env); // 视向严格连续（yaw+pitch 自当前相机反解）
       appMode = 'walk';
-      try { canvas.requestPointerLock(); } catch { /* 非手势上下文可能被拒，行走支持拖拽环视 */ }
+      // 移动端：无指针锁定，行走使用单指拖拽环视
+      if (!IS_MOBILE) try { canvas.requestPointerLock(); } catch { /* 非手势上下文 */ }
     }
     if (input.tapped('KeyF') && !orbitCam.flight) switchToFly();
   } else {
@@ -593,6 +608,9 @@ function loop() {
     }
   }
 
+  // 移动端屏显控制：累加 held-zoom、刷新按钮状态
+  touchControls?.update(appMode, nearestCache, orbitCam);
+
   fpsGuard(dtReal);
   input.endFrame();
   composer.render();
@@ -680,7 +698,7 @@ function updateTip(nearest) {
   } else if (orbitCam.flight) {
     hud.tip(t('tip.flyingTo', { name: bodyName(registry.get(orbitCam.flight.toId)) }));
   } else if (appMode === 'walk') {
-    hud.tip(input.locked ? t('tip.walkLocked') : t('tip.walkUnlocked'));
+    hud.tip(IS_MOBILE ? t('tip.walkTouch') : (input.locked ? t('tip.walkLocked') : t('tip.walkUnlocked')));
   } else if (nearest && nearest.landable &&
     nearest.distSurface < Math.max(20, nearest.radiusKm * 0.05)) {
     hud.tip(t('tip.landNear', { name: bodyName(registry.get(nearest.id)) }));

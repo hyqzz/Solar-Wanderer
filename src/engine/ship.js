@@ -1,6 +1,11 @@
 // 玩家载具：第一人称飞船（6DOF，惯性阻尼，指数速度档）与行星地表行走模式。
 // 飞船运动使用真实时间 dt（时间加速只作用于天体仿真）；
 // 行走模式下位置存于天体体固系，随行星自转自然co-rotate，重力 g=GM/r² 取真实值。
+//
+// 移动端触摸支持（M1）：
+// - Input 类使用 Pointer Events 替代纯鼠标事件，统一处理鼠标与触摸
+// - 单指拖 → drag（探索旋转/行走视角）；双指捏合 → wheel（缩放/起飞/登陆）；双指平移 → pan
+// - joystick / touchAscend / touchDescend / touchJump / touchSprint 由 TouchControls 外部设置
 
 import * as THREE from 'three';
 
@@ -15,8 +20,7 @@ const isTyping = (e) => {
   return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
 };
 
-// 指针锁定 movementX/Y 已知尖峰（Chromium 锁定瞬间可达数百 px）→ 每事件钳制，
-// 杜绝行走/飞行视角的"快速旋转"（R7 #3）
+// 指针锁定 movementX/Y 已知尖峰 → 每事件钳制
 const clampMove = (m) => Math.max(-150, Math.min(150, m));
 
 export class Input {
@@ -25,23 +29,40 @@ export class Input {
     this.dx = 0; this.dy = 0; this.wheel = 0;
     this.locked = false;
     this.justPressed = new Set();
-    // 非指针锁定时的拖拽（Google Earth 式探索模式）：左键旋转，右/中键平移
     this.drag = { active: false, dx: 0, dy: 0 };
-    this.pan = { active: false, dx: 0, dy: 0 };
-    this.look = { active: false, dx: 0, dy: 0 }; // Ctrl+左键：旋转航向/倾斜（R7 #7）
+    this.pan  = { active: false, dx: 0, dy: 0 };
+    this.look = { active: false, dx: 0, dy: 0 };
     this.onLockChange = null;
 
+    // Touch / joystick fields (set by TouchControls)
+    this.joystick     = { x: 0, y: 0 };  // -1..1 analog stick
+    this.touchAscend  = false;            // held: up-thrust / ascend in water
+    this.touchDescend = false;            // held: down-thrust / dive
+    this.touchSprint  = false;            // held: run
+    this.touchJump    = false;            // one-shot: jump (consumed in updateWalk)
+
+    // Internal pointer-event tracking
+    this._pointers    = new Map();  // pointerId → {x, y}
+    this._ptrDownPos  = new Map();  // pointerId → {x, y} at pointerdown
+    this._pinchDist   = 0;          // last two-finger distance
+    this._pinchMid    = null;       // last two-finger midpoint
+    this._tapStart    = 0;          // pointerdown timestamp for tap detection
+    this._lastTapTime = 0;
+    this._lastTapPos  = { x: 0, y: 0 };
+    this.muteUntil    = 0;
+
+    // ── Keyboard ──────────────────────────────────────────────────────────
     dom.addEventListener('keydown', (e) => {
       if (isTyping(e)) return;
       if (['Space', 'BracketLeft', 'BracketRight', 'Tab', 'PageUp', 'PageDown',
         'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-      if (e.repeat) { this.keys.add(e.code); return; } // R10：锁定切换会清空按键集，
-      // 仍被按住的键靠 repeat 事件找回——否则登陆/起飞后按住的 GE 键失效
+      if (e.repeat) { this.keys.add(e.code); return; }
       this.keys.add(e.code);
       this.justPressed.add(e.code);
     });
     dom.addEventListener('keyup', (e) => { if (!isTyping(e)) this.keys.delete(e.code); });
-    this.muteUntil = 0; // 指针锁定切换瞬间静默（Chromium 锁定获得/释放时产生突发事件串，R9-1a）
+
+    // ── Pointer lock ──────────────────────────────────────────────────────
     document.addEventListener('pointerlockchange', () => {
       this.locked = !!document.pointerLockElement;
       this.muteUntil = performance.now() + 150;
@@ -49,95 +70,208 @@ export class Input {
       if (!this.locked) this.keys.clear();
       this.onLockChange?.(this.locked);
     });
+
+    // ── Mouse-move (pointer-lock only: uses movementX/Y) ──────────────────
     document.addEventListener('mousemove', (e) => {
       if (performance.now() < this.muteUntil) return;
-      const mx = clampMove(e.movementX), my = clampMove(e.movementY);
       if (this.locked) {
-        this.dx += mx; this.dy += my;
-      } else if (this.look.active) {
-        this.look.dx += mx; this.look.dy += my;
-      } else if (this.drag.active) {
-        this.drag.dx += mx; this.drag.dy += my;
-      } else if (this.pan.active) {
-        this.pan.dx += mx; this.pan.dy += my;
+        this.dx += clampMove(e.movementX);
+        this.dy += clampMove(e.movementY);
       }
+      // Non-locked movement handled by pointermove on canvas below
     });
-    if (canvas) {
-      canvas.addEventListener('mousedown', (e) => {
+
+    // ── Wheel ─────────────────────────────────────────────────────────────
+    document.addEventListener('wheel', (e) => {
+      if (isTyping(e)) return;
+      this.wheel += Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY) / 100, 1);
+    }, { passive: true });
+
+    // ── Window blur ───────────────────────────────────────────────────────
+    window.addEventListener('blur', () => {
+      this.keys.clear();
+      this.drag.active = false; this.pan.active = false; this.look.active = false;
+      this._pointers.clear(); this._ptrDownPos.clear();
+      this._pinchDist = 0; this._pinchMid = null;
+    });
+
+    if (!canvas) return;
+
+    // ── Canvas: Pointer Events (mouse + touch unified) ────────────────────
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      const pt = { x: e.clientX, y: e.clientY };
+      this._pointers.set(e.pointerId, { ...pt });
+      this._ptrDownPos.set(e.pointerId, { ...pt });
+
+      if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+        // Touch single-finger tap start
+        if (this._pointers.size === 1) {
+          this.drag.active = true;
+          this._tapStart = performance.now();
+          // Synthesize mousedown so main.js downX/downY tracking catches it
+          canvas.dispatchEvent(new MouseEvent('mousedown', {
+            clientX: e.clientX, clientY: e.clientY, bubbles: false,
+          }));
+        } else if (this._pointers.size === 2) {
+          // Two fingers: end single-drag, start pinch+pan
+          this.drag.active = false;
+          const pts = [...this._pointers.values()];
+          this._pinchDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+          this._pinchMid  = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+        } else {
+          // 3+ fingers: cancel everything
+          this.drag.active = false; this.pan.active = false;
+        }
+      } else {
+        // Mouse buttons
         if (this.locked) return;
         if (e.button === 0) {
           if (e.ctrlKey) this.look.active = true;
           else this.drag.active = true;
-        } else if (e.button === 2 || e.button === 1) { this.pan.active = true; e.preventDefault(); }
-      });
-      canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-      window.addEventListener('mouseup', () => {
-        this.drag.active = false; this.pan.active = false; this.look.active = false;
-      });
-    }
-    document.addEventListener('wheel', (e) => {
-      if (isTyping(e)) return;
-      // 按 deltaY 幅度归一化（标准滚轮 100/格 → 1）：高速滚轮/触控板的密集事件
-      // 不再按事件个数整格累计，消除缩放离散跳跃（R8 #2）
-      this.wheel += Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY) / 100, 1);
+        } else if (e.button === 2 || e.button === 1) {
+          this.pan.active = true;
+          e.preventDefault();
+        }
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (this.locked) return; // pointer-lock: handled by mousemove (movementX/Y)
+      if (!this._pointers.has(e.pointerId)) return;
+
+      const prev = this._pointers.get(e.pointerId);
+      const dx = e.clientX - prev.x;
+      const dy = e.clientY - prev.y;
+      this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      const count = this._pointers.size;
+
+      if (count === 1) {
+        if (this.look.active)       { this.look.dx += dx; this.look.dy += dy; }
+        else if (this.drag.active)  { this.drag.dx += dx; this.drag.dy += dy; }
+        else if (this.pan.active)   { this.pan.dx  += dx; this.pan.dy  += dy; }
+      } else if (count === 2) {
+        const pts = [...this._pointers.values()];
+        const newDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        const newMid  = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+
+        // Pinch → wheel equivalent (spread = zoom in = wheel < 0)
+        if (this._pinchDist > 0 && newDist > 0) {
+          const ratio  = newDist / this._pinchDist;
+          // Map log-ratio to wheel units (1.12 is orbitCam's per-unit base)
+          const wEq = -(Math.log(ratio) / Math.log(1.12)) * 1.6;
+          this.wheel += wEq;
+        }
+        this._pinchDist = newDist;
+
+        // Two-finger translation → pan
+        if (this._pinchMid) {
+          this.pan.active = true;
+          this.pan.dx += newMid.x - this._pinchMid.x;
+          this.pan.dy += newMid.y - this._pinchMid.y;
+        }
+        this._pinchMid = newMid;
+      }
     }, { passive: true });
-    window.addEventListener('blur', () => {
-      this.keys.clear(); this.drag.active = false; this.pan.active = false; this.look.active = false;
+
+    const onPointerEnd = (e) => {
+      const downPos = this._ptrDownPos.get(e.pointerId);
+      this._pointers.delete(e.pointerId);
+      this._ptrDownPos.delete(e.pointerId);
+
+      // Touch tap detection → synthesize click / dblclick on canvas
+      if ((e.pointerType === 'touch' || e.pointerType === 'pen') && downPos) {
+        const moved   = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+        const elapsed = performance.now() - this._tapStart;
+        if (moved < 14 && elapsed < 400 && this._pointers.size === 0) {
+          const now = performance.now();
+          const dblDist = Math.hypot(e.clientX - this._lastTapPos.x, e.clientY - this._lastTapPos.y);
+          if (now - this._lastTapTime < 360 && dblDist < 32) {
+            canvas.dispatchEvent(new MouseEvent('dblclick', {
+              clientX: e.clientX, clientY: e.clientY, bubbles: true, cancelable: true,
+            }));
+            this._lastTapTime = 0;
+          } else {
+            canvas.dispatchEvent(new MouseEvent('click', {
+              clientX: e.clientX, clientY: e.clientY, bubbles: true, cancelable: true,
+            }));
+            this._lastTapTime = now;
+            this._lastTapPos  = { x: e.clientX, y: e.clientY };
+          }
+        }
+      }
+
+      const remaining = this._pointers.size;
+      if (remaining === 0) {
+        this.drag.active = false; this.pan.active = false; this.look.active = false;
+        this._pinchDist  = 0;    this._pinchMid  = null;
+      } else if (remaining === 1) {
+        // Back to single finger after two-finger gesture
+        this._pinchDist = 0; this._pinchMid = null;
+        this.pan.active = false;
+        if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+          this.drag.active = true;
+        }
+      }
+    };
+    canvas.addEventListener('pointerup',     onPointerEnd);
+    canvas.addEventListener('pointercancel', onPointerEnd);
+
+    // Fallback: release on window in case pointer capture was lost
+    window.addEventListener('mouseup', () => {
+      if (this._pointers.size === 0) {
+        this.drag.active = false; this.pan.active = false; this.look.active = false;
+      }
     });
+
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
+
   down(code) { return this.keys.has(code); }
   tapped(code) { return this.justPressed.has(code); }
-  /** 每帧末调用 */
+
   endFrame() {
     this.dx = 0; this.dy = 0; this.wheel = 0;
     this.drag.dx = 0; this.drag.dy = 0;
-    this.pan.dx = 0; this.pan.dy = 0;
+    this.pan.dx  = 0; this.pan.dy  = 0;
     this.look.dx = 0; this.look.dy = 0;
     this.justPressed.clear();
   }
 }
 
-const MOUSE_SENS = 0.0022;
-const WALK_SENS = 0.00085;  // 行走视角灵敏度（R9-1a 再降：仰望天空可精确定位，仍 360° 无限制）
-const WALK_SMOOTH_TAU = 0.05; // 行走视角指数平滑时间常数（秒）
-const WALK_FRAME_CLAMP = 260; // 每帧累计输入上限 px（事件堆积/卡顿帧不得倾泻成快速旋转，R9-1a）
-const MAX_SUN_R = 1.55e13;  // 飞行模式日心距上限（扩展到奥尔特云外边界，R11）
-const WALK_EYE_KM = 0.0017; // 1.7 m
-const MIN_SPEED = 0.001;    // 1 m/s
-const MAX_SPEED = 3e8;      // ~2 AU/s
+const MOUSE_SENS   = 0.0022;
+const WALK_SENS    = 0.00085;
+const WALK_SMOOTH_TAU  = 0.05;
+const WALK_FRAME_CLAMP = 260;
+const MAX_SUN_R  = 1.55e13;
+const WALK_EYE_KM = 0.0017;
+const MIN_SPEED = 0.001;
+const MAX_SPEED = 3e8;
 
 export class Ship {
   constructor() {
     this.mode = 'fly';
     this.posKm = new Float64Array(3);
     this.quat = new THREE.Quaternion();
-    this.vel = new THREE.Vector3(); // km/s 世界轴
-    this.speedSetting = 10;         // km/s
-    this.effSpeed = 0;              // 实际限速后的目标速度（HUD 显示）
+    this.vel = new THREE.Vector3();
+    this.speedSetting = 10;
+    this.effSpeed = 0;
     this.damping = true;
-    // 行走状态（smx/smy = 视角输入指数平滑状态）
-    this.walk = { bodyId: null, localPos: new THREE.Vector3(), yaw: 0, pitch: 0, vAlt: 0, grounded: false, smx: 0, smy: 0, diving: false, submerged: false };
+    this.walk = {
+      bodyId: null, localPos: new THREE.Vector3(),
+      yaw: 0, pitch: 0, vAlt: 0, grounded: false,
+      smx: 0, smy: 0, diving: false, submerged: false,
+    };
   }
 
-  /** 当前速度大小 km/s */
   speed() { return this.vel.length(); }
 
-  /**
-   * @param dt 真实秒
-   * @param input Input
-   * @param env {
-   *   nearest: { id, posKm:Float64Array, radiusKm, landable, distSurface } | null,
-   *   getBodyQuat(id)->THREE.Quaternion, getBodyPos(id)->Float64Array,
-   *   heightFn(id, dirLocalUnit:Vector3)->km(表面半径), surfaceAngVel(id)->rad/s
-   * }
-   */
   update(dt, input, env) {
-    // 速度档调节（滚轮）
     if (input.wheel !== 0 && this.mode === 'fly') {
-      this.speedSetting *= Math.pow(0.5, input.wheel); // 上滚加速
+      this.speedSetting *= Math.pow(0.5, input.wheel);
       this.speedSetting = Math.min(MAX_SPEED, Math.max(MIN_SPEED, this.speedSetting));
     }
-    // 模式切换：近地表且可登陆
     if (input.tapped('KeyG') && env.nearest) {
       if (this.mode === 'fly' && env.nearest.landable && env.nearest.distSurface < 20) {
         this.enterWalk(env);
@@ -150,34 +284,38 @@ export class Ship {
   }
 
   updateFly(dt, input, env) {
-    // 姿态：鼠标俯仰/偏航，Q/E 滚转
-    const yaw = -input.dx * MOUSE_SENS;
-    const pitch = -input.dy * MOUSE_SENS;
+    // View: pointer-lock uses dx/dy; mobile uses single-finger drag
+    const lookDx = input.locked ? input.dx : input.drag.dx;
+    const lookDy = input.locked ? input.dy : input.drag.dy;
+    const yaw   = -lookDx * MOUSE_SENS;
+    const pitch = -lookDy * MOUSE_SENS;
     let roll = 0;
     if (input.down('KeyQ')) roll += 1.2 * dt;
     if (input.down('KeyE')) roll -= 1.2 * dt;
-    _q1.set(pitch / 2, yaw / 2, roll / 2, 1).normalize(); // 小角度近似四元数
+    _q1.set(pitch / 2, yaw / 2, roll / 2, 1).normalize();
     this.quat.multiply(_q1).normalize();
 
-    // 推力方向（本地系）
+    // Thrust — keyboard + joystick
+    const jx = input.joystick.x;
+    const jy = input.joystick.y;
     _v1.set(0, 0, 0);
-    if (input.down('KeyW')) _v1.z -= 1;
-    if (input.down('KeyS')) _v1.z += 1;
-    if (input.down('KeyA')) _v1.x -= 1;
-    if (input.down('KeyD')) _v1.x += 1;
-    if (input.down('KeyR') || input.down('Space')) _v1.y += 1;
-    if (input.down('KeyF') || input.down('KeyC')) _v1.y -= 1;
+    if (input.down('KeyW') || jy < -0.15) _v1.z -= 1;
+    if (input.down('KeyS') || jy > 0.15)  _v1.z += 1;
+    if (input.down('KeyA') || jx < -0.15) _v1.x -= 1;
+    if (input.down('KeyD') || jx > 0.15)  _v1.x += 1;
+    if (input.down('KeyR') || input.down('Space') || input.touchAscend)  _v1.y += 1;
+    if (input.down('KeyC') || input.touchDescend) _v1.y -= 1;
+
     const thrusting = _v1.lengthSq() > 0;
     if (thrusting) _v1.normalize().applyQuaternion(this.quat);
 
-    // 接近限速：距表面越近自动越慢（保证可控接近，悬停驻留）
     let cap = this.speedSetting;
     if (env.nearest) {
       const d = Math.max(env.nearest.distSurface, 0.001);
       cap = Math.min(cap, Math.max(0.02, d * 0.6));
     }
     this.effSpeed = thrusting ? cap : 0;
-    const boost = input.down('ShiftLeft') ? 2 : 1;
+    const boost = (input.down('ShiftLeft') || input.touchSprint) ? 2 : 1;
 
     if (this.damping) {
       _v2.copy(_v1).multiplyScalar(cap * boost);
@@ -193,17 +331,15 @@ export class Ship {
     this.posKm[1] += this.vel.y * dt;
     this.posKm[2] += this.vel.z * dt;
 
-    // 日球层边界：飞行不得超出全景距离（与探索模式一致的世界边界，R9-1c）
     const rSun = Math.hypot(this.posKm[0], this.posKm[1], this.posKm[2]);
     if (rSun > MAX_SUN_R) {
       const s = MAX_SUN_R / rSun;
       this.posKm[0] *= s; this.posKm[1] *= s; this.posKm[2] *= s;
       _v1.set(this.posKm[0], this.posKm[1], this.posKm[2]).normalize();
       const vr = this.vel.dot(_v1);
-      if (vr > 0) this.vel.addScaledVector(_v1, -vr); // 消除外向分量
+      if (vr > 0) this.vel.addScaledVector(_v1, -vr);
     }
 
-    // 碰撞站离：不允许进入天体表面之下（地形由行走模式处理，飞行用球面+余量）
     if (env.nearest) {
       const n = env.nearest;
       _v1.set(this.posKm[0] - n.posKm[0], this.posKm[1] - n.posKm[1], this.posKm[2] - n.posKm[2]);
@@ -215,7 +351,7 @@ export class Ship {
         this.posKm[1] = n.posKm[1] + _v1.y * minR;
         this.posKm[2] = n.posKm[2] + _v1.z * minR;
         const vr = this.vel.dot(_v1);
-        if (vr < 0) this.vel.addScaledVector(_v1, -vr); // 消除内向分量
+        if (vr < 0) this.vel.addScaledVector(_v1, -vr);
       }
     }
   }
@@ -225,7 +361,6 @@ export class Ship {
     this.mode = 'walk';
     const w = this.walk;
     w.bodyId = n.id;
-    // 世界相对位置 → 体固(网格本地)系
     _v1.set(this.posKm[0] - n.posKm[0], this.posKm[1] - n.posKm[1], this.posKm[2] - n.posKm[2]);
     _q1.copy(env.getBodyQuat(n.id)).invert();
     _v1.applyQuaternion(_q1);
@@ -233,24 +368,22 @@ export class Ship {
     w.localPos.copy(_v2).multiplyScalar(h + WALK_EYE_KM);
     w.vAlt = 0;
     w.grounded = true;
-    // 从当前视向初始化偏航与俯仰（视向严格连续，R7 #1：登陆无跳变）
     const frame = this.walkFrame(_m1, env);
-    _v3.set(0, 0, -1).applyQuaternion(this.quat); // 当前世界视向
+    _v3.set(0, 0, -1).applyQuaternion(this.quat);
     _q1.copy(env.getBodyQuat(w.bodyId)).invert();
-    _v3.applyQuaternion(_q1); // → 本地
+    _v3.applyQuaternion(_q1);
     const e = new THREE.Vector3().setFromMatrixColumn(frame, 0);
     const upv = new THREE.Vector3().setFromMatrixColumn(frame, 1);
     const nrt = new THREE.Vector3().setFromMatrixColumn(frame, 2);
-    w.yaw = Math.atan2(_v3.dot(e), _v3.dot(nrt));
+    w.yaw   = Math.atan2(_v3.dot(e), _v3.dot(nrt));
     w.pitch = Math.asin(THREE.MathUtils.clamp(_v3.dot(upv), -1, 1));
     w.smx = 0; w.smy = 0;
-    w.diving = false; w.submerged = false; // 默认登陆水面（R10：继续滚轮下才下潜）
+    w.diving = false; w.submerged = false;
     this.vel.set(0, 0, 0);
   }
 
   exitWalk(env) {
-    // 当前行走位姿已是世界位姿（updateWalk 每帧写回），直接切换并向上抬升一点
-    this.mode = 'walk-exit'; // 标记
+    this.mode = 'walk-exit';
     const up = _v1.copy(this.walk.localPos).normalize().applyQuaternion(env.getBodyQuat(this.walk.bodyId));
     this.posKm[0] += up.x * 0.003;
     this.posKm[1] += up.y * 0.003;
@@ -259,29 +392,23 @@ export class Ship {
     this.mode = 'fly';
   }
 
-  /** 行走本地坐标系（列: east, up, north），在网格本地系中 */
   walkFrame(outM, env) {
-    const u = _v2.copy(this.walk.localPos).normalize(); // 天顶
+    const u = _v2.copy(this.walk.localPos).normalize();
     const poleY = Math.abs(u.y) > 0.999;
-    const east = poleY ? _v3.set(1, 0, 0) : _v3.set(0, 1, 0).cross(u).normalize();
-    // 北 = 天顶 × 东
+    const east  = poleY ? _v3.set(1, 0, 0) : _v3.set(0, 1, 0).cross(u).normalize();
     const north = new THREE.Vector3().crossVectors(u, east);
     return outM.makeBasis(east.clone(), u.clone(), north);
   }
 
   updateWalk(dt, input, env) {
     const w = this.walk;
-    const bodyPos = env.getBodyPos(w.bodyId);
+    const bodyPos  = env.getBodyPos(w.bodyId);
     const bodyQuat = env.getBodyQuat(w.bodyId);
     const phys = env.phys(w.bodyId);
     const r = w.localPos.length();
-    const g = (phys.gm / (r * r)); // km/s²
+    const g = (phys.gm / (r * r));
 
-    // 视角：偏航绕天顶；俯仰 360° 连续循环（可仰头翻转环视，无任何钳制）。
-    // R7 #2：dx>0（鼠标右移）→ yaw 增大 = 向右看，与探索模式方向一致；
-    // R7 #3：低灵敏度 + 指数平滑（τ=50ms），未锁定指针时回退用左键拖拽环视。
-    // R9-1a：帧级总量钳制（一帧多事件累计无上限是尖峰根源）；
-    // 卡顿帧平滑系数按 dt≤33ms 计，积压输入分多帧释放而非一帧倾泻
+    // View input — pointer-lock OR single-finger drag OR touch drag
     let inDx = input.locked ? input.dx : (input.drag.active ? input.drag.dx : 0);
     let inDy = input.locked ? input.dy : (input.drag.active ? input.drag.dy : 0);
     inDx = Math.max(-WALK_FRAME_CLAMP, Math.min(WALK_FRAME_CLAMP, inDx));
@@ -289,93 +416,91 @@ export class Ship {
     const sm = 1 - Math.exp(-Math.min(dt, 0.033) / WALK_SMOOTH_TAU);
     w.smx += (inDx - w.smx) * sm;
     w.smy += (inDy - w.smy) * sm;
-    w.yaw += w.smx * WALK_SENS;
+    w.yaw   += w.smx * WALK_SENS;
     w.pitch -= w.smy * WALK_SENS;
-    if (w.pitch > Math.PI) w.pitch -= 2 * Math.PI;
+    if (w.pitch >  Math.PI) w.pitch -= 2 * Math.PI;
     if (w.pitch < -Math.PI) w.pitch += 2 * Math.PI;
-    if (w.yaw > Math.PI) w.yaw -= 2 * Math.PI;
-    if (w.yaw < -Math.PI) w.yaw += 2 * Math.PI;
+    if (w.yaw   >  Math.PI) w.yaw   -= 2 * Math.PI;
+    if (w.yaw   < -Math.PI) w.yaw   += 2 * Math.PI;
 
-    // 本地坐标系
     const frame = this.walkFrame(_m1, env);
-    const east = _v1.setFromMatrixColumn(frame, 0).clone();
-    const up = _v2.setFromMatrixColumn(frame, 1).clone();
+    const east  = _v1.setFromMatrixColumn(frame, 0).clone();
+    const up    = _v2.setFromMatrixColumn(frame, 1).clone();
     const north = _v3.setFromMatrixColumn(frame, 2).clone();
 
-    // 朝向（本地）：yaw 绕 up，从 -north 开始（yaw=0 朝北）
-    const fwd = north.clone().multiplyScalar(Math.cos(w.yaw)).addScaledVector(east, Math.sin(w.yaw));
+    const fwd   = north.clone().multiplyScalar(Math.cos(w.yaw)).addScaledVector(east, Math.sin(w.yaw));
     const right = new THREE.Vector3().crossVectors(fwd, up).normalize();
 
-    // 行走运动
+    // Movement — keyboard + virtual joystick
+    const jx = input.joystick.x;
+    const jy = input.joystick.y;
     const move = new THREE.Vector3();
-    if (input.down('KeyW')) move.add(fwd);
-    if (input.down('KeyS')) move.sub(fwd);
-    if (input.down('KeyD')) move.add(right);
-    if (input.down('KeyA')) move.sub(right);
-    // 水体（R10）：默认站在水面；滚轮下/PageDown = 下潜，水下滚轮上 = 向上游，
-    // 浮出水面自动恢复站立（起飞只在水面/陆地由滚轮上触发，见 main.js）
+    if (input.down('KeyW') || jy < -0.15) move.add(fwd);
+    if (input.down('KeyS') || jy > 0.15)  move.sub(fwd);
+    if (input.down('KeyD') || jx > 0.15)  move.add(right);
+    if (input.down('KeyA') || jx < -0.15) move.sub(right);
+
     const dirNow = w.localPos.clone().normalize();
-    const surfR = phys.radiusKm + 0.001;
+    const surfR  = phys.radiusKm + 0.001;
     const onWater = !!env.isWater?.(w.bodyId, dirNow);
-    if (onWater && !w.diving && (input.wheel <= -0.5 || input.down('PageDown'))) {
-      w.diving = true;
-      w.grounded = false;
-      w.vAlt = 0;
+    if (onWater && !w.diving && (input.wheel <= -0.5 || input.down('PageDown') || input.touchDescend)) {
+      w.diving = true; w.grounded = false; w.vAlt = 0;
     }
     const inWater = onWater && w.diving && r < surfR + 1e-7;
-    let speed = (input.down('ShiftLeft') ? 0.009 : 0.003); // 9 / 3 m/s
+    let speed = ((input.down('ShiftLeft') || input.touchSprint) ? 0.009 : 0.003);
     if (inWater) speed *= 0.45;
     if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed * dt);
     w.localPos.add(move);
 
-    // 水中垂直微动（R10）：滚轮低灵敏度升降——浅处 0.4m/格、深处按深度 12%，
-    // 停止滚动即中性浮力悬停 → 可精确定位水中任意深度
     if (inWater && input.wheel !== 0) {
       const depth = Math.max(surfR - w.localPos.length(), 0.0002);
-      const step = Math.max(0.0004, depth * 0.12);
+      const step  = Math.max(0.0004, depth * 0.12);
       w.localPos.addScaledVector(up, step * Math.max(-3, Math.min(3, input.wheel)));
     }
+    // Water vertical with touch
+    if (inWater && input.touchAscend)  w.vAlt += g * 0.5 * dt;
 
-    // 重力与跳跃（沿天顶）；水中 = 中性浮力（阻尼悬停），Space 踩水上浮
-    if (input.tapped('Space') && w.grounded) { w.vAlt = inWater ? 0.0024 : 0.0042; w.grounded = false; }
+    // Jump / ascend
+    const jumpTriggered = input.tapped('Space') || input.touchJump;
+    if (jumpTriggered) {
+      if (w.grounded) {
+        w.vAlt = inWater ? 0.0024 : 0.0042;
+        w.grounded = false;
+      }
+      input.touchJump = false; // consume
+    }
     if (inWater) {
-      if (input.down('Space')) w.vAlt += g * 0.5 * dt;
-      w.vAlt *= Math.exp(-dt * 2.5); // 水阻尼 → 静止时悬停于当前深度
+      if (input.down('Space') || input.touchAscend) w.vAlt += g * 0.5 * dt;
+      w.vAlt *= Math.exp(-dt * 2.5);
     } else {
       w.vAlt -= g * dt;
     }
     w.localPos.addScaledVector(up, w.vAlt * dt);
 
-    // 地面碰撞：默认 = 表面（水面可站立）；下潜中 = 海床（固体面）
     const dir = w.localPos.clone().normalize();
-    // 出水判定：必须先真正没入（submerged），回升到水面即恢复站立——
-    // 否则水面与眼高之间存在 1.7m 死区（滚轮无效、重力又拉回，永远出不来）
     if (w.diving) {
       const rr = w.localPos.length();
       if (rr < surfR - 0.001) w.submerged = true;
       else if (w.submerged && rr >= surfR - 0.0001) { w.diving = false; w.submerged = false; w.vAlt = 0; }
     }
     const groundFn = w.diving ? (env.heightSolidFn ?? env.heightFn) : env.heightFn;
-    const ground = groundFn(w.bodyId, dir) + WALK_EYE_KM;
+    const ground   = groundFn(w.bodyId, dir) + WALK_EYE_KM;
     if (w.localPos.length() <= ground) {
       w.localPos.copy(dir).multiplyScalar(ground);
-      w.vAlt = 0;
-      w.grounded = true;
+      w.vAlt = 0; w.grounded = true;
     } else if (w.localPos.length() > ground + 0.0001) {
       w.grounded = false;
     }
 
-    // 写回世界位姿
     const worldOff = w.localPos.clone().applyQuaternion(bodyQuat);
     this.posKm[0] = bodyPos[0] + worldOff.x;
     this.posKm[1] = bodyPos[1] + worldOff.y;
     this.posKm[2] = bodyPos[2] + worldOff.z;
 
-    // 相机姿态 = 体固→世界 ∘ 本地朝向
-    const lookM = new THREE.Matrix4();
+    const lookM  = new THREE.Matrix4();
     const camFwd = fwd.clone().multiplyScalar(Math.cos(w.pitch)).addScaledVector(up, Math.sin(w.pitch));
-    const camUp = up.clone().multiplyScalar(Math.cos(w.pitch)).addScaledVector(fwd, -Math.sin(w.pitch));
-    lookM.lookAt(new THREE.Vector3(), camFwd, camUp); // Matrix4.lookAt: z = eye−target = −camFwd（相机沿 −Z 看）
+    const camUp  = up.clone().multiplyScalar(Math.cos(w.pitch)).addScaledVector(fwd, -Math.sin(w.pitch));
+    lookM.lookAt(new THREE.Vector3(), camFwd, camUp);
     this.quat.setFromRotationMatrix(lookM).premultiply(bodyQuat);
   }
 }
