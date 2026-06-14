@@ -136,11 +136,14 @@ export function createOortCloud() {
   group.frustumCulled = false;
 
   function update(dSunAU) {
-    // 在云外（内太阳系）远观时正常显示；进入云内部后逐渐减弱到很低（真实极稀疏），
-    // 使最外层不再呈现"密集且随平移移动的星场"。
+    // 物理正确：奥尔特云从内太阳系/外太阳系（< 1000 AU）根本不可见
+    // （实测极稀疏，万亿天体散布于2000-100000 AU巨大球壳，视觉密度为零）。
+    // 1000→2000 AU 线性淡入（接近内边界才出现），> 2000 AU 在云内正常显示后逐渐稀化。
+    // 这确保柯伊伯带内外星空背景完全一致——不因注册在日心系的视差星点而出现差异。
     let f;
-    if (dSunAU < 1000) f = 1;
-    else if (dSunAU < 60000) f = 1 - 0.78 * ((dSunAU - 1000) / 59000);
+    if (dSunAU < 1000) f = 0;
+    else if (dSunAU < 2000) f = (dSunAU - 1000) / 1000;
+    else if (dSunAU < 60000) f = 1 - 0.78 * ((dSunAU - 2000) / 58000);
     else f = 0.22;
     for (const sh of shells) sh.material.opacity = sh.userData.baseOpacity * f;
   }
