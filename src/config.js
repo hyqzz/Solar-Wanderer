@@ -6,10 +6,23 @@ import * as THREE from 'three';
 export const KM_PER_AU = 149597870.7;
 export const C_KM_S = 299792.458;
 
-// 界面语言：浏览器为中文→'zh'，其他→'en'；Node（无 navigator）默认 'zh' 以保持离线工具/测试行为。
-export const LANG = (typeof navigator !== 'undefined')
-  ? (/^zh/i.test(navigator.language || navigator.userLanguage || '') ? 'zh' : 'en')
-  : 'zh';
+// 界面语言优先级：URL 路径或参数 > 浏览器语言 > Node 默认 'zh'。
+// 支持 /en/?lang=en 强制英文，/ 或 ?lang=zh 强制中文。
+function detectLang() {
+  if (typeof window !== 'undefined' && window.location) {
+    const params = new URLSearchParams(window.location.search);
+    const paramLang = params.get('lang');
+    if (paramLang === 'en' || paramLang === 'zh') return paramLang;
+    const pathLang = window.location.pathname.split('/')[1];
+    if (pathLang === 'en' || pathLang === 'zh') return pathLang;
+  }
+  if (typeof navigator !== 'undefined') {
+    const nav = navigator.language || navigator.userLanguage || '';
+    return /^zh/i.test(nav) ? 'zh' : 'en';
+  }
+  return 'zh';
+}
+export const LANG = detectLang();
 const _u = (zh, en) => (LANG === 'zh' ? zh : en);
 
 /** 黄道坐标 {x,y,z} → three 世界 Vector3 */
