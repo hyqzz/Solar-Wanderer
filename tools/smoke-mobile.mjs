@@ -22,9 +22,15 @@ async function run(lang) {
   await page.emulateTimezone('UTC');
 
   // Force coarse-pointer media query and touch detection
-  await page.emulateMediaFeatures([{ name: 'pointer', value: 'coarse' }]);
   await page.evaluateOnNewDocument(() => {
     Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 5 });
+    const origMatchMedia = window.matchMedia;
+    window.matchMedia = (query) => {
+      if (query === '(pointer: coarse)') {
+        return { matches: true, media: query, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false; } };
+      }
+      return origMatchMedia(query);
+    };
   });
 
   const errors = [];
@@ -62,12 +68,29 @@ async function run(lang) {
   let menuVisible = false;
   if (menuBtnExists) {
     await page.tap('#tc-menu-btn');
-    await sleep(300);
+    await sleep(400);
     menuVisible = await page.evaluate(() => {
       const el = document.getElementById('tc-menu');
       return el && !el.hidden;
     });
     await page.tap('#tc-menu-btn'); // close
+    await sleep(200);
+  }
+
+  // Directory button: tap to open bottom sheet
+  let dirVisible = false;
+  const dirBtnExists = await page.$('#tc-dir-btn') !== null;
+  if (dirBtnExists) {
+    await page.tap('#tc-dir-btn');
+    await sleep(400);
+    dirVisible = await page.evaluate(() => {
+      const dir = document.getElementById('directory');
+      if (!dir) return false;
+      const rect = dir.getBoundingClientRect();
+      // Bottom sheet is visible when its top is inside viewport (transformed up)
+      return dir.classList.contains('open') && rect.top < window.innerHeight && rect.bottom > 0;
+    });
+    await page.tap('#tc-dir-btn'); // close
     await sleep(200);
   }
 
@@ -100,6 +123,7 @@ async function run(lang) {
   return {
     lang, errors, hint, hasKeyHint,
     tcVisible, joystickExists, menuBtnExists, menuVisible,
+    dirBtnExists, dirVisible,
     helpTouchContent, keyBadgeVisible, isMobileFlagSet,
   };
 }
@@ -118,6 +142,8 @@ for (const lang of ['zh', 'en']) {
     ['Joystick DOM exists',        r.joystickExists],
     ['Menu button exists',         r.menuBtnExists],
     ['Menu opens on tap',          r.menuVisible],
+    ['Directory button exists',    r.dirBtnExists],
+    ['Directory opens on tap',     r.dirVisible],
     ['Help shows touch content',   r.helpTouchContent],
     ['.key badges hidden',         !r.keyBadgeVisible],
   ];

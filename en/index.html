@@ -68,10 +68,12 @@
 
   <div id="left-col">
     <div id="hud-time" class="panel"></div>
-    <div id="directory" class="open">
-      <div class="dir-head"><span data-i18n="dir.title">🪐 天体目录</span> <span class="dim" data-i18n="dir.sub">点击即前往</span></div>
-      <div id="dir-body"></div>
-    </div>
+  </div>
+
+  <!-- Directory moved out of #left-col: mobile .touch #left-col sets display:none, which would hide fixed children too -->
+  <div id="directory" class="open">
+    <div class="dir-head"><span data-i18n="dir.title">🪐 天体目录</span> <span class="dim" data-i18n="dir.sub">点击即前往</span></div>
+    <div id="dir-body"></div>
   </div>
 
   <div id="hud">

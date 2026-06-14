@@ -94,6 +94,7 @@ export class Input {
       this.drag.active = false; this.pan.active = false; this.look.active = false;
       this._pointers.clear(); this._ptrDownPos.clear();
       this._pinchDist = 0; this._pinchMid = null;
+      this._wasPinching = false;
     });
 
     if (!canvas) return;
@@ -110,6 +111,7 @@ export class Input {
         if (this._pointers.size === 1) {
           this.drag.active = true;
           this._tapStart = performance.now();
+          this._wasPinching = false; // fresh single-finger gesture
           // Synthesize mousedown so main.js downX/downY tracking catches it
           canvas.dispatchEvent(new MouseEvent('mousedown', {
             clientX: e.clientX, clientY: e.clientY, bubbles: false,
@@ -180,15 +182,15 @@ export class Input {
 
     const onPointerEnd = (e) => {
       const downPos = this._ptrDownPos.get(e.pointerId);
+      const hadPinch = this._wasPinching;
       this._pointers.delete(e.pointerId);
       this._ptrDownPos.delete(e.pointerId);
 
       // Touch tap detection → synthesize click / dblclick on canvas
-      const wasPinching = this._wasPinching;
       if ((e.pointerType === 'touch' || e.pointerType === 'pen') && downPos) {
         const moved   = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
         const elapsed = performance.now() - this._tapStart;
-        if (moved < 14 && elapsed < 400 && this._pointers.size === 0 && !wasPinching) {
+        if (moved < 14 && elapsed < 400 && this._pointers.size === 0 && !hadPinch) {
           const now = performance.now();
           const dblDist = Math.hypot(e.clientX - this._lastTapPos.x, e.clientY - this._lastTapPos.y);
           if (now - this._lastTapTime < 360 && dblDist < 32) {
@@ -223,6 +225,12 @@ export class Input {
     canvas.addEventListener('pointerup',     onPointerEnd);
     canvas.addEventListener('pointercancel', onPointerEnd);
 
+    // Browser may implicitly release capture (alert, system gesture, scroll edge).
+    // Treat it like pointerup so stale pointerIds don't accumulate.
+    canvas.addEventListener('lostpointercapture', (e) => {
+      if (this._pointers.has(e.pointerId)) onPointerEnd(e);
+    });
+
     // Fallback: release on window in case pointer capture was lost
     window.addEventListener('mouseup', () => {
       if (this._pointers.size === 0) {
@@ -234,11 +242,12 @@ export class Input {
 
     // ── Global: capture 2nd finger even when it lands on HUD/label elements ──
     // Without this, a second touch on a non-canvas element is never registered,
-    // so canvas never enters pinch mode.
+    // so canvas never enters pinch mode. Only allow promotion from exactly 1
+    // existing pointer → 2; ignore 3rd+ fingers to keep state machine simple.
     window.addEventListener('pointerdown', (e) => {
       if (e.target === canvas) return;               // canvas already handled it
       if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-      if (this._pointers.size < 1) return;           // only care about 2nd+ finger
+      if (this._pointers.size !== 1) return;         // only promote a lone pointer to pinch
       if (this._pointers.has(e.pointerId)) return;   // duplicate
       try { canvas.setPointerCapture(e.pointerId); } catch { return; }
       this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });

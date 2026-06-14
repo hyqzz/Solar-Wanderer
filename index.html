@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>Solar Wanderer · 遨游太阳系 — 1:1 Real-Time Solar System Explorer</title>
+  <title>遨游太阳系 · Solar Wanderer — 1:1 Real-Time Solar System Explorer</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='7' fill='%23ffcc55'/><circle cx='26' cy='16' r='2' fill='%234a90d9'/></svg>" />
   <link rel="manifest" href="/manifest.json" />
 
   <!-- Open Graph / Social sharing -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://sw.icodestar.net/" />
-  <meta property="og:title" content="Solar Wanderer · 遨游太阳系 — 浏览器里的 1:1 实时太阳系" />
+  <meta property="og:title" content="遨游太阳系 · Solar Wanderer — 浏览器里的 1:1 实时太阳系" />
   <meta property="og:description" content="基于 NASA JPL 星历，还原此刻太阳系的真正位置。从太阳表面到奥尔特云，无缝登陆、行走、飞行、下潜。无需安装，打开即用。" />
   <meta property="og:image" content="https://sw.icodestar.net/preview.png" />
   <meta property="og:image:width" content="1280" />
@@ -18,7 +18,7 @@
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Solar Wanderer · 遨游太阳系 — 浏览器里的 1:1 实时太阳系" />
+  <meta name="twitter:title" content="遨游太阳系 · Solar Wanderer — 浏览器里的 1:1 实时太阳系" />
   <meta name="twitter:description" content="基于 NASA JPL 星历，还原此刻太阳系的真正位置。无缝登陆、行走、飞行、下潜。无需安装。" />
   <meta name="twitter:image" content="https://sw.icodestar.net/preview.png" />
 
@@ -40,8 +40,8 @@
   {
     "@context": "https://schema.org",
     "@type": "WebApplication",
-    "name": "Solar Wanderer",
-    "alternateName": "遨游太阳系",
+    "name": "遨游太阳系",
+    "alternateName": "Solar Wanderer",
     "url": "https://sw.icodestar.net/",
     "description": "Solar Wanderer / 遨游太阳系：基于 NASA JPL 星历的浏览器端 1:1 实时太阳系探索器。此刻行星就在真实位置，支持无缝登陆、地表行走、海洋下潜、自由飞行。",
     "applicationCategory": "EducationalApplication",
@@ -68,10 +68,12 @@
 
   <div id="left-col">
     <div id="hud-time" class="panel"></div>
-    <div id="directory" class="open">
-      <div class="dir-head"><span data-i18n="dir.title">🪐 天体目录</span> <span class="dim" data-i18n="dir.sub">点击即前往</span></div>
-      <div id="dir-body"></div>
-    </div>
+  </div>
+
+  <!-- 目录移出 #left-col：移动端 .touch #left-col 会 display:none，fixed 子元素也会被隐藏 -->
+  <div id="directory" class="open">
+    <div class="dir-head"><span data-i18n="dir.title">🪐 天体目录</span> <span class="dim" data-i18n="dir.sub">点击即前往</span></div>
+    <div id="dir-body"></div>
   </div>
 
   <div id="hud">
