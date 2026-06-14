@@ -241,28 +241,19 @@ html, body {
   color: #d8ecff; border: 1px solid rgba(58, 110, 168, 0.6); border-radius: 10px;
   letter-spacing: 6px; font-family: inherit;
   backdrop-filter: blur(4px);
-  box-shadow: 0 0 20px rgba(58, 110, 168, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 26px rgba(58, 110, 168, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition: all 0.35s ease;
 }
-#start-btn:enabled {
-  cursor: pointer;
-  animation: btnPulse 3s ease-in-out infinite;
-}
+#start-btn:enabled { cursor: pointer; }
 #start-btn:disabled {
   cursor: default;
-  /* 加载中视觉与完成态保持一致：不降低不透明度、不改文字颜色、保留静态发光 */
+  /* 加载中与完成态静态视觉完全一致 */
   color: #d8ecff;
   background: linear-gradient(180deg, rgba(29, 58, 95, 0.9), rgba(18, 39, 66, 0.9));
   border-color: rgba(58, 110, 168, 0.6);
   box-shadow: 0 0 26px rgba(58, 110, 168, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
-#start-btn:disabled .btn-text {
-  color: #d8ecff;
-}
-@keyframes btnPulse {
-  0%, 100% { box-shadow: 0 0 20px rgba(58, 110, 168, 0.15), inset 0 1px 0 rgba(255,255,255,0.05); }
-  50% { box-shadow: 0 0 32px rgba(58, 110, 168, 0.35), inset 0 1px 0 rgba(255,255,255,0.05); }
-}
+#start-btn:disabled .btn-text { color: #d8ecff; }
 #start-btn:enabled:hover {
   background: linear-gradient(180deg, rgba(40, 80, 127, 0.95), rgba(23, 51, 86, 0.95));
   border-color: rgba(90, 160, 230, 0.8);
@@ -278,16 +269,14 @@ html, body {
   width: 0%;
   transition: width 0.4s ease-out, opacity 0.6s ease;
 }
-#start-btn:enabled .btn-fill {
-  opacity: 0;
-}
+#start-btn:enabled .btn-fill { opacity: 0; }
 .btn-shimmer {
   position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
   transform: skewX(-20deg);
   transition: left 0.6s ease;
 }
-#start-btn:enabled:hover .btn-shimmer { left: 150%; }
+#start-btn:hover .btn-shimmer { left: 150%; }
 
 .start-inner .hint {
   margin-top: 20px; font-size: 13px; color: #5a7a9a;
