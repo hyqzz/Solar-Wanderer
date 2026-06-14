@@ -45,6 +45,14 @@ async function run(lang) {
   const hint = await page.$eval('.hint', (e) => e.textContent.trim()).catch(() => '');
   const hasKeyHint = hint.includes('W/S');
 
+  // Check start screen title order matches requested locale
+  const titleOrder = await page.evaluate(() => {
+    const main = [...document.querySelectorAll('.title-block .main-title')].find((e) => window.getComputedStyle(e).display !== 'none');
+    if (!main) return 'missing';
+    return main.textContent.trim();
+  });
+  const titleCorrect = lang === 'zh' ? titleOrder === '遨游太阳系' : titleOrder === 'Solar Wanderer';
+
   // Tap start button via touch
   const startBtn = await page.$('#start-btn');
   await startBtn.tap();
@@ -125,6 +133,7 @@ async function run(lang) {
     tcVisible, joystickExists, menuBtnExists, menuVisible,
     dirBtnExists, dirVisible,
     helpTouchContent, keyBadgeVisible, isMobileFlagSet,
+    titleOrder, titleCorrect,
   };
 }
 
@@ -137,6 +146,7 @@ for (const lang of ['zh', 'en']) {
   const checks = [
     ['No JS errors',              r.errors.length === 0],
     ['Touch hint (not kbd)',       !r.hasKeyHint],
+    ['Title order correct',        r.titleCorrect],
     ['IS_MOBILE flag (.touch)',    r.isMobileFlagSet],
     ['#tc-root visible',           r.tcVisible],
     ['Joystick DOM exists',        r.joystickExists],
