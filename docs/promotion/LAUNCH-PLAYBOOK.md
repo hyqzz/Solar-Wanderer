@@ -1,103 +1,123 @@
-# 🚀 Solar Wanderer 发布传播手册（Launch Playbook）
+# 🚀 Solar Wanderer v2.0.0 发布传播手册（Launch Playbook）
 
-> 目标：最大化曝光、传播、使用与影响力。
-> 本手册把"必须真人操作"的发帖工作整理成**按最优时序、复制即发**的清单。
-> 自动化部分（GitHub Release、Discussions、贡献 issue、SEO、演示 GIF、社交卡片）**已由助手完成**，见文末「已完成」清单。
+> 这是**唯一入口文档**。助手已把能自动做的全做了；本手册把**只能你本人操作**的事整理成按优先级、复制即执行的清单。
+> 主线卖点：**v2.0.0 完整移动端支持——"手机上零下载就能登陆月球"**。
+> 配套：策略 `PROMOTION_PLAN.md` · 复制即发 `POSTING_SCHEDULE.md` · 平台长文案 `hn-post.md`/`reddit-posts.md`/`chinese-posts.md` · 数字口径 `FACTS.md`。
 
 ---
 
-## 📦 资产清单（发帖时按需附带）
+## ✅ 助手已完成（无需你操作）
 
-| 资产 | 路径 / 链接 | 用途 |
+- [x] **GitHub Release v2.0.0** 已发布并标为 latest：https://github.com/hyqzz/Solar-Wanderer/releases/tag/v2.0.0
+- [x] **仓库 description / homepage / topics** 已更新（15 个 topics，含 solar-system / threejs / webgl / nasa / education 等）
+- [x] **线上站点已是 v2.0.0**（sw.icodestar.net 已部署移动端版本）
+- [x] **README** 重写：移动端升为头部卖点，全部数字校准（约 200 kB gzip、0.5 m–10 万 AU、21 卫星、19 可登陆），移动端移出 roadmap
+- [x] **全部推广文案重写为 v2.0.0**：HN / Reddit / Twitter / 知乎 / B站 / 抖音竖屏 / 小红书 / 掘金 / dev.to / V2EX / Three.js Forum
+- [x] **移动端真机截图 ×5** 生成入库：`docs/promotion/mobile-shots/`（地球弧光、土星、木星、目录抽屉、火星+时间）
+- [x] **`FACTS.md` 事实基准表**：统一所有口径，杜绝数字不一致
+- [x] **Awesome 清单分支已备好**（fork + 分支 + 正确字母序条目已提交，差你点一下开 PR——见下方第 3 项）
+
+---
+
+## 📋 需你操作（按优先级，复制即可执行）
+
+### ① 录一段手机竖屏录屏（本轮最重要素材，~15 分钟）
+
+短视频是这轮最大流量点，但**必须真机实拍**（软渲染截图没质感）。
+
+**步骤：**
+1. 手机浏览器打开 `https://sw.icodestar.net`，点"进入"。
+2. 开系统录屏（iPhone：控制中心●；安卓：下拉录屏）。**竖屏**录。
+3. 按这个镜头顺序录约 30–40 秒：
+   - 地球悬在画面 →（2s）
+   - **双指捏合放大**，冲过大气，降落到月球表面 →（8s，这是核心镜头，慢一点）
+   - 抬头，地球挂在黑色天空 →（4s）
+   - 点右下 ☰ 打开目录 → 点"土星"飞过去，看环 →（6s）
+   - 点"木星"飞进云层 →（4s）
+   - 回地球，捏合到海面继续推进，潜入水下 →（5s）
+   - 点右上时间标签展开，加速看运动 →（4s）
+4. 停止录屏，存好。这段录屏供**抖音/视频号/B站竖屏 + Twitter 主推 + 小红书封面**共用。
+
+> 配文/脚本已写好：`chinese-posts.md`「抖音 / 视频号 / B站竖屏」。
+
+---
+
+### ② 按时间表发帖（核心传播，分散在一周内）
+
+**完整复制即发清单：`POSTING_SCHEDULE.md`**（每条都带标题、正文、UTM 链接、发布时间）。
+
+最小执行版（按 ROI 只发这 6 个也够）：
+
+| 顺序 | 平台 | 文案位置 |
+|---|---|---|
+| 1 | 抖音/视频号/B站竖屏（配①的录屏） | `chinese-posts.md`「抖音」 |
+| 2 | Hacker News Show HN | `hn-post.md`（含标题+正文+首评） |
+| 3 | 小红书 | `chinese-posts.md`「小红书」 |
+| 4 | Reddit r/InternetIsBeautiful + r/space | `reddit-posts.md` |
+| 5 | 知乎文章 + 3 个回答 | `chinese-posts.md`「知乎」 |
+| 6 | Twitter/X 推文串（配①录屏） | `chinese-posts.md`「Twitter/X」 |
+
+**发帖纪律：** ① 不同平台分散在不同时段，别同一小时齐发；② 发完蹲守评论区 2–3 小时逐条回复（HN 尤其看早期互动）；③ HN 标题别堆 emoji、别自己求赞。
+
+---
+
+### ③ 提交 Awesome 清单 PR（长期外链，2 次点击，~3 分钟）
+
+助手已在你的 fork 里建好分支并提交了正确格式/字母序的条目。**因 fine-grained PAT 无法对第三方仓库开 PR，需你点链接确认：**
+
+| 清单 | 一键开 PR（页面已预填，点 **Create pull request** 即可） |
+|------|--------|
+| `orbitalindex/awesome-space`（2.2k⭐） | https://github.com/orbitalindex/awesome-space/compare/master...hyqzz:awesome-space:add-solar-wanderer?expand=1 |
+| `terkelg/awesome-creative-coding`（14.9k⭐） | https://github.com/terkelg/awesome-creative-coding/compare/main...hyqzz:awesome-creative-coding:add-solar-wanderer?expand=1 |
+
+> 礼仪：一个清单只提一次；被拒就坦然接受别催。
+> 想让助手全自动开 PR？给一个 **classic PAT（勾 `public_repo`）** 即可，届时无需手动点。
+
+---
+
+### ④ 设置 GitHub 仓库社交预览图（决定每个分享链接的卡片样式，~1 分钟）
+
+GitHub 无此 API，必须手动：
+1. 打开 https://github.com/hyqzz/Solar-Wanderer/settings
+2. 下滑到 **Social preview** → **Edit → Upload an image**
+3. 选仓库里的 `docs/promotion/social-card.png`
+
+---
+
+### ⑤ Product Hunt（可选，能放大开发者圈曝光，~20 分钟）
+
+1. 提前一天在 https://www.producthunt.com/posts/new 建草稿（周二–周四 00:01 PT 上线最佳）。
+2. Tagline：`Explore the entire solar system 1:1, in your browser — now on mobile`
+3. 首图用 `social-card.png`；画廊放①的手机录屏 + 3 张 `mobile-shots/` 截图。
+4. First comment 用 `hn-post.md` 正文精简版。
+5. 上线**当天**（非前夜）请朋友去 upvote。
+
+---
+
+### ⑥ 教育 / 科普 Outreach（长尾影响力，~30 分钟）
+
+邮件模板 + 收件人方向见 `PROMOTION_PLAN.md`「教育 / 科普 outreach」。本轮强调"学生手机即可访问，无需机房安装"。给 10–20 位科普/教育博主或机构各发一封。
+
+---
+
+## 🖼 素材清单（发帖时按需取用）
+
+| 素材 | 路径 / 链接 | 用途 |
 |------|------------|------|
 | 在线体验 | https://sw.icodestar.net | 所有帖子主链接 |
 | GitHub 仓库 | https://github.com/hyqzz/Solar-Wanderer | Star / 源码 |
-| 演示 GIF（5.8 MB） | `docs/promotion/demo.gif` | README、Reddit、知乎、掘金 |
-| 演示视频 MP4（2.1 MB） | `docs/promotion/demo.mp4` | Twitter/X、B站封面、Product Hunt |
-| 社交卡片（1280×640） | `docs/promotion/social-card.png` | GitHub 社交预览、PH 缩略图 |
+| v2.0.0 Release | https://github.com/hyqzz/Solar-Wanderer/releases/tag/v2.0.0 | 版本说明 |
+| 桌面演示 GIF | `docs/promotion/demo.gif` | README、Reddit、知乎、掘金 |
+| 桌面演示 MP4 | `docs/promotion/demo.mp4` | Twitter、PH 画廊 |
+| 社交卡片 1280×640 | `docs/promotion/social-card.png` | GitHub 社交预览、PH 缩略图 |
+| **移动端真机截图 ×5** | `docs/promotion/mobile-shots/` | 小红书/PH 画廊/知乎配图 |
 | 静态截图 ×9 | `docs/sdlc/screenshots/example/` | 备用配图 |
-
-> **更长/更精致的视频**：用录屏软件（OBS / Win+G）实拍 30–60s——真实 GPU 画质远胜 headless GIF。
-> 推荐镜头：① 滚轮从地球轨道无缝降落月球→抬头看地球 ② 飞进木星云层 ③ 土星环近景 ④ 时间加速看行星公转。
-
----
-
-## ⏰ 发布时序（建议一周内，分散而非同日全发）
-
-> 时区均按**美东（ET）**——英文社区主力在此。换算：ET + 12h = 北京时间次日。
-
-### Day 0（周二或周三，最佳）
-1. **08:00 ET｜Hacker News — Show HN**
-   - 标题/正文见 `hn-post.md`
-   - ⚠️ HN 规则：标题不要堆叠 emoji；自己别先点赞/求赞；发完在评论区补一条技术细节钩子。
-   - 发布后**蹲守评论 2–3 小时**逐条认真回复（HN 排名看早期互动质量）。
-
-2. **09:30 ET｜r/InternetIsBeautiful**（见 `reddit-posts.md`）
-   - 附 GIF 或视频。这个 sub 对"浏览器里能跑"的视觉项目极友好。
-
-### Day 1
-3. **10:00 ET｜r/space** + **r/threejs**（错峰，见 `reddit-posts.md`）
-   - r/space 强调 NASA JPL 真实位置；r/threejs 强调浮动原点/对数深度/大气着色器。
-4. **晚上（北京时间黄金档）｜V2EX 分享创造**（见 `chinese-posts.md`）
-
-### Day 2
-5. **Product Hunt**（周二–周四 00:01 PT 上线，提前一天建好草稿）
-   - Tagline: *"Explore the entire solar system 1:1, in your browser"*
-   - 首图用 `social-card.png`，画廊放 `demo.mp4` + 3 张截图。
-   - First comment 用 `hn-post.md` 正文精简版。
-   - 发动朋友在**上线当天**而非前夜投票。
-
-### Day 3–5（持续放）
-6. **掘金**技术长文（见 `chinese-posts.md`，含代码，SEO 长尾流量）
-7. **知乎**回答相关问题（见 `chinese-posts.md` 的目标问题）
-8. **B站**视频（脚本见 `chinese-posts.md`），简介放 GitHub + 在线链接
-9. **Twitter/X** 推文串（见 `chinese-posts.md`），主推附 `demo.mp4`
-10. **r/webgl / r/gamedev**（技术向，见 `reddit-posts.md`）
-
-### 持续
-- **awesome 清单 PR**（见下节）——长期外链与发现入口
-- 回复所有评论/issue；每涨一批 star 截图发 Twitter 维持势头
-
----
-
-## 🔗 Awesome 清单提交（长期发现渠道）—— 已为你备好，差最后一点
-
-助手已分析各清单结构、选定**最契合**的两个旗舰清单、在你的 fork 里**建好分支并提交了正确格式/字母序的条目**。
-但你提供的是 **fine-grained PAT，无法对第三方仓库开 PR**，所以最后一步需你点击（页面已预填，点 **Create pull request** 即可）：
-
-| 清单 | 归类 | 一键开 PR |
-|------|------|-----------|
-| `orbitalindex/awesome-space`（2.2k⭐，活跃） | Astronomy → **Visualization**（与 Celestia / Gaia Sky / NASA Eyes 并列，完美契合） | https://github.com/orbitalindex/awesome-space/compare/master...hyqzz:awesome-space:add-solar-wanderer?expand=1 |
-| `terkelg/awesome-creative-coding`（14.9k⭐，活跃） | **Inspiration** | https://github.com/terkelg/awesome-creative-coding/compare/main...hyqzz:awesome-creative-coding:add-solar-wanderer?expand=1 |
-
-> 跳过了 `awesome-webgl` / `awesome-threejs` / `jonathansick/awesome-astronomy`：经核查均为**纯学习资源清单，无项目展示节**，硬塞成品项目会被拒且像刷屏。
-> 若想让助手**全自动**开 PR：提供一个 **classic PAT（勾选 `public_repo`）** 即可，届时无需你手动点击。
-> ⚠️ 礼仪：一个清单只提一次；被拒就坦然接受别催。重跑命令：`node tools/submit-awesome-prs.mjs`。
-
----
-
-## 🖼 你的两步手动操作（助手无 API 权限）
-
-**设置 GitHub 仓库社交预览图**（决定每个分享链接的卡片样式）：
-1. 打开 https://github.com/hyqzz/Solar-Wanderer/settings → 往下找 **Social preview**
-2. 点 **Edit → Upload an image**，选择仓库里的 `docs/promotion/social-card.png`
-
----
-
-## ✅ 助手已自动完成（GitHub 侧 + 站点侧）
-
-- [x] **Release v1.1.0** 发布并标为 latest（全站 feed 曝光）
-- [x] **GitHub Discussions** 已开启（社区问答中心）
-- [x] **6 个贡献 issue**（good first issue / help wanted，邀请协作者）
-- [x] **演示 GIF** 嵌入 README 顶部 hero 位（5.8 MB，纯天体画面）
-- [x] **演示 MP4** + **社交卡片** 生成入库
-- [x] **SEO**：`robots.txt` + `sitemap.xml` + JSON-LD 结构化数据，已部署并验证线上可访问
-- [x] 仓库 topics / description / homepage 完整（之前已配）
+| **手机竖屏录屏** | ⏳ 你录（第①项） | 抖音/视频号/B站/Twitter/小红书 |
 
 ---
 
 ## 📝 一句话电梯陈述（随处可用）
 
-> **中文**：用浏览器打开一个 1:1 的真实太阳系——行星位置来自 NASA JPL 星历，是此刻真实的位置。滚轮一路推进就能从地球轨道无缝降落月球表面，抬头地球挂在黑色天空里。纯网页，无需安装。
+> **中文**：用浏览器——现在手机也行——打开一个 1:1 的真实太阳系。行星位置来自 NASA JPL，是此刻真实的位置。双指一捏就能从地球轨道无缝降落月球表面，抬头地球挂在黑色天空里。免安装、免账号、开源。
 
-> **EN**: A 1:1 real-time solar system in your browser. Planet positions come from NASA JPL — they're where they actually are right now. Scroll from Earth orbit straight down to walking on the Moon, no loading. Zero install.
+> **EN**: A 1:1 real-time solar system in your browser — now on your phone. Planet positions come from NASA JPL; they're where they actually are right now. Pinch from Earth orbit straight down to standing on the Moon, no loading. Zero install, open source.

@@ -2,7 +2,7 @@
 
 # 🚀 Solar Wanderer · 遨游太阳系
 
-**A 1:1 real-time solar system explorer — entirely in your browser.**
+**A 1:1 real-time solar system explorer — entirely in your browser. Now on your phone.**
 
 Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 
@@ -11,7 +11,7 @@ Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 [![Three.js](https://img.shields.io/badge/Three.js-0.165-black?style=for-the-badge&logo=three.js)](https://threejs.org)
 [![Stars](https://img.shields.io/github/stars/hyqzz/Solar-Wanderer?style=for-the-badge&color=yellow)](https://github.com/hyqzz/Solar-Wanderer/stargazers)
 
-*Zero install · Zero account · Zero backend · ~180 kB gzipped*
+*Zero install · Zero account · Zero backend · Desktop **&** mobile · ~200 kB gzipped*
 
 <br>
 
@@ -20,6 +20,11 @@ Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 <sub>▲ Real-time, rendered live in the browser. [**Open the live demo →**](https://sw.icodestar.net)</sub>
 
 </div>
+
+---
+
+> ### 🆕 v2.0.0 — Full mobile support
+> The entire 1:1 real-time solar system now runs on your phone. **Pinch** to zoom from Earth orbit straight down to standing on the Moon, **drag** to orbit, **tap** any body to fly there. On-screen joystick for walking and flying, a persistent simulation clock, and GPU auto-tiering tuned for phones. Pull out your phone and try it — [sw.icodestar.net](https://sw.icodestar.net).
 
 ---
 
@@ -46,35 +51,38 @@ Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 </tr>
 </table>
 
-> *Left to right, top to bottom: standing on the Moon watching Earthrise · Saturn's rings · entering Jupiter's cloud deck · diving underwater on Earth · Pluto's heart-shaped plain · edge of the solar system at 120 AU*
+> *Left to right, top to bottom: standing on the Moon watching Earthrise · Saturn's rings · entering Jupiter's cloud deck · diving underwater on Earth · Pluto's heart-shaped plain · the outer solar system*
 
 ---
 
 ## Why Solar Wanderer?
 
-Most space simulators make you choose between scientific accuracy and immersion. Solar Wanderer does both.
+Most space simulators make you choose between scientific accuracy and immersion. Solar Wanderer does both — on any device.
 
 | | Solar Wanderer |
 |---|---|
-| **Scale** | True 1:1 km — every planet, every moon, every AU |
+| **Scale** | True 1:1 km — every planet, every moon, every AU, from 0.5 m to 100,000 AU |
 | **Accuracy** | NASA JPL Horizons verified · ≤0.074° for planets · 21 moons fitted from state vectors |
 | **Immersion** | Seamless descent from orbit → atmosphere → surface → walking → underwater (no cuts, no loading) |
-| **Scope** | Sun to 120 AU heliopause · asteroid belt · Kuiper belt · 4 real comets · Voyager 1 & 2 |
-| **Size** | ~170 kB gzipped JS · no server · no GPU farm |
+| **Scope** | Sun to the Oort Cloud (100,000 AU) · asteroid belt · Kuiper belt · 4 real comets · past the heliopause where Voyager 1 & 2 are now |
+| **Anywhere** | Desktop keyboard/mouse **and** full mobile touch — same physics, same scale |
+| **Size** | ~200 kB gzipped JS · no server · no GPU farm |
 
 ---
 
 ## Features
 
-- 🕐 **Real time** — launch it and see the solar system *right now*. Press `N` to return to the present after time-traveling.
-- 📏 **True 1:1 scale** — floating-origin + logarithmic depth renders 0.5 m to 120 AU without a seam or a pop.
+- 🕐 **Real time** — launch it and see the solar system *right now*. Press `N` (or tap the clock) to return to the present after time-traveling.
+- 📏 **True 1:1 scale** — floating-origin + logarithmic depth renders 0.5 m to 100,000 AU without a seam or a pop.
+- 📱 **Full mobile support** — pinch-to-zoom, one-finger orbit, two-finger pan, tap-to-fly, on-screen joystick for walk/fly, persistent clock, directory bottom sheet. GPU auto-tiering for phones.
 - 🌍 **Google Earth controls** extended to the whole heliosphere — drag, scroll, double-click-to-fly, keyboard pan, inertia, pole-flip.
 - 🚶 **Land and walk** on 19 solid worlds with real surface gravity. Jump 6× higher on the Moon. Dive underwater on Earth.
 - 🌅 **Ray-marched atmospheres** — Rayleigh+Mie scattering: blue limb from space, red sunsets, butterscotch Martian sky. Dive into Jupiter's cloud deck.
 - 🪐 **Saturn's rings** — NASA gold-brown tint, ice-particle grazing scatter, shadow cast onto the planet body.
 - 🚀 **6DOF free flight** 1 m/s → 2 AU/s, time warp ×10 years/s, instant freeze anywhere.
-- ☄️ **Full heliosphere** — asteroid belt, Kuiper belt, zodiacal light, termination shock, heliopause.
-- 🔭 **21 real bright stars** (Hipparcos catalog, Chinese/Western names, light-years displayed).
+- ☄️ **Full heliosphere** — asteroid belt, Kuiper belt, 28 real TNOs, zodiacal light, termination shock, heliopause, Oort Cloud.
+- 🔭 **21 real bright stars** (Hipparcos catalog, Chinese/Western names, light-years displayed) with real 3D parallax.
+- 🌐 **Bilingual** — Chinese / English UI, auto-detected from your browser language.
 - 🔬 **Verifiable** — `npm run verify` cross-checks live against the JPL Horizons API.
 
 ---
@@ -88,20 +96,22 @@ npm install
 npm run dev      # → http://localhost:5173
 ```
 
-Or just open **[sw.icodestar.net](https://sw.icodestar.net)** — nothing to install.
+Or just open **[sw.icodestar.net](https://sw.icodestar.net)** on any device — nothing to install.
 
 ---
 
 ## Controls
 
-> Press **H** in-game for the full control reference.
+> Press **H** in-game (or tap **❓**) for the full control reference.
+
+### 🖱 Desktop
 
 | Action | Control |
 |--------|---------|
 | Rotate around focus | Left-drag |
 | Zoom (screen-center) | Scroll wheel / PageUp PageDown |
 | Pan space | Right-drag |
-| **Fly to a body** | Double-click its label, or type in the 🪐 directory |
+| **Fly to a body** | Double-click its label, or pick it in the 🪐 directory |
 | **Click a body** | Lock focus — then scroll zooms straight toward it |
 | Scroll all the way in | **Seamless landing** → surface walking |
 | Scroll out while walking | **Seamless takeoff** back to orbit |
@@ -111,7 +121,20 @@ Or just open **[sw.icodestar.net](https://sw.icodestar.net)** — nothing to ins
 | Time warp | `[` / `]` slower/faster · `P` pause · `N` back to now |
 | Inertial view | `V` — watch moons orbit while time-warping |
 
-**Try this:** open the directory → click *Moon* → scroll all the way in → you land on the surface → look up: the blue Earth hangs in the Moon's black sky.
+### 📱 Mobile
+
+| Action | Gesture |
+|--------|---------|
+| Rotate around focus | One-finger drag |
+| Zoom | Pinch in / out |
+| Pan space | Two-finger drag |
+| **Fly to a body** | Tap its label, or pick it in the directory sheet (☰) |
+| Land / take off | Pinch all the way in to land · use the on-screen **Takeoff** button to leave |
+| Walk / fly | On-screen joystick + look-drag |
+| Time & display | Tap the clock (top-right) to expand time warp + toggles |
+| Directory | Tap **☰** (bottom-right) for the full body catalog |
+
+**Try this:** open the directory → tap *Moon* → pinch all the way in → you land on the surface → look up: the blue Earth hangs in the Moon's black sky.
 
 ---
 
@@ -128,7 +151,7 @@ Or just open **[sw.icodestar.net](https://sw.icodestar.net)** — nothing to ins
 npm test          # 33 unit/accuracy tests (offline JPL fixtures)
 npm run verify    # live cross-check against NASA JPL Horizons API
 npm run fit-moons # refit moon orbits to today's epoch
-npm run build     # → dist/ (598 kB JS, 169 kB gzip) — pure static deploy
+npm run build     # → dist/ (684 kB JS, ~200 kB gzip) — pure static deploy
 ```
 
 ---
@@ -148,7 +171,7 @@ src/
 │   ├── world.js        # Floating-origin scene graph
 │   └── quality.js      # GPU auto-tiering (discrete GPU detect, FPS guard)
 ├── scene/          # Renderers: sun shader, atmospheres, rings, terrain, starfield…
-└── ui/             # HUD, labels, directory, edu-facts
+└── ui/             # HUD, labels, directory, edu-facts, i18n, touch controls
 ```
 
 Three.js 0.165 · Vite 5 · native ESM · WebGL2 · logarithmic depth buffer.
@@ -163,13 +186,15 @@ Three.js 0.165 · Vite 5 · native ESM · WebGL2 · logarithmic depth buffer.
 - [ ] Save/restore bookmarks (position + time)
 - [ ] VSOP87 + ELP2000 for ±3000 year validity
 
+✅ **Done in v2.0.0:** full mobile touch support.
+
 ---
 
 ## Contributing
 
 Issues and PRs are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Ideas especially wanted: translations, real terrain DEMs, eclipse shadows, sound, mobile touch controls.
+Ideas especially wanted: translations, real terrain DEMs, eclipse shadows, ambient sound.
 
 **⭐ Star the repo** if it made you feel small in a good way.
 
