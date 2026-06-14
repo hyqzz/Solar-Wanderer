@@ -31,17 +31,13 @@ export function createAtmosphere(phys) {
 
   const mat = new THREE.ShaderMaterial({
     uniforms,
-    side: THREE.BackSide,
+    // 外侧：FrontSide + depthTest 让大气只绘制在最近的 opaque 表面之前，
+    // 从而被前方卫星/行星本体正确遮挡（#R15 替代方案，避免模板缓冲失效）。
+    // 内侧：DoubleSide 保证相机在大气壳内部时仍能看到天空穹顶。
+    side: THREE.DoubleSide,
     transparent: true,
     depthWrite: false,
-    // 保留 depthTest:false：大气散射需要覆盖在行星本体盘面上（地球晨昏/蓝雾），
-    // 开启深度测试会让行星本体裁掉大气，导致地球外观“失真”。
-    // 改用模板缓冲解决卫星遮挡：卫星在它所占据的像素写入 stencil=1，
-    // 大气只在 stencil=0 处绘制，从而被前方卫星正确遮挡。
-    depthTest: false,
-    stencilWrite: false,
-    stencilRef: 0,
-    stencilFunc: THREE.EqualStencilFunc,
+    depthTest: true,
     blending: THREE.CustomBlending,
     blendSrc: THREE.OneFactor,
     blendDst: THREE.OneMinusSrcAlphaFactor,

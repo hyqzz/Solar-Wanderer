@@ -33,7 +33,7 @@ import { t, bodyName, LANG, applyDomI18n } from './ui/i18n.js';
 const canvas = document.getElementById('app');
 // powerPreference: 多显卡系统由浏览器选高性能独显（R7 #8）
 const renderer = new THREE.WebGLRenderer({
-  canvas, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance', stencil: true,
+  canvas, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance',
 });
 initQuality(renderer); // 必须在 buildSolarSystem 之前（着色器步进/网格密度构建期固化）
 renderer.setSize(window.innerWidth, window.innerHeight);
