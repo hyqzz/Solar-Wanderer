@@ -50,6 +50,7 @@ export class Input {
     this._lastTapTime = 0;
     this._lastTapPos  = { x: 0, y: 0 };
     this.muteUntil    = 0;
+    this._wasPinching = false;      // true during/after 2-finger gesture → suppresses tap
 
     // ── Keyboard ──────────────────────────────────────────────────────────
     dom.addEventListener('keydown', (e) => {
@@ -116,6 +117,7 @@ export class Input {
         } else if (this._pointers.size === 2) {
           // Two fingers: end single-drag, start pinch+pan
           this.drag.active = false;
+          this._wasPinching = true;
           const pts = [...this._pointers.values()];
           this._pinchDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
           this._pinchMid  = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
@@ -157,11 +159,12 @@ export class Input {
         const newMid  = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
 
         // Pinch → wheel equivalent (spread = zoom in = wheel < 0)
-        if (this._pinchDist > 0 && newDist > 0) {
-          const ratio  = newDist / this._pinchDist;
-          // Map log-ratio to wheel units (1.12 is orbitCam's per-unit base)
-          const wEq = -(Math.log(ratio) / Math.log(1.12)) * 1.6;
-          this.wheel += wEq;
+        if (this._pinchDist > 5 && newDist > 5) {
+          const ratio = newDist / this._pinchDist;
+          if (ratio > 0.1 && ratio < 10) { // guard against degenerate values
+            const wEq = -(Math.log(ratio) / Math.log(1.12)) * 1.6;
+            this.wheel += wEq;
+          }
         }
         this._pinchDist = newDist;
 
@@ -181,10 +184,11 @@ export class Input {
       this._ptrDownPos.delete(e.pointerId);
 
       // Touch tap detection → synthesize click / dblclick on canvas
+      const wasPinching = this._wasPinching;
       if ((e.pointerType === 'touch' || e.pointerType === 'pen') && downPos) {
         const moved   = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
         const elapsed = performance.now() - this._tapStart;
-        if (moved < 14 && elapsed < 400 && this._pointers.size === 0) {
+        if (moved < 14 && elapsed < 400 && this._pointers.size === 0 && !wasPinching) {
           const now = performance.now();
           const dblDist = Math.hypot(e.clientX - this._lastTapPos.x, e.clientY - this._lastTapPos.y);
           if (now - this._lastTapTime < 360 && dblDist < 32) {
@@ -206,6 +210,7 @@ export class Input {
       if (remaining === 0) {
         this.drag.active = false; this.pan.active = false; this.look.active = false;
         this._pinchDist  = 0;    this._pinchMid  = null;
+        this._wasPinching = false;
       } else if (remaining === 1) {
         // Back to single finger after two-finger gesture
         this._pinchDist = 0; this._pinchMid = null;
@@ -226,6 +231,26 @@ export class Input {
     });
 
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // ── Global: capture 2nd finger even when it lands on HUD/label elements ──
+    // Without this, a second touch on a non-canvas element is never registered,
+    // so canvas never enters pinch mode.
+    window.addEventListener('pointerdown', (e) => {
+      if (e.target === canvas) return;               // canvas already handled it
+      if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+      if (this._pointers.size < 1) return;           // only care about 2nd+ finger
+      if (this._pointers.has(e.pointerId)) return;   // duplicate
+      try { canvas.setPointerCapture(e.pointerId); } catch { return; }
+      this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this._ptrDownPos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this._pointers.size === 2) {
+        this.drag.active = false; this.pan.active = false;
+        this._wasPinching = true;
+        const pts = [...this._pointers.values()];
+        this._pinchDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        this._pinchMid  = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      }
+    }, { capture: true, passive: true });
   }
 
   down(code) { return this.keys.has(code); }
