@@ -135,7 +135,10 @@ export class HUD {
 
   setLoading(done, total) {
     const el = document.getElementById('loading-progress');
+    const bar = document.getElementById('load-bar');
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     if (el) el.textContent = t('start.loadingTex', { done, total });
+    if (bar) bar.style.width = pct + '%';
   }
 
   loadingDone() {

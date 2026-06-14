@@ -73,13 +73,33 @@
   </div>
 
   <div id="start">
+    <div class="start-bg">
+      <div class="nebula-glow"></div>
+      <div class="star-particles"></div>
+    </div>
     <div class="start-inner">
-      <h1>遨游太阳系 <span>SOLAR WANDERER</span></h1>
+      <div class="title-block">
+        <h1 class="main-title">遨游太阳系</h1>
+        <span class="sub-title">SOLAR WANDERER</span>
+      </div>
+
       <p class="sub" data-i18n="start.sub">太阳系 1:1 实时模拟 · 基于 NASA JPL 星历还原此刻太阳系 · 自由探索整个太阳系</p>
-      <div id="loading"><div class="spinner"></div><div id="loading-progress" data-i18n="start.loading">加载中…</div></div>
-      <button id="start-btn" style="display:none" data-i18n="start.enter">点击进入太阳系</button>
+
+      <div id="loading">
+        <div class="load-track"><div class="load-bar" id="load-bar"></div></div>
+        <div id="loading-progress" data-i18n="start.loading">加载中…</div>
+      </div>
+
+      <button id="start-btn" style="display:none" data-i18n="start.enter">
+        <span class="btn-text">点击进入太阳系</span>
+        <span class="btn-shimmer"></span>
+      </button>
+
       <p class="hint" data-i18n="start.hint">进入后单击画面锁定鼠标 · H 查看完整操作说明</p>
-      <a id="github-star" href="https://github.com/hyqzz/Solar-Wanderer" target="_blank" rel="noopener">⭐ Star on GitHub</a>
+
+      <a id="github-star" href="https://github.com/hyqzz/Solar-Wanderer" target="_blank" rel="noopener">
+        <span class="star-icon">⭐</span><span data-i18n="start.star">Star on GitHub</span>
+      </a>
     </div>
   </div>
 

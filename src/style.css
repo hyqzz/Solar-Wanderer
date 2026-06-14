@@ -149,27 +149,176 @@ html, body {
 /* ---------- 启动屏 ---------- */
 #start {
   position: fixed; inset: 0; z-index: 100;
-  background: radial-gradient(ellipse at center, #0a1322 0%, #02050c 100%);
+  background: radial-gradient(ellipse at center, #0c1a2e 0%, #02050c 70%);
   display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
 }
-.start-inner { text-align: center; }
-.start-inner h1 { font-size: 56px; letter-spacing: 12px; color: #eaf4ff; }
-.start-inner h1 span { display: block; font-size: 16px; letter-spacing: 18px; color: #6fa8d8; margin-top: 4px; }
-.start-inner .sub { margin: 22px 0; color: #8db4d8; font-size: 15px; }
+
+/* 背景氛围：星云呼吸 + 粒子飘移（纯 CSS，无额外 DOM） */
+.start-bg {
+  position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+}
+.nebula-glow {
+  position: absolute; top: 50%; left: 50%; width: 140vmax; height: 140vmax;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(25, 70, 125, 0.22) 0%, rgba(12, 40, 80, 0.08) 40%, transparent 70%);
+  animation: nebulaPulse 10s ease-in-out infinite;
+}
+@keyframes nebulaPulse {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+}
+.star-particles {
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(2px 2px at 20% 30%, rgba(180, 220, 255, 0.9), transparent),
+    radial-gradient(1.5px 1.5px at 80% 20%, rgba(200, 230, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 50% 70%, rgba(160, 200, 240, 0.6), transparent),
+    radial-gradient(2px 2px at 70% 60%, rgba(190, 215, 250, 0.8), transparent),
+    radial-gradient(1px 1px at 10% 80%, rgba(170, 210, 250, 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 90% 90%, rgba(200, 225, 255, 0.7), transparent);
+  background-size: 200% 200%;
+  animation: particleDrift 30s linear infinite;
+}
+@keyframes particleDrift {
+  0% { background-position: 0% 0%, 100% 0%, 50% 100%, 0% 50%, 100% 100%, 50% 0%; }
+  100% { background-position: 100% 100%, 0% 100%, 50% 0%, 100% 50%, 0% 0%, 50% 100%; }
+}
+
+/* 玻璃态内容卡片 */
+.start-inner {
+  position: relative; z-index: 1;
+  text-align: center;
+  padding: 56px 72px;
+  background: rgba(8, 16, 28, 0.55);
+  border: 1px solid rgba(110, 160, 210, 0.22);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 0 40px rgba(0, 0, 0, 0.6),
+    inset 0 0 60px rgba(110, 160, 210, 0.04),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+  animation: cardFloat 6s ease-in-out infinite, cardFadeIn 1.2s ease-out both;
+}
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: scale(0.96) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* 标题：中文主标题 + 英文副标题 */
+.title-block { margin-bottom: 6px; }
+.main-title {
+  font-size: 64px; font-weight: 300; letter-spacing: 14px;
+  color: #eaf4ff;
+  text-shadow: 0 0 20px rgba(127, 196, 255, 0.25), 0 0 60px rgba(60, 130, 210, 0.15);
+  animation: titleGlow 4s ease-in-out infinite, titleFadeIn 1s ease-out 0.3s both;
+}
+@keyframes titleGlow {
+  0%, 100% { text-shadow: 0 0 20px rgba(127, 196, 255, 0.25), 0 0 60px rgba(60, 130, 210, 0.15); }
+  50% { text-shadow: 0 0 30px rgba(127, 196, 255, 0.4), 0 0 80px rgba(60, 130, 210, 0.25); }
+}
+.sub-title {
+  display: block;
+  font-size: 15px; letter-spacing: 20px; font-weight: 400;
+  color: #6fa8d8; margin-top: 8px;
+  animation: subShimmer 5s ease-in-out infinite, titleFadeIn 1s ease-out 0.6s both;
+}
+@keyframes subShimmer {
+  0%, 100% { opacity: 0.7; letter-spacing: 20px; }
+  50% { opacity: 1; letter-spacing: 22px; }
+}
+@keyframes titleFadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.start-inner .sub {
+  margin: 24px 0 28px;
+  color: #8db4d8; font-size: 15px; line-height: 1.6;
+  animation: fadeInUp 0.8s ease-out 0.9s both;
+}
+
+/* 加载进度条 */
+#loading {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  justify-content: center; color: #7fa8d0;
+  animation: fadeInUp 0.6s ease-out 0.6s both;
+}
+.load-track {
+  width: 220px; height: 4px;
+  background: rgba(110, 160, 210, 0.15);
+  border-radius: 2px; overflow: hidden;
+}
+.load-bar {
+  width: 0%; height: 100%;
+  background: linear-gradient(90deg, #4a8fd9, #7fc4ff, #a8e0ff);
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(127, 196, 255, 0.4);
+  transition: width 0.4s ease-out;
+}
+#loading-progress { font-size: 13px; letter-spacing: 1px; }
+
+/* 进入按钮：发光 + 脉冲 + 扫光 */
 #start-btn {
-  font-size: 20px; padding: 14px 52px; cursor: pointer;
-  background: linear-gradient(180deg, #1d3a5f, #122742);
-  color: #d8ecff; border: 1px solid #3a6ea8; border-radius: 8px;
+  position: relative; overflow: hidden;
+  font-size: 18px; padding: 16px 56px; cursor: pointer;
+  background: linear-gradient(180deg, rgba(29, 58, 95, 0.9), rgba(18, 39, 66, 0.9));
+  color: #d8ecff; border: 1px solid rgba(58, 110, 168, 0.6); border-radius: 10px;
   letter-spacing: 6px; font-family: inherit;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 0 20px rgba(58, 110, 168, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.35s ease;
+  animation: btnPulse 3s ease-in-out infinite, fadeInUp 0.8s ease-out both;
 }
-#start-btn:hover { background: linear-gradient(180deg, #28507f, #173356); }
-.start-inner .hint { margin-top: 18px; font-size: 13px; color: #5a7a9a; }
-#loading { display: flex; align-items: center; gap: 12px; justify-content: center; color: #7fa8d0; }
-.spinner {
-  width: 18px; height: 18px; border: 2px solid #2a4a6a; border-top-color: #7fc4ff;
-  border-radius: 50%; animation: spin 0.9s linear infinite;
+@keyframes btnPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(58, 110, 168, 0.15), inset 0 1px 0 rgba(255,255,255,0.05); }
+  50% { box-shadow: 0 0 32px rgba(58, 110, 168, 0.35), inset 0 1px 0 rgba(255,255,255,0.05); }
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+#start-btn:hover {
+  background: linear-gradient(180deg, rgba(40, 80, 127, 0.95), rgba(23, 51, 86, 0.95));
+  border-color: rgba(90, 160, 230, 0.8);
+  box-shadow: 0 0 40px rgba(58, 110, 168, 0.4), 0 0 80px rgba(58, 110, 168, 0.15);
+  transform: translateY(-2px);
+}
+.btn-text { position: relative; z-index: 1; }
+.btn-shimmer {
+  position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+}
+#start-btn:hover .btn-shimmer { left: 150%; }
+
+.start-inner .hint {
+  margin-top: 20px; font-size: 13px; color: #5a7a9a;
+  animation: fadeInUp 0.8s ease-out 1.2s both;
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* GitHub Star */
+#github-star {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 22px;
+  padding: 8px 20px; font-size: 13px; font-family: inherit;
+  color: #e6edf3; background: rgba(33, 110, 60, 0.35);
+  border: 1px solid rgba(63, 185, 80, 0.4); border-radius: 20px;
+  text-decoration: none; letter-spacing: 0.5px;
+  transition: background 0.25s, border-color 0.25s, transform 0.25s;
+  animation: fadeInUp 0.8s ease-out 1.5s both;
+}
+#github-star:hover {
+  background: rgba(63, 185, 80, 0.25); border-color: #3fb950;
+  transform: translateY(-1px);
+}
+.star-icon { display: inline-block; transition: transform 0.3s ease; }
+#github-star:hover .star-icon { transform: rotate(15deg) scale(1.15); }
 
 /* ---------- 帮助 ---------- */
 #help {
