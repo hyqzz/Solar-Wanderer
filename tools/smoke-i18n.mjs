@@ -34,7 +34,7 @@ async function run(locale) {
   const dir = await page.evaluate(() => {
     const reg = window.__game.registry;
     return {
-      hasBelts: reg.has('belts'), hasOort: reg.has('oortcloud'),
+      hasAsteroidBelt: reg.has('asteroidbelt'), hasKuiperBelt: reg.has('kuiperbelt'), hasOort: reg.has('oortcloud'),
       regionGroup: [...document.querySelectorAll('#dir-body summary')].map((s) => s.textContent),
     };
   });

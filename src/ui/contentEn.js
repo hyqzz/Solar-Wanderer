@@ -49,7 +49,8 @@ export const DESC_EN = {
   termshock: 'The boundary where the solar wind abruptly drops from supersonic to subsonic (~90 AU). Voyager 1 crossed it in 2004.',
   heliopause: 'The boundary where solar-wind pressure balances the interstellar medium — the edge of the Sun\'s domain (~121 AU). Beyond it lies interstellar space.',
   // ── 区域 ──
-  belts: 'The Solar System\'s main disk structures: the asteroid belt (2.1–3.4 AU) and the Kuiper Belt (30–50 AU).',
+  asteroidbelt: 'The main asteroid belt (2.1–3.4 AU): a flattened disk of hundreds of thousands of small bodies between Mars and Jupiter.',
+  kuiperbelt: 'The Kuiper Belt (30–50 AU): a disk of icy bodies beyond Neptune, home to Pluto, Haumea, Makemake and countless smaller Kuiper Belt objects.',
   oortcloud: 'The Solar System\'s outermost spherical comet cloud, ~2,000–100,000 AU from the Sun — the home of long-period comets.',
   // ── 海外天体（TNO）──
   eris: 'The largest known dwarf planet (~2326 km across), slightly bigger than Pluto. Its discovery directly triggered Pluto\'s reclassification. A high-albedo scattered-disk object coated in nitrogen ice and methane frost; orbital period ~559 years.',

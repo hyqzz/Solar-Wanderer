@@ -119,10 +119,12 @@ export function createOortCloud() {
   const group = new THREE.Group();
   const shells = [];
 
-  // 内奥尔特云（Hills Cloud）：2000–20000 AU，轻度扁化、倾角集中在 ±30°
+  // 内奥尔特云（Hills Cloud）：2000–20000 AU。真实奥尔特云整体近似球形，仅存在
+  // 一个相对赤道面的微弱累积（而非盘状低圆柱）；这里用球面分布 + 赤道外概率轻微降低
+  // 来近似，避免相机内部看时呈现“扁平环带”的出戏形状。
   const inner = makeOortShell({
     count: 1400, rMinAU: 2000, rMaxAU: 20000,
-    inclSigmaDeg: 30, spherical: false,
+    inclSigmaDeg: 30, spherical: true,
     color: 0x8ca8c8, size: 1.1, opacity: 0.20, seed: 31415,
   });
   // 外奥尔特云：20000–100000 AU，近球形，各向同性

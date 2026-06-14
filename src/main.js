@@ -238,10 +238,15 @@ function buildRegistry() {
   // 被排除（无固体表面、不可点击拾取/缩放收敛），仅用于目录前往与远距科教标注。
   // radiusKm 决定标签隐藏阈值（dist < radiusKm×1.6 时隐藏）：取各结构的代表尺度，
   // 使标签仅在足够远、整个结构入画时才出现，避免贴近行星时挡在太阳前方。
-  registry.set('belts', {
-    nameZh: '小行星带与柯伊伯带', nameEn: 'Asteroid & Kuiper Belts', kind: 'region',
-    desc: '太阳系的主要盘状结构：主小行星带（2.1–3.4 AU）与柯伊伯带（30–50 AU）。',
-    phys: { radiusKm: 3 * KM_PER_AU }, posKm: new Float64Array(3), relObj: belts, viewDist: 9 * KM_PER_AU,
+  registry.set('asteroidbelt', {
+    nameZh: '小行星带', nameEn: 'Asteroid Belt', kind: 'region',
+    desc: '主小行星带（2.1–3.4 AU）：火星与木星之间数十万颗小天体的盘状结构。',
+    phys: { radiusKm: 2 * KM_PER_AU }, posKm: new Float64Array(3), relObj: belts, viewDist: 5.5 * KM_PER_AU,
+  });
+  registry.set('kuiperbelt', {
+    nameZh: '柯伊伯带', nameEn: 'Kuiper Belt', kind: 'region',
+    desc: '柯伊伯带（30–50 AU）：海王星轨道外的冰质天体盘，冥王星、妊神星等均位于其中。',
+    phys: { radiusKm: 40 * KM_PER_AU }, posKm: new Float64Array(3), relObj: belts, viewDist: 75 * KM_PER_AU,
   });
   registry.set('oortcloud', {
     nameZh: '奥尔特云', nameEn: 'Oort Cloud', kind: 'region',
