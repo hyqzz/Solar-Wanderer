@@ -85,13 +85,9 @@
 
       <p class="sub" data-i18n="start.sub">太阳系 1:1 实时模拟 · 基于 NASA JPL 星历还原此刻太阳系 · 自由探索整个太阳系</p>
 
-      <div id="loading">
-        <div class="load-track"><div class="load-bar" id="load-bar"></div></div>
-        <div id="loading-progress" data-i18n="start.loading">加载中…</div>
-      </div>
-
-      <button id="start-btn" style="display:none" data-i18n="start.enter">
-        <span class="btn-text">点击进入太阳系</span>
+      <button id="start-btn" disabled>
+        <span class="btn-fill" id="start-btn-fill"></span>
+        <span class="btn-text" id="start-btn-text" data-i18n="start.loading">加载中…</span>
         <span class="btn-shimmer"></span>
       </button>
 

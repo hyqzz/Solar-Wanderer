@@ -134,18 +134,23 @@ export class HUD {
   }
 
   setLoading(done, total) {
-    const el = document.getElementById('loading-progress');
-    const bar = document.getElementById('load-bar');
+    const fill = document.getElementById('start-btn-fill');
+    const text = document.getElementById('start-btn-text');
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-    if (el) el.textContent = t('start.loadingTex', { done, total });
-    if (bar) bar.style.width = pct + '%';
+    if (text) text.textContent = t('start.loading') + ' ' + pct + '%';
+    if (fill) fill.style.width = pct + '%';
   }
 
   loadingDone() {
-    const el = document.getElementById('loading');
-    if (el) el.style.display = 'none';
+    const fill = document.getElementById('start-btn-fill');
+    const text = document.getElementById('start-btn-text');
     const btn = document.getElementById('start-btn');
-    if (btn) btn.style.display = '';
+    if (fill) fill.style.width = '100%';
+    if (text) text.textContent = t('start.enter');
+    if (btn) {
+      btn.disabled = false;
+      btn.style.cursor = 'pointer';
+    }
   }
 }
 

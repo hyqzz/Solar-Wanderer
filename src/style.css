@@ -242,56 +242,57 @@ html, body {
   animation: fadeInUp 0.8s ease-out 0.9s both;
 }
 
-/* 加载进度条 */
-#loading {
-  display: flex; flex-direction: column; align-items: center; gap: 14px;
-  justify-content: center; color: #7fa8d0;
-  animation: fadeInUp 0.6s ease-out 0.6s both;
-}
-.load-track {
-  width: 220px; height: 4px;
-  background: rgba(110, 160, 210, 0.15);
-  border-radius: 2px; overflow: hidden;
-}
-.load-bar {
-  width: 0%; height: 100%;
-  background: linear-gradient(90deg, #4a8fd9, #7fc4ff, #a8e0ff);
-  border-radius: 2px;
-  box-shadow: 0 0 8px rgba(127, 196, 255, 0.4);
-  transition: width 0.4s ease-out;
-}
-#loading-progress { font-size: 13px; letter-spacing: 1px; }
-
-/* 进入按钮：发光 + 脉冲 + 扫光 */
+/* 进入按钮：加载与完成状态保持同一视觉框架，仅文字/填充变化 */
 #start-btn {
   position: relative; overflow: hidden;
-  font-size: 18px; padding: 16px 56px; cursor: pointer;
+  font-size: 18px; padding: 16px 56px;
   background: linear-gradient(180deg, rgba(29, 58, 95, 0.9), rgba(18, 39, 66, 0.9));
   color: #d8ecff; border: 1px solid rgba(58, 110, 168, 0.6); border-radius: 10px;
   letter-spacing: 6px; font-family: inherit;
   backdrop-filter: blur(4px);
   box-shadow: 0 0 20px rgba(58, 110, 168, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition: all 0.35s ease;
-  animation: btnPulse 3s ease-in-out infinite, fadeInUp 0.8s ease-out both;
+}
+#start-btn:enabled {
+  cursor: pointer;
+  animation: btnPulse 3s ease-in-out infinite;
+}
+#start-btn:disabled {
+  cursor: default;
+  opacity: 0.92;
+}
+#start-btn:disabled .btn-text {
+  color: #a8c8e8;
 }
 @keyframes btnPulse {
   0%, 100% { box-shadow: 0 0 20px rgba(58, 110, 168, 0.15), inset 0 1px 0 rgba(255,255,255,0.05); }
   50% { box-shadow: 0 0 32px rgba(58, 110, 168, 0.35), inset 0 1px 0 rgba(255,255,255,0.05); }
 }
-#start-btn:hover {
+#start-btn:enabled:hover {
   background: linear-gradient(180deg, rgba(40, 80, 127, 0.95), rgba(23, 51, 86, 0.95));
   border-color: rgba(90, 160, 230, 0.8);
   box-shadow: 0 0 40px rgba(58, 110, 168, 0.4), 0 0 80px rgba(58, 110, 168, 0.15);
   transform: translateY(-2px);
 }
 .btn-text { position: relative; z-index: 1; }
+.btn-fill {
+  position: absolute; bottom: 0; left: 0; height: 3px;
+  background: linear-gradient(90deg, #4a8fd9, #7fc4ff, #a8e0ff);
+  border-radius: 0 0 0 10px;
+  box-shadow: 0 0 8px rgba(127, 196, 255, 0.5);
+  width: 0%;
+  transition: width 0.4s ease-out, opacity 0.6s ease;
+}
+#start-btn:enabled .btn-fill {
+  opacity: 0;
+}
 .btn-shimmer {
   position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
   transform: skewX(-20deg);
   transition: left 0.6s ease;
 }
-#start-btn:hover .btn-shimmer { left: 150%; }
+#start-btn:enabled:hover .btn-shimmer { left: 150%; }
 
 .start-inner .hint {
   margin-top: 20px; font-size: 13px; color: #5a7a9a;
