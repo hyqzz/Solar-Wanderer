@@ -91,8 +91,10 @@ export class HeightField {
     h += 0.05 * n.fbm(dir.x * 900, dir.y * 900, dir.z * 900, 3);
     h += 0.022 * n.fbm(dir.x * 8000, dir.y * 8000, dir.z * 8000, 2);
     h += 0.009 * n.fbm(dir.x * 42000, dir.y * 42000, dir.z * 42000, 2);
+    // 安全上限：噪声幅度不超过天体平均半径的 5%，防止小天体（Phobos 等）山脉过高
+    const effAmp = Math.min(sp.ampKm, this.phys.radiusKm * 0.05);
     // 抬升保证地形在全球光滑球面之上
-    return R + sp.ampKm * (h * 0.5 + 0.62);
+    return R + effAmp * (h * 0.5 + 0.62);
   }
 
   isOcean(dir) {

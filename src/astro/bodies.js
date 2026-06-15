@@ -48,8 +48,10 @@ export const BODIES = {
     surface: { ampKm: 8, roughness: 0.6, craters: 0.6, palette: 'mars' },
     atmosphere: {
       // 火星白昼天空呈奶油黄褐色——主要来自悬浮尘埃的散射（红光占优），实拍：海盗号/毅力号
+      // mieG 从 0.55 降至 0.32：单散射 Mie 前向不对称在 0.55 时造成日照半球亮度约 66 倍于
+      // 逆日半球，呈现不真实的"半球更亮"——实拍显示火星天空亮度梯度更温和（多重散射填充阴影侧）。
       heightKm: 80, rayleighScaleKm: 11.1, mieScaleKm: 9,
-      rayleigh: [5.0e-7, 3.0e-7, 1.2e-7], mie: 1.5e-6, mieG: 0.55, multiplier: 2.2,
+      rayleigh: [5.0e-7, 3.0e-7, 1.2e-7], mie: 1.2e-6, mieG: 0.32, multiplier: 2.2,
     },
     textures: { map: 'mars.jpg' },
     desc: '红色行星。拥有太阳系最高的火山（奥林帕斯山 21.9 km）与最长的峡谷（水手谷 4000 km）。稀薄 CO₂ 大气，尘暴可席卷全球。',
@@ -118,11 +120,13 @@ export const MOON_PHYS = {
                desc: '地球唯一的天然卫星，潮汐锁定使其永远以同一面朝向地球。人类唯一踏足过的地外天体。' },
   phobos:    { nameZh: '火卫一', nameEn: 'Phobos', parent: 'mars', radiusKm: 11.27, gm: 7.087e-4,
                landable: true, shape: { dims: [27.0, 18.4, 22.0] }, // 真实土豆状（长轴指向火星）
-               surface: { ampKm: 1.5, roughness: 0.7, craters: 1.5, palette: 'gray' },
+               // ampKm 从 1.5 降至 0.5（≈4.4% R）：原值 13% R 使山脉视觉上远超真实 Phobos 地形起伏
+               surface: { ampKm: 0.5, roughness: 0.7, craters: 1.0, palette: 'gray' },
                desc: '火星的大卫星，土豆状（27×22×18 km），轨道极低（9376 km），正以每百年 1.8 米的速度向火星坠落。' },
   deimos:    { nameZh: '火卫二', nameEn: 'Deimos', parent: 'mars', radiusKm: 6.2, gm: 9.6e-5,
                landable: true, shape: { dims: [15.0, 11.0, 12.2] }, // 不规则（15×12.2×11 km）
-               surface: { ampKm: 0.8, roughness: 0.7, craters: 1.2, palette: 'gray' },
+               // ampKm 从 0.8 降至 0.25（≈4% R）：与 Phobos 同理，小天体噪声幅度需按半径缩放
+               surface: { ampKm: 0.25, roughness: 0.7, craters: 1.0, palette: 'gray' },
                desc: '火星较小较远的卫星，不规则状，表面覆盖细腻尘埃层。' },
   io:        { nameZh: '木卫一', nameEn: 'Io', parent: 'jupiter', radiusKm: 1821.6, gm: 5.916e3,
                landable: true, surface: { ampKm: 4, roughness: 0.5, craters: 0.1, palette: 'io' },

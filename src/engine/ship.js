@@ -163,7 +163,8 @@ export class Input {
         // Pinch → wheel equivalent (spread = zoom in = wheel < 0)
         if (this._pinchDist > 5 && newDist > 5) {
           const ratio = newDist / this._pinchDist;
-          if (ratio > 0.1 && ratio < 10) { // guard against degenerate values
+          // 1.5% 死区：双指平移时手指间距微变产生虚假滚轮事件 → 叠加缩放与平移、干扰平移手势
+          if (ratio > 0.1 && ratio < 10 && Math.abs(ratio - 1) > 0.015) {
             const wEq = -(Math.log(ratio) / Math.log(1.12)) * 1.6;
             this.wheel += wEq;
           }
@@ -264,6 +265,16 @@ export class Input {
 
   down(code) { return this.keys.has(code); }
   tapped(code) { return this.justPressed.has(code); }
+
+  /** 模式切换时重置所有手势状态（拖拽 / 平移 / 捏合），防止旧手势"泄漏"到新模式 */
+  cancelGestures() {
+    this.drag.active = false; this.pan.active = false; this.look.active = false;
+    this._pinchDist = 0; this._pinchMid = null;
+    this._wasPinching = false;
+    this.drag.dx = 0; this.drag.dy = 0;
+    this.pan.dx = 0; this.pan.dy = 0;
+    this.look.dx = 0; this.look.dy = 0;
+  }
 
   endFrame() {
     this.dx = 0; this.dy = 0; this.wheel = 0;

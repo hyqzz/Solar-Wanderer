@@ -40,18 +40,27 @@ export class SimClock {
   constructor() {
     this.rate = 1; // 仿真秒 / 真实秒
     this.paused = false;
+    this._wallMs = Date.now();
     this.setNow();
   }
 
   setNow() {
     this.jdTT = jdUTtoTT(dateToJD(new Date()));
+    this._wallMs = Date.now();
   }
 
-  /** dtReal: 真实经过秒（应由调用方钳制，防止失焦大步长） */
+  /**
+   * 正常帧用 dtReal；若 wallElapsed 比 dtReal 多出 1 秒以上（tab 后台恢复），
+   * 则用实际挂钟经过时间（上限 60s），让仿真时钟追上真实时间。
+   */
   tick(dtReal) {
+    const nowMs = Date.now();
     if (!this.paused) {
-      this.jdTT += (dtReal * this.rate) / DAY_SECONDS;
+      const wallElapsed = (nowMs - this._wallMs) / 1000;
+      const elapsed = wallElapsed > dtReal + 1 ? Math.min(wallElapsed, 60) : dtReal;
+      this.jdTT += (elapsed * this.rate) / DAY_SECONDS;
     }
+    this._wallMs = nowMs;
     return this.jdTT;
   }
 

@@ -190,6 +190,15 @@ async function init() {
   syncShipToOrbit();
   select('earth');
 
+  // ---- URL hash 书签（#1）：加载时解析；Ctrl+L 复制当前位置链接 ----
+  applyLocationHash();
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyL' && !e.shiftKey) {
+      e.preventDefault(); // 阻止浏览器原生地址栏聚焦
+      copyShareUrl();
+    }
+  });
+
   document.getElementById('start-btn').addEventListener('click', () => hud.hideStart());
   let downX = 0, downY = 0;
   canvas.addEventListener('mousedown', (e) => { downX = e.clientX; downY = e.clientY; });
@@ -432,7 +441,9 @@ function switchToOrbit() {
   // 抬升后 auto-tilt 消失，负 tilt 会让视线指向地平线下方，导致径向缩放条件失效、
   // 滚轮进入 dolly。复位后由 auto-tilt 在抬升过程中自然接管。
   orbitCam.tilt = 0;
+  orbitCam.panOffset.set(0, 0, 0); // 重置平移偏置以确保下次滚轮缩放走径向而非 dolly
   orbitCam.distTarget = orbitCam.dist + Math.max(orbitCam.dist * 0.002, 0.05);
+  input.cancelGestures(); // 清理旧手势状态，防止平移/捏合泄漏到新模式
 }
 
 function switchToFly() {
@@ -498,7 +509,8 @@ function loop() {
       _q.copy(builder.bodies.get(nearest.id).mesh.quaternion).invert();
       _rel.applyQuaternion(_q).normalize();
       const altGround = relLen - terrainMgr.heightAt(nearest.id, _rel);
-      autoLand = altGround < 0.0022; // 离地 < 2.2m（视高 1.7m + 余量）
+      // 移动端阈值放宽至 5m：捏合缩放步长比鼠标滚轮大，需更宽触发窗口才能触发着陆
+      autoLand = altGround < (IS_MOBILE ? 0.005 : 0.0022);
     }
     if ((autoLand || (input.tapped('KeyG') && nearest?.landable && nearest.distSurface < landRange))
       && !orbitCam.flight) {
@@ -519,10 +531,12 @@ function loop() {
       // 滚轮起飞后复位 tilt 并抬升相机，避免 adoptPosition 留下的 -autoTilt 在 auto-tilt
       // 消失后导致视线指向地平线下方，进而使径向缩放条件失效、滚轮进入 dolly。
       orbitCam.tilt = 0;
+      orbitCam.panOffset.set(0, 0, 0); // 重置平移偏置：起飞后应能径向缩放重新着陆
       orbitCam.distTarget = orbitCam.dist + Math.max(orbitCam.dist * 0.002, 0.05);
       appMode = 'orbit';
       ship.mode = 'fly';
       ship.vel.set(0, 0, 0);
+      input.cancelGestures(); // 清理起飞手势，防止捏合/平移状态泄漏
     } else {
       ship.update(dtReal, input, env);
       if (appMode === 'walk' && ship.mode === 'fly') {
@@ -847,4 +861,53 @@ function onResize() {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// ---- 可分享 URL（issue #1）----
+// 格式：#<focusId>,<lat_deg>,<lon_deg>,<dist_km>,<jdTT>
+// 仅编码探索模式相机状态；fly/walk 模式下只记录最近探索快照。
+
+function applyLocationHash() {
+  const hash = location.hash.slice(1);
+  if (!hash) return;
+  const parts = hash.split(',');
+  if (parts.length < 4) return;
+  const [focusId, latDeg, lonDeg, distKm, jdStr] = parts;
+  if (!registry.has(focusId)) return;
+  const DEG = Math.PI / 180;
+  const lat = parseFloat(latDeg), lon = parseFloat(lonDeg), dist = parseFloat(distKm);
+  if (!isFinite(lat) || !isFinite(lon) || !isFinite(dist) || dist <= 0) return;
+  orbitCam.focusId = focusId;
+  orbitCam.lat = lat * DEG;
+  orbitCam.lon = lon * DEG;
+  orbitCam.dist = dist;
+  orbitCam.distTarget = dist;
+  orbitCam.tilt = 0;
+  orbitCam.heading = 0;
+  orbitCam.panOffset.set(0, 0, 0);
+  if (jdStr) {
+    const jd = parseFloat(jdStr);
+    if (isFinite(jd) && jd > 2000000) simClock.jdTT = jd;
+  }
+  syncShipToOrbit();
+  select(focusId);
+}
+
+function copyShareUrl() {
+  if (appMode !== 'orbit') return; // 仅在探索模式下共享（fly/walk 位置无法直接还原）
+  const DEG = Math.PI / 180;
+  const lat = (orbitCam.lat / DEG).toFixed(5);
+  const lon = (orbitCam.lon / DEG).toFixed(5);
+  const dist = orbitCam.dist.toFixed(3);
+  const jd = simClock.jdTT.toFixed(3);
+  const hash = `#${orbitCam.focusId},${lat},${lon},${dist},${jd}`;
+  const url = location.href.replace(/#.*$/, '') + hash;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(url)
+      .then(() => hud.tip(t('tip.urlCopied')))
+      .catch(() => { history.replaceState(null, '', hash); hud.tip(t('tip.urlUpdated')); });
+  } else {
+    history.replaceState(null, '', hash);
+    hud.tip(t('tip.urlUpdated'));
+  }
 }

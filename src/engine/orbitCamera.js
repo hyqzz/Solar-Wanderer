@@ -474,6 +474,12 @@ export class OrbitCamera {
 
     // 右键/中键拖拽 → 空间平移（无旋转：整个空间跟随鼠标移动）
     if (input.pan.active && (input.pan.dx !== 0 || input.pan.dy !== 0)) {
+      // 平移开始时提交残余 dolly（否则 dolly 继续写入 panOffset，与平移叠加导致镜头跳回）
+      if (Math.abs(this._dolly - 1) > 1e-4) {
+        this._dolly = 1;
+        this._dollyDepth = null;
+        this._dollyTargetId = null;
+      }
       const k = this.dist * 0.0012;
       _v2.set(1, 0, 0).applyQuaternion(this.quat);  // 相机右
       _v3.set(0, 1, 0).applyQuaternion(this.quat);  // 相机上

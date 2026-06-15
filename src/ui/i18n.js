@@ -74,6 +74,8 @@ const D = {
     'Click to lock the pointer and look around (or drag) · scroll back to take off'],
   'tip.landNear': ['滚轮继续拉近 = 直接降落 {name}（或按 G 立即登陆）',
     'Keep scrolling in = land on {name} (or press G to land now)'],
+  'tip.urlCopied': ['🔗 链接已复制到剪贴板（Ctrl+L）', '🔗 Link copied to clipboard (Ctrl+L)'],
+  'tip.urlUpdated': ['🔗 地址栏已更新（Ctrl+L）', '🔗 Address bar updated (Ctrl+L)'],
 
   // ── HUD 面板 ─────────────────────────────────────────────────────────
   'hud.flightTo': ['前往 {name}　{p}%', 'To {name}　{p}%'],

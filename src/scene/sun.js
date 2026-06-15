@@ -78,9 +78,11 @@ export function createSun(radiusKm, mapTex) {
   corona.scale.setScalar(radiusKm * 7);
   group.add(corona);
 
+  // depthTest: true（原为 false）：允许不透明行星写入深度缓冲后遮挡光晕精灵，
+  // 使行星凌日时太阳光晕被正确遮蔽而不穿透行星表面。
   const glare = new THREE.Sprite(new THREE.SpriteMaterial({
     map: coronaTex, color: 0xfff4e0, transparent: true, opacity: 0.95,
-    blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false,
+    blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true,
   }));
   glare.scale.setScalar(radiusKm * 2.6);
   group.add(glare);
