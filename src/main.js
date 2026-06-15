@@ -852,8 +852,10 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   // 行走在夜面时的微环境光（地照/星光下的暗适应，保证夜间探索可见性）
   ambient.intensity += ((appMode === 'walk' ? 0.14 : 0.02) - ambient.intensity) * Math.min(dt * 3, 1);
 
+  // 方向性眼睛适应（#21）：进入强光快（瞳孔收缩 ~0.4s），进入暗处慢（视杆适应 ~1.4s）
+  const adaptSpeed = exposureTarget < renderer.toneMappingExposure ? 2.5 : 0.7;
   renderer.toneMappingExposure +=
-    (exposureTarget - renderer.toneMappingExposure) * Math.min(dt * 1.5, 1);
+    (exposureTarget - renderer.toneMappingExposure) * Math.min(dt * adaptSpeed, 1);
 }
 
 function onResize() {

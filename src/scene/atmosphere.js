@@ -22,6 +22,7 @@ export function createAtmosphere(phys) {
     uG: { value: a.mieG },
     uSunI: { value: 13.0 * (a.multiplier ?? 1) },
     uBoost: { value: 1.0 }, // 入气密度增幅（相机在大气外恒 1 → 外观与 R5 审查版逐位一致）
+    uHaze: { value: a.haze ?? 0.0 }, // 近地面气溶胶/尘埃雾霾（火星沙尘、金星硫酸云、泰坦烟霾）
     // 扁率（R8 #1）：气巨网格按 (1−ob) 压扁，大气求交必须用同一椭球，
     // 否则"地面辉光/遮挡"画在正球 Rg 上，与压扁的真实视边缘错开形成双边界。
     // uStretch = 1/(1−ob) − 1（沿极轴拉伸 → 椭球还原为球）；可登陆体网格未压扁 → 0（数学恒等）
@@ -57,7 +58,7 @@ export function createAtmosphere(phys) {
       #include <logdepthbuf_pars_fragment>
       uniform vec3 uCenter;
       uniform vec3 uSunDir;
-      uniform float uRg, uRa, uHR, uHM, uG, uSunI, uBetaM, uBoost, uStretch;
+      uniform float uRg, uRa, uHR, uHM, uG, uSunI, uBetaM, uBoost, uHaze, uStretch;
       uniform vec3 uBetaR, uAxis;
       varying vec3 vWorldPos;
 
@@ -104,7 +105,8 @@ export function createAtmosphere(phys) {
           vec3 p = ro + rd * (t0 + (float(i) + 0.5) * ds);
           float h = hAbove(p);
           float dR = exp(-h / uHR) * uBoost;
-          float dM = exp(-h / uHM) * uBoost;
+          // 近地面气溶胶层（#21）：低标高指数衰减，对火星/金星/泰坦提供地平线雾霾
+          float dM = (exp(-h / uHM) + uHaze * exp(-h / max(uHM * 0.22, 0.5))) * uBoost;
           odR += dR * ds;
           odM += dM * ds;
           // 向太阳的光学深度

@@ -9,6 +9,15 @@ import * as THREE from 'three';
 import { makeNoise, hashSeed } from '../util/noise.js';
 import { QUALITY } from '../engine/quality.js';
 
+// 极冠霜冻覆盖颜色（palette → [r,g,b]，仅 color() 有地图时也生效）
+const FROST_PALETTES = {
+  mars:   [0.86, 0.82, 0.78], // CO₂干冰，略带玫瑰粉
+  ice:    [0.94, 0.96, 1.00], // 水冰，纯白带蓝
+  pluto:  [0.90, 0.88, 0.84], // 氮冰，米白
+  triton: [0.88, 0.86, 0.92], // 氮冰+甲烷，微蓝紫
+  gray:   [0.80, 0.80, 0.82], // 月面极区轻微高反照率
+};
+
 const PALETTES = {
   gray:     [[0.32, 0.32, 0.33], [0.55, 0.55, 0.56]],
   dark:     [[0.18, 0.17, 0.17], [0.34, 0.33, 0.32]],
@@ -152,6 +161,16 @@ export class HeightField {
     b = b * (1 - rock) + (lum * 0.52 + b * 0.12) * rock;
     // 高度调制
     const shade = 0.85 + 0.3 * ((hKm - this.phys.radiusKm) / Math.max(this.sp.ampKm, 0.01) - 0.5);
+    // 极冠霜冻：高纬度向 ±y 极点过渡区白化（仅对有 FROST_PALETTES 定义的星体生效）
+    const frost = FROST_PALETTES[this.sp.palette];
+    if (frost) {
+      const polar = sstep(0.76, 0.90, Math.abs(dir.y));
+      if (polar > 0) {
+        r = r * (1 - polar) + frost[0] * polar;
+        g = g * (1 - polar) + frost[1] * polar;
+        b = b * (1 - polar) + frost[2] * polar;
+      }
+    }
     out.setRGB(
       Math.min(1, Math.max(0, r * shade)),
       Math.min(1, Math.max(0, g * shade)),
@@ -163,34 +182,41 @@ export class HeightField {
 
 
 /** 地形材质（每 LOD 级一份）：StandardMaterial + 片元级三尺度细节噪声注入（近看不糊）。
- * 顶点坐标为"级原点相对"（R9-2a：绝对体本地坐标模 ≈ R，fp32 在 6400 km 模长下
- * 量化 0.5 m，与 1.7 m 眼高同量级 → 登陆闪烁；改存小坐标后亚毫米精确）。
- * 噪声坐标 = 级原点相对坐标 + uPatchRel（级原点 − 噪声原点，CPU 双精度算好），
- * 全程小数值，跨级噪声严格连续。水面顶点（attribute water=1）低粗糙度 + 时变波纹法线。 */
-function makeTerrainMaterial(uPatchRel, uTime, polyUnits) {
+ * uFade: 0→1 淡入 uniform，LOD 级重建时从 0 淡起，800ms 后归 1（避免突然弹出感）。
+ * vSlope: 顶点坡度属性，驱动粗糙度 PBR（陡岩面更粗糙，水面最光滑）。
+ * 岸边泡沫：land/water 过渡区（vWater∈(0,1)）叠加动态白沫噪声。
+ * 水面波纹：三向行进波叠加（SpaceEngine 式海面）。 */
+function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits) {
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true, roughness: 0.95, metalness: 0.0, fog: true,
     side: THREE.DoubleSide, // 水下仰望可见海面（R9-2b）
+    transparent: true, depthWrite: true, // 支持 uFade 淡入（#18）
     polygonOffset: polyUnits > 0, polygonOffsetFactor: polyUnits > 0 ? 1 : 0,
     polygonOffsetUnits: polyUnits, // 粗级后推，消除 LOD 环带重叠区 z-fight（R9-2a）
   });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uPatchRel = uPatchRel;
     shader.uniforms.uTime = uTime;
+    shader.uniforms.uFade = uFade;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
         uniform vec3 uPatchRel;
         attribute float water;
+        attribute float slope;
         varying float vWater;
+        varying float vSlope;
         varying vec3 vObjPos;`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vObjPos = position + uPatchRel;
-        vWater = water;`);
+        vWater = water;
+        vSlope = slope;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', /* glsl */ `#include <common>
         varying vec3 vObjPos;
         varying float vWater;
+        varying float vSlope;
         uniform float uTime;
+        uniform float uFade;
         float thash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         float tnoise(vec3 p) {
           vec3 i = floor(p), f = fract(p);
@@ -210,20 +236,29 @@ function makeTerrainMaterial(uPatchRel, uTime, polyUnits) {
           float d2 = tnoise(vObjPos * 420.0) * f2;
           float d3 = tnoise(vObjPos * 5200.0) * f3;
           float dm = 0.78 + 0.46 * (d1 * 0.45 + d2 * 0.33 + d3 * 0.22)
-                   + (1.0 - f2) * 0.075 + (1.0 - f3) * 0.05; // 均值补偿，避免远处变暗
-          diffuseColor.rgb *= mix(dm, 1.0, vWater); // 水面无岩屑细节
+                   + (1.0 - f2) * 0.075 + (1.0 - f3) * 0.05;
+          diffuseColor.rgb *= mix(dm, 1.0, vWater);
+          // 岸边泡沫：land→water 过渡区（vWater 0..1 内插）叠加白色浪沫（#21）
+          float foam = smoothstep(0.05, 0.38, vWater) * (1.0 - smoothstep(0.62, 0.95, vWater));
+          if (foam > 0.01) {
+            float fw = tnoise(vObjPos * 1500.0 + vec3(uTime * 0.15, -uTime * 0.08, 0.0));
+            fw *= fw;
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88, 0.91, 0.96), foam * fw * 0.72);
+          }
         }`)
       .replace('#include <roughnessmap_fragment>', /* glsl */ `#include <roughnessmap_fragment>
-        roughnessFactor = mix(roughnessFactor, 0.12, vWater); // 水面镜面反射（太阳波光）`)
+        // 坡度驱动 PBR 粗糙度：平坦=0.82，陡岩=1.0，水面=0.12（#21）
+        roughnessFactor = mix(0.82 + clamp(vSlope, 0.0, 1.0) * 0.18, 0.12, vWater);`)
       .replace('#include <normal_fragment_begin>', /* glsl */ `#include <normal_fragment_begin>
         {
-          // 程序化凹凸（屏幕导数法）：岩面粗糙起伏；水面 = 双向行进波叠加（时变波纹）
+          // 程序化凹凸（屏幕导数法）；水面 = 三向行进波叠加（SpaceEngine 式海面，#21）
           float vdb = length(vViewPosition);
           float bf = 1.0 - smoothstep(0.1, 1.2, vdb);
           float hRock = (tnoise(vObjPos * 420.0) * 0.68 + tnoise(vObjPos * 5200.0) * 0.32) * 0.0016 * bf;
           float wf = 1.0 - smoothstep(0.05, 14.0, vdb);
-          float hWave = (tnoise(vObjPos * 900.0 + vec3(uTime * 0.06, 0.0, uTime * 0.043)) * 0.6
-                       + tnoise(vObjPos * 3200.0 - vec3(uTime * 0.11, uTime * 0.05, 0.0)) * 0.4) * 0.0009 * wf;
+          float hWave = (tnoise(vObjPos * 820.0  + vec3(uTime * 0.07,  0.0,          uTime * 0.05 )) * 0.50
+                       + tnoise(vObjPos * 2800.0 - vec3(uTime * 0.12,  uTime * 0.04, 0.0          )) * 0.35
+                       + tnoise(vObjPos * 7200.0 + vec3(uTime * 0.19, -uTime * 0.09, uTime * 0.11 )) * 0.15) * 0.0012 * wf;
           float hb = mix(hRock, hWave, vWater);
           vec3 sX = dFdx(-vViewPosition);
           vec3 sY = dFdy(-vViewPosition);
@@ -233,7 +268,10 @@ function makeTerrainMaterial(uPatchRel, uTime, polyUnits) {
           det *= (float(gl_FrontFacing) * 2.0 - 1.0);
           vec3 grad = sign(det) * (dFdx(hb) * r1 + dFdy(hb) * r2);
           normal = normalize(abs(det) * normal - grad);
-        }`);
+        }`)
+      .replace('#include <colorspace_fragment>',
+        `#include <colorspace_fragment>
+        gl_FragColor.a *= uFade;`); // LOD 级淡入（#18）
   };
   return mat;
 }
@@ -342,6 +380,7 @@ export class TerrainPatchSet {
     this.uTime = { value: 0 };
     // 噪声原点：跟随玩家、每 2km 重新吸附（保证片元噪声参数始终小数精度充足）
     this.noiseOriginU = { value: new THREE.Vector3(1e9, 0, 0) };
+    this._initialized = false; // 首次激活后标记：指导首帧由外向内构建各级
     for (let li = 0; li < this.extents.length; li++) {
       const geo = new THREE.BufferGeometry();
       const verts = (GRID + 1) * (GRID + 1);
@@ -349,6 +388,7 @@ export class TerrainPatchSet {
       geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
       geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
       geo.setAttribute('water', new THREE.BufferAttribute(new Float32Array(verts), 1));
+      geo.setAttribute('slope', new THREE.BufferAttribute(new Float32Array(verts), 1)); // 坡度 PBR
       const idx = [];
       const hole = li === 0 ? 0 : (this.extents[li - 1] / this.extents[li]) * GRID * 0.5 * 0.92;
       for (let y = 0; y < GRID; y++) {
@@ -362,13 +402,15 @@ export class TerrainPatchSet {
       geo.setIndex(idx);
       // 级原点相对几何（R9-2a 修闪烁）：每级独立原点 + 独立材质（粗级 polygonOffset 后推）
       const uPatchRel = { value: new THREE.Vector3() };
-      const mat = makeTerrainMaterial(uPatchRel, this.uTime, li * 2);
+      const uFade = { value: 0 }; // 新建级从 0 淡入，避免 LOD 突然弹出（#18）
+      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 2);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.frustumCulled = false;
       this.group.add(mesh);
       this.levels.push({
-        mesh, geo, mat, uPatchRel, extent: this.extents[li],
+        mesh, geo, mat, uPatchRel, uFade, extent: this.extents[li],
         origin: new THREE.Vector3(), builtAnchor: new THREE.Vector3(1e9, 0, 0),
+        fadeStart: -1, // -1 = 尚未构建
       });
     }
     // 岩石散布层
@@ -377,8 +419,8 @@ export class TerrainPatchSet {
   }
 
   /** dirLocal: 相机在天体本地系中的方向（单位）。timeSec: 水面波纹时基。
-   * 每帧最多重建 1 级（细级优先）——旧实现一帧全量重建会卡顿跳帧，
-   * 破坏滚轮降落的连续感（R7 #1）。 */
+   * 每帧最多重建 1 级。首次激活由外向内（最大覆盖先出现）；后续正常内向外优先。
+   * 每级重建后触发 0.8s 淡入，避免 LOD 突然弹出（#18）。 */
   update(dirLocal, timeSec = 0) {
     const R = this.field.phys.radiusKm;
     this.uTime.value = timeSec;
@@ -389,7 +431,17 @@ export class TerrainPatchSet {
       o.set(Math.round(px), Math.round(py), Math.round(pz));
       for (const lv of this.levels) lv.uPatchRel.value.copy(lv.origin).sub(o);
     }
-    for (let li = 0; li < this.levels.length; li++) {
+    // 淡入动画：每帧推进所有正在淡入的级
+    const now = performance.now();
+    for (const lv of this.levels) {
+      if (lv.fadeStart >= 0 && lv.uFade.value < 1) {
+        lv.uFade.value = Math.min(1, (now - lv.fadeStart) / 800);
+      }
+    }
+    // 首次激活：由外向内逐帧构建（大覆盖先出现，远处进入时感知更自然）
+    const initMode = !this._initialized;
+    for (let i = 0; i < this.levels.length; i++) {
+      const li = initMode ? this.levels.length - 1 - i : i;
       const lv = this.levels[li];
       const moveKm = lv.builtAnchor.distanceTo(dirLocal) * R;
       if (moveKm > lv.extent * 0.25) {
@@ -398,6 +450,10 @@ export class TerrainPatchSet {
         if (li === 0) this.rocks.rebuild(dirLocal, lv.origin);
         break; // 分帧：其余级下一帧再建
       }
+    }
+    // 全部级至少构建一次后标记已初始化
+    if (initMode && this.levels.every(lv => lv.fadeStart >= 0)) {
+      this._initialized = true;
     }
   }
 
@@ -443,8 +499,9 @@ export class TerrainPatchSet {
     lv.geo.attributes.water.needsUpdate = true;
     lv.geo.computeVertexNormals();
     lv.geo.attributes.normal.needsUpdate = true;
-    // 第二遍：用法线坡度上色（陡坡岩壁化）
+    // 第二遍：用法线坡度上色（陡坡岩壁化）并写入坡度属性（PBR 粗糙度驱动）
     const nrm = lv.geo.attributes.normal.array;
+    const slp = lv.geo.attributes.slope.array;
     k = 0;
     for (let y = 0; y <= GRID; y++) {
       for (let x = 0; x <= GRID; x++, k++) {
@@ -453,9 +510,12 @@ export class TerrainPatchSet {
         const slope = 1 - Math.min(1, Math.max(0, ndotu));
         this.field.color(dir, hs[k], slope, c);
         col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
+        slp[k] = slope;
       }
     }
     lv.geo.attributes.color.needsUpdate = true;
+    lv.geo.attributes.slope.needsUpdate = true;
+    lv.fadeStart = performance.now(); // 启动淡入计时（#18）
   }
 
   dispose() {
@@ -500,11 +560,12 @@ export class TerrainManager {
   }
 
   update(nearest, camLocalDir, timeSec = 0) {
-    // 激活半径：小天体按半径比例（火卫一在数十 km 外不该看到地形补丁色块，R9-2c）
+    // 激活半径（#18 提前激活：确保外圈 LOD 在远处建好，接近时无弹出感）
+    // 大天体：地球 1147km、火星 610km、月球 500km；小天体比例缩放
     let wantId = null;
     if (nearest && nearest.landable) {
       const R = this.physOf(nearest.id).radiusKm;
-      const actDist = R < 100 ? Math.max(8, R * 0.6) : Math.max(60, R * 0.06);
+      const actDist = R < 100 ? Math.max(10, R * 0.8) : Math.max(500, R * 0.18);
       if (nearest.distSurface < actDist) wantId = nearest.id;
     }
 

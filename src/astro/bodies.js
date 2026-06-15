@@ -25,6 +25,7 @@ export const BODIES = {
     atmosphere: {
       heightKm: 90, rayleighScaleKm: 15.9, mieScaleKm: 5,
       rayleigh: [9e-6, 8.5e-6, 5.5e-6], mie: 6e-6, mieG: 0.85, multiplier: 6,
+      haze: 0.55, // 硫酸云厚重气溶胶层，近地平线乳白色光晕
     },
     textures: { map: 'venus_surface.jpg', clouds: 'venus_atmosphere.jpg', cloudsOpaque: true },
     desc: '大小与地球相仿的“姊妹星”，却被 92 倍地球气压的 CO₂ 浓密大气与硫酸云覆盖，表面 465°C，自转方向逆行且一天长于一年。',
@@ -52,6 +53,7 @@ export const BODIES = {
       // 逆日半球，呈现不真实的"半球更亮"——实拍显示火星天空亮度梯度更温和（多重散射填充阴影侧）。
       heightKm: 80, rayleighScaleKm: 11.1, mieScaleKm: 9,
       rayleigh: [5.0e-7, 3.0e-7, 1.2e-7], mie: 1.2e-6, mieG: 0.32, multiplier: 2.2,
+      haze: 0.28, // 悬浮尘埃近地面雾霾（实拍：毅力号地平线可见奶油色大气带）
     },
     textures: { map: 'mars.jpg' },
     desc: '红色行星。拥有太阳系最高的火山（奥林帕斯山 21.9 km）与最长的峡谷（水手谷 4000 km）。稀薄 CO₂ 大气，尘暴可席卷全球。',
@@ -163,7 +165,8 @@ export const MOON_PHYS = {
                landable: true, surface: { ampKm: 1.5, roughness: 0.4, craters: 0.1, palette: 'titan' },
                textures: { map: 'titan.jpg' },
                atmosphere: { heightKm: 200, rayleighScaleKm: 20, mieScaleKm: 30,
-                             rayleigh: [8e-7, 5e-7, 2e-7], mie: 1.2e-6, mieG: 0.7, multiplier: 3 },
+                             rayleigh: [8e-7, 5e-7, 2e-7], mie: 1.2e-6, mieG: 0.7, multiplier: 3,
+                             haze: 0.38 }, // 烃类烟霾（tholin），橙色近地面雾霾极厚
                desc: '唯一拥有浓密大气的卫星（1.5 倍地球气压），表面有液态甲烷的湖泊与河流，橙色烟霾笼罩全球。' },
   iapetus:   { nameZh: '土卫八', nameEn: 'Iapetus', parent: 'saturn', radiusKm: 734.5, gm: 120.51,
                landable: true, surface: { ampKm: 4, roughness: 0.55, craters: 1.0, palette: 'iapetus' },

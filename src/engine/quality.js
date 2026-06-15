@@ -9,8 +9,8 @@ export const QUALITY = {
   gpuName: '(未检测)',
   pixelRatio: 2,
   bloomDiv: 2,
-  atmoN: 16,
-  atmoNL: 6,
+  atmoN: 20, // #21：增加步进数改善黄昏色带与大气内散射细节
+  atmoNL: 8,
   terrainGrid: 64,
   anisotropy: 8,
   segHi: [96, 64],
@@ -53,8 +53,8 @@ export function initQuality(renderer) {
       tier: 'lite',
       pixelRatio: pr,
       bloomDiv: IS_MOBILE ? 6 : 4,
-      atmoN: IS_MOBILE ? 6 : 8,
-      atmoNL: IS_MOBILE ? 2 : 3,
+      atmoN: IS_MOBILE ? 8 : 12, // #21：lite 档也适当提升
+      atmoNL: IS_MOBILE ? 3 : 4,
       terrainGrid: IS_MOBILE ? 32 : 48,
       anisotropy: 2,
       segHi: IS_MOBILE ? [48, 32] : [64, 42],

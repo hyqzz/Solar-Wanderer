@@ -94,7 +94,8 @@ export function createPlanetMaterial({
         if (uDetailMode > 0) {
           float dist = length(vPosW); // 相机恒在原点（浮动原点）
           float app = uRadius / max(dist, uRadius); // 视半径因子 0..1
-          float fade = smoothstep(0.05, 0.4, app);
+          // 淡入范围从 0.01 起（#18：更远处开始出现程序细节，平滑球面→地形过渡）
+          float fade = smoothstep(0.01, 0.18, app);
           if (fade > 0.001) {
             vec3 p = vObjPos / uRadius;
             if (uDetailMode == 2) {
@@ -106,10 +107,11 @@ export function createPlanetMaterial({
               albedo *= 1.0 + fade * ((t1 - 0.5) * 0.16 + (t2 - 0.5) * 0.10);
               albedo = mix(albedo, albedo * vec3(1.10, 1.05, 0.97), fade * storm * 0.55);
             } else {
-              // 岩质/冰面：各向同性中尺度细节（地形系统接管前的中距离观感）
+              // 岩质/冰面：三尺度各向同性细节（#21：比原来多一层，地形接管前中距离更真实）
               float t1 = pnoise(p * 64.0);
               float t2 = pnoise(p * 340.0) * smoothstep(0.2, 0.75, app);
-              albedo *= 1.0 + fade * ((t1 - 0.5) * 0.17 + (t2 - 0.5) * 0.11);
+              float t3 = pnoise(p * 1200.0) * smoothstep(0.35, 0.9, app);
+              albedo *= 1.0 + fade * ((t1 - 0.5) * 0.22 + (t2 - 0.5) * 0.14 + (t3 - 0.5) * 0.07);
             }
           }
         }
