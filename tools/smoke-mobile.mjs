@@ -1,6 +1,8 @@
 // Mobile smoke test: emulate an iPhone 14 Pro viewport with touch + coarse pointer media.
-// Checks: no JS errors, touch hint shown, #tc-root present, pinch-zoom simulation,
-// help screen shows touch variant, menu opens, joystick DOM exists.
+// Checks (v2.0.0 UI): no JS errors, touch hint shown, #tc-root present, joystick DOM,
+// ☰ (tc-menu-btn) opens the directory bottom sheet, directory auto-hides on body select,
+// persistent time widget (tc-time-btn) expands/collapses the time+display panel,
+// help screen shows touch variant.
 // Requires: dev server running at http://localhost:5173
 import puppeteer from 'puppeteer';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -81,35 +83,44 @@ async function run(lang) {
     return !!btn;
   });
 
-  // Menu button exists
-  const menuBtnExists = await page.$('#tc-menu-btn') !== null;
+  // Persistent time widget: button always visible, panel collapsed by default
+  const timeBtnExists = await page.$('#tc-time-btn') !== null;
+  const timeValExists = await page.$('#tc-time-val') !== null;
+  const timePanelHiddenByDefault = await page.evaluate(() => {
+    const p = document.getElementById('tc-time-panel');
+    return !!p && p.hidden === true;
+  });
 
-  // Tap menu button to open menu
-  let menuVisible = false;
+  // Tap time button → panel expands; tap again → collapses
+  let timePanelOpens = false;
+  let timePanelCloses = false;
+  if (timeBtnExists) {
+    await page.tap('#tc-time-btn');
+    await sleep(400);
+    timePanelOpens = await page.evaluate(() => {
+      const p = document.getElementById('tc-time-panel');
+      return !!p && p.hidden === false;
+    });
+    await page.tap('#tc-time-btn');
+    await sleep(300);
+    timePanelCloses = await page.evaluate(() => {
+      const p = document.getElementById('tc-time-panel');
+      return !!p && p.hidden === true;
+    });
+  }
+
+  // ☰ (tc-menu-btn) is the directory button in v2.0.0
+  const menuBtnExists = await page.$('#tc-menu-btn') !== null;
+  let dirOpens = false;
+  let dirAutoHides = false;
+  let backdropDimming = false;
   if (menuBtnExists) {
     await page.tap('#tc-menu-btn');
     await sleep(400);
-    menuVisible = await page.evaluate(() => {
-      const el = document.getElementById('tc-menu');
-      return el && !el.hidden;
-    });
-    await page.tap('#tc-menu-btn'); // close
-    await sleep(200);
-  }
-
-  // Directory button: tap to open bottom sheet
-  let dirVisible = false;
-  let dirAutoHides = false;
-  let backdropDimming = false;
-  const dirBtnExists = await page.$('#tc-dir-btn') !== null;
-  if (dirBtnExists) {
-    await page.tap('#tc-dir-btn');
-    await sleep(400);
-    dirVisible = await page.evaluate(() => {
+    dirOpens = await page.evaluate(() => {
       const dir = document.getElementById('directory');
       if (!dir) return false;
       const rect = dir.getBoundingClientRect();
-      // Bottom sheet is visible when its top is inside viewport (transformed up)
       return dir.classList.contains('open') && rect.top < window.innerHeight && rect.bottom > 0;
     });
     // Backdrop should not dim (transparent background)
@@ -117,27 +128,27 @@ async function run(lang) {
       const bd = document.getElementById('tc-backdrop');
       if (!bd || !bd.classList.contains('visible')) return false;
       const bg = window.getComputedStyle(bd).backgroundColor;
-      // transparent / rgba(0,0,0,0) means no dimming
       return bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
     });
-    // Tap first planet item (Sun) and verify directory closes
+    // Tap first body item (Sun) and verify directory auto-closes
     dirAutoHides = await page.evaluate(() => {
-      const sunBtn = [...document.querySelectorAll('.dir-item')].find((b) => b.textContent.includes('太阳') || b.textContent.includes('Sun'));
-      if (sunBtn) sunBtn.click();
+      const item = [...document.querySelectorAll('.dir-item')].find((b) => b.textContent.includes('太阳') || b.textContent.includes('Sun'));
+      if (item) item.click();
       const dir = document.getElementById('directory');
       return dir && !dir.classList.contains('open');
     });
     await sleep(200);
   }
 
-  // Open help via ❓ button if visible, else keyboard
-  let helpTouchContent = false;
+  // Target (ℹ️) drawer button exists
+  const tgtBtnExists = await page.$('#tc-tgt-btn') !== null;
+
+  // Open help via keyboard and confirm touch-variant content
   await page.keyboard.press('KeyH');
   await sleep(600);
-  helpTouchContent = await page.evaluate(() => {
+  const helpTouchContent = await page.evaluate(() => {
     const inner = document.querySelector('#help .help-inner');
     if (!inner) return false;
-    // Touch help should mention "joystick" or "摇杆"
     return inner.textContent.includes('joystick') || inner.textContent.includes('摇杆');
   });
   await page.keyboard.press('KeyH');
@@ -158,8 +169,9 @@ async function run(lang) {
 
   return {
     lang, errors, hint, hasKeyHint,
-    tcVisible, joystickExists, menuBtnExists, menuVisible,
-    dirBtnExists, dirVisible, dirClosedByDefault, dirAutoHides,
+    tcVisible, joystickExists,
+    timeBtnExists, timeValExists, timePanelHiddenByDefault, timePanelOpens, timePanelCloses,
+    menuBtnExists, dirOpens, dirClosedByDefault, dirAutoHides, tgtBtnExists,
     flyBtnInOrbit, backdropDimming,
     helpTouchContent, keyBadgeVisible, isMobileFlagSet,
     titleOrder, titleCorrect,
@@ -173,22 +185,26 @@ for (const lang of ['zh', 'en']) {
   console.log('JS errors:', r.errors.length ? r.errors : 'NONE');
 
   const checks = [
-    ['No JS errors',              r.errors.length === 0],
-    ['Touch hint (not kbd)',       !r.hasKeyHint],
-    ['Title order correct',        r.titleCorrect],
-    ['IS_MOBILE flag (.touch)',    r.isMobileFlagSet],
-    ['#tc-root visible',           r.tcVisible],
-    ['Joystick DOM exists',        r.joystickExists],
-    ['Menu button exists',         r.menuBtnExists],
-    ['Menu opens on tap',          r.menuVisible],
-    ['Directory button exists',    r.dirBtnExists],
-    ['Directory closed by default',r.dirClosedByDefault],
-    ['Directory opens on tap',     r.dirVisible],
-    ['Directory auto-hides on go', r.dirAutoHides],
-    ['No orbit-mode fly button',   !r.flyBtnInOrbit],
-    ['Backdrop does not dim',      !r.backdropDimming],
-    ['Help shows touch content',   r.helpTouchContent],
-    ['.key badges hidden',         !r.keyBadgeVisible],
+    ['No JS errors',                r.errors.length === 0],
+    ['Touch hint (not kbd)',         !r.hasKeyHint],
+    ['Title order correct',          r.titleCorrect],
+    ['IS_MOBILE flag (.touch)',      r.isMobileFlagSet],
+    ['#tc-root visible',             r.tcVisible],
+    ['Joystick DOM exists',          r.joystickExists],
+    ['Time button exists',           r.timeBtnExists],
+    ['Time value span exists',       r.timeValExists],
+    ['Time panel hidden by default', r.timePanelHiddenByDefault],
+    ['Time panel opens on tap',      r.timePanelOpens],
+    ['Time panel closes on 2nd tap', r.timePanelCloses],
+    ['Menu (☰) button exists',       r.menuBtnExists],
+    ['Target (ℹ️) button exists',    r.tgtBtnExists],
+    ['Directory closed by default',  r.dirClosedByDefault],
+    ['☰ opens directory',            r.dirOpens],
+    ['Directory auto-hides on go',   r.dirAutoHides],
+    ['No orbit-mode fly button',     !r.flyBtnInOrbit],
+    ['Backdrop does not dim',        !r.backdropDimming],
+    ['Help shows touch content',     r.helpTouchContent],
+    ['.key badges hidden',           !r.keyBadgeVisible],
   ];
 
   for (const [name, ok] of checks) {
