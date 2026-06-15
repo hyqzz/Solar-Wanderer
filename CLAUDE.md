@@ -30,9 +30,13 @@ node tools/repro-r9.mjs          # 镜头/地形/海洋/惯性模式断言
 node tools/repro-r10.mjs         # 焦点/水体/V 连续性断言
 node tools/repro-issue1.mjs      # 返回探索模式后 GE 操控生效
 node tools/repro-issue2.mjs      # 右键平移后滚轮不跳回原空间
+node tools/repro-issue18.mjs     # 轨道→地表无缝过渡：提前激活/由外向内/逐级淡入
+node tools/repro-issue21.mjs     # 登陆视觉真实感：极冠霜冻/坡度 PBR/气溶胶 haze/步进
+node tools/repro-fixbatch.mjs    # 批量修复回归：#12 火星天空/#17 时钟追赶/#19 小天体地形/#20 平移/#1/#13/#14/#15/#16
 node tools/repro-label-focus.mjs # 点击标签后滚动平滑切换焦点
 node tools/probe-r7.mjs          # 自动登陆/起飞/气巨入气（需 dev server）
 node tools/smoke-i18n.mjs        # 中英双语 UI 冒烟（需 dev server）
+node tools/smoke-mobile.mjs      # 移动端触控 UI 冒烟（需 dev server）
 node tools/probe-maxdist.mjs     # 400 AU 远距标签可见性（需 dev server）
 node tools/repro-occlusion.mjs   # 土卫一遮挡土星（需 dev server）
 ```
