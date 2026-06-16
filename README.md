@@ -15,9 +15,19 @@ Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 
 <br>
 
-[![Solar Wanderer demo — click to watch on YouTube](docs/sdlc/screenshots/example/youtube-demo-poster.jpg)](https://youtu.be/3rwShi6oF0o)
+### ▶ Demo video
 
-<sub>▲ Click the thumbnail to watch on YouTube. [**Open the live demo →**](https://sw.icodestar.net)</sub>
+**This poster is a link to a YouTube video** — not a static screenshot. Click it (or the button below) to watch the full walkthrough.
+
+<a href="https://youtu.be/3rwShi6oF0o" title="Play Solar Wanderer demo on YouTube">
+  <img src="docs/sdlc/screenshots/example/youtube-demo-poster.jpg" alt="▶ Click to play — Solar Wanderer demo video on YouTube" width="720">
+</a>
+
+<br>
+
+[![Watch demo on YouTube](https://img.shields.io/badge/▶%20Watch%20Demo%20Video-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/3rwShi6oF0o)
+
+<sub>Opens the demo recording on YouTube in your browser · Prefer to explore yourself? [**Launch the live app →**](https://sw.icodestar.net)</sub>
 
 </div>
 
