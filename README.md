@@ -15,7 +15,7 @@ Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 
 <br>
 
-[![Solar Wanderer demo — click to watch on YouTube](https://img.youtube.com/vi/3rwShi6oF0o/maxresdefault.jpg)](https://youtu.be/3rwShi6oF0o)
+[![Solar Wanderer demo — click to watch on YouTube](docs/sdlc/screenshots/example/youtube-demo-poster.jpg)](https://youtu.be/3rwShi6oF0o)
 
 <sub>▲ Click the thumbnail to watch on YouTube. [**Open the live demo →**](https://sw.icodestar.net)</sub>
 
