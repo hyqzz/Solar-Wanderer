@@ -297,6 +297,13 @@ html[lang^="en"] .title-block .title-en { display: block; }
 .start-inner .hint {
   margin-top: 20px; font-size: 13px; color: #5a7a9a;
 }
+/* ICP 备案号：境内合规展示，低调置于启动页底部，不进入 3D 画面 */
+#beian {
+  display: block; margin-top: 16px;
+  font-size: 12px; color: #44607d; letter-spacing: 0.5px;
+  text-decoration: none; transition: color 0.2s ease;
+}
+#beian:hover { color: #6f97bf; }
 
 /* ---------- 帮助 ---------- */
 #help {
