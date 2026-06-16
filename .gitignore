@@ -1,5 +1,58 @@
+# ---- 依赖 ----
 node_modules/
+.pnp/
+.pnp.js
+
+# ---- 构建产物 ----
 dist/
-.DS_Store
+dist-ssr/
+*.local
+
+# ---- Vite / 缓存 ----
+.vite/
+.cache/
+*.tsbuildinfo
+
+# ---- 日志 ----
 *.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- 环境变量 / 密钥 ----
+.env
+.env.*
+!.env.example
+
+# ---- 测试 / 覆盖率 ----
+coverage/
+.nyc_output/
+
+# ---- 编辑器 / IDE ----
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- 操作系统 ----
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---- 文档与推广素材 ----
+# 整个 docs/ 不纳入版本库:其中含无法推送到远程的超大演示视频。
+# 如需改为只忽略大文件、保留文本文档,可把下面一行替换为更精细的规则。
 docs/
+
+# ---- 大体积视频素材(防止误提交,本项目无需跟踪任何视频)----
+*.mp4
+*.mov
+*.webm
+*.avi
+*.mkv
