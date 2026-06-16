@@ -46,9 +46,14 @@ Desktop.ini
 $RECYCLE.BIN/
 
 # ---- 文档与推广素材 ----
-# 整个 docs/ 不纳入版本库:其中含无法推送到远程的超大演示视频。
-# 如需改为只忽略大文件、保留文本文档,可把下面一行替换为更精细的规则。
-docs/
+# docs/ 默认不纳入版本库(含超大演示视频等);仅保留 example 演示截图供 README 引用。
+docs/*
+!docs/sdlc/
+docs/sdlc/*
+!docs/sdlc/screenshots/
+docs/sdlc/screenshots/*
+!docs/sdlc/screenshots/example/
+!docs/sdlc/screenshots/example/**
 
 # ---- 大体积视频素材(防止误提交,本项目无需跟踪任何视频)----
 *.mp4
