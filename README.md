@@ -15,9 +15,9 @@ Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 
 <br>
 
-[![Solar Wanderer demo — Saturn, Earth, Jupiter](docs/promotion/demo.gif)](https://sw.icodestar.net)
+[![Solar Wanderer demo — click to watch on YouTube](https://img.youtube.com/vi/3rwShi6oF0o/maxresdefault.jpg)](https://youtu.be/3rwShi6oF0o)
 
-<sub>▲ Real-time, rendered live in the browser. [**Open the live demo →**](https://sw.icodestar.net)</sub>
+<sub>▲ Click the thumbnail to watch on YouTube. [**Open the live demo →**](https://sw.icodestar.net)</sub>
 
 </div>
 
