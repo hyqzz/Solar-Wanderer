@@ -675,8 +675,19 @@ const PLANET_KEYS = {
 
 let orbitLinesOn = true;
 let tnoOrbitsOn = false; // 海外天体（TNO）轨道线默认关闭（#4：数量多且远，避免画面杂乱）
+let directoryTabKeyBound = false;
 
 function handleUIKeys() {
+  if (!directoryTabKeyBound) {
+    directoryTabKeyBound = true;
+    window.addEventListener('keydown', (e) => {
+      if (e.code !== 'Tab' || e.repeat) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      e.preventDefault();
+      document.querySelector('#directory')?.classList.toggle('open');
+    });
+  }
   for (const [key, id] of Object.entries(PLANET_KEYS)) {
     if (input.tapped(key)) flyTo(id); // GE 风格：快捷键直接前往
   }
