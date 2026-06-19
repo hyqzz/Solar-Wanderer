@@ -2,16 +2,19 @@
 
 # 🚀 Solar Wanderer · 遨游太阳系
 
-**A 1:1 real-time solar system explorer — entirely in your browser. Now on your phone.**
+**The first stop on humanity's journey to becoming an interstellar civilization.**
+
+A 1:1 real-time solar system explorer — entirely in your browser. Now on your phone.
 
 Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 
 [![Live Demo](https://img.shields.io/badge/▶%20Live%20Demo-sw.icodestar.net-4a9eff?style=for-the-badge)](https://sw.icodestar.net)
+[![中文 README](https://img.shields.io/badge/中文-README-red?style=for-the-badge)](README-zh.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Three.js](https://img.shields.io/badge/Three.js-0.165-black?style=for-the-badge&logo=three.js)](https://threejs.org)
 [![Stars](https://img.shields.io/github/stars/hyqzz/Solar-Wanderer?style=for-the-badge&color=yellow)](https://github.com/hyqzz/Solar-Wanderer/stargazers)
 
-*Zero install · Zero account · Zero backend · Desktop **&** mobile · ~200 kB gzipped*
+*Zero install · Zero account · Zero backend · Desktop **&** mobile · ~200 kB gzipped · MIT open source*
 
 <br>
 
@@ -25,128 +28,136 @@ Powered by NASA JPL ephemerides. The planets are where they are **right now**.
 
 [![Watch demo on YouTube](https://img.shields.io/badge/▶%20Watch%20Demo%20Video-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/3rwShi6oF0o)
 
-<sub>Opens the demo recording on YouTube in your browser · Prefer to explore yourself? [**Launch the live app →**](https://sw.icodestar.net)</sub>
-
 </div>
 
 ---
 
-> ### 🆕 v2.0.0 — Full mobile support
-> The entire 1:1 real-time solar system now runs on your phone. **Pinch** to zoom from Earth orbit straight down to standing on the Moon, **drag** to orbit, **tap** any body to fly there. On-screen joystick for walking and flying, a persistent simulation clock, and GPU auto-tiering tuned for phones. Pull out your phone and try it — [sw.icodestar.net](https://sw.icodestar.net).
+## 🌌 Why this matters
+
+We all learned the names of the planets as children. But have you ever **been** there?
+
+Most space apps make you choose: either scientifically accurate, or beautiful and immersive. Solar Wanderer does both. It puts the real solar system — every planet, every moon, every AU — into a web page that anyone can open, on any device, for free.
+
+Our mission is simple:
+
+> **Before humanity becomes an interstellar species, we must first truly see our own backyard.**
+
+When a child stands on the Moon, turns around, and sees Earth as a tiny blue marble in the black sky, something changes. When a student pulls back from Earth until the planets shrink to dots and the Oort Cloud appears, their sense of scale changes forever. When a teacher can take an entire classroom to Mars in five minutes, science education changes.
+
+This is not just a simulation. It is an **invitation**.
 
 ---
 
-<table>
-<tr>
-<td><img src="docs/sdlc/screenshots/example/01.png" alt=""/></td>
-<td><img src="docs/sdlc/screenshots/example/02.png" alt=""/></td>
-</tr>
-<tr>
-<td><img src="docs/sdlc/screenshots/example/03.png" alt=""/></td>
-<td><img src="docs/sdlc/screenshots/example/04.png" alt=""/></td>
-</tr>
-<tr>
-<td><img src="docs/sdlc/screenshots/example/05.png" alt=""/></td>
-<td><img src="docs/sdlc/screenshots/example/06.png" alt=""/></td>
-</tr>
-<tr>
-<td><img src="docs/sdlc/screenshots/example/07.png" alt=""/></td>
-<td><img src="docs/sdlc/screenshots/example/08.png" alt=""/></td>
-</tr>
-<tr>
-<td><img src="docs/sdlc/screenshots/example/09.png" alt=""/></td>
-<td></td>
-</tr>
-</table>
-
-> *Left to right, top to bottom: standing on the Moon watching Earthrise · Saturn's rings · entering Jupiter's cloud deck · diving underwater on Earth · Pluto's heart-shaped plain · the outer solar system*
-
----
-
-## Why Solar Wanderer?
-
-Most space simulators make you choose between scientific accuracy and immersion. Solar Wanderer does both — on any device.
+## ✨ What makes it different
 
 | | Solar Wanderer |
 |---|---|
 | **Scale** | True 1:1 km — every planet, every moon, every AU, from 0.5 m to 100,000 AU |
 | **Accuracy** | NASA JPL Horizons verified · ≤0.074° for planets · 21 moons fitted from state vectors |
 | **Immersion** | Seamless descent from orbit → atmosphere → surface → walking → underwater (no cuts, no loading) |
-| **Scope** | Sun to the Oort Cloud (100,000 AU) · asteroid belt · Kuiper belt · 4 real comets · past the heliopause where Voyager 1 & 2 are now |
+| **Scope** | Sun to the Oort Cloud (100,000 AU) · asteroid belt · Kuiper belt · 28 real TNOs · 4 comets · past the heliopause where Voyager 1 & 2 are now |
 | **Anywhere** | Desktop keyboard/mouse **and** full mobile touch — same physics, same scale |
 | **Size** | ~200 kB gzipped JS · no server · no GPU farm |
+| **Open** | MIT licensed · all data from public NASA/IAU sources · verifiable against JPL Horizons |
 
 ---
 
-## Features
+## 🎯 The Road Ahead: Help us build the first interstellar stepping stone
 
-- 🕐 **Real time** — launch it and see the solar system *right now*. Press `N` (or tap the clock) to return to the present after time-traveling.
-- 📏 **True 1:1 scale** — floating-origin + logarithmic depth renders 0.5 m to 100,000 AU without a seam or a pop.
-- 📱 **Full mobile support** — pinch-to-zoom, one-finger orbit, two-finger pan, tap-to-fly, on-screen joystick for walk/fly, persistent clock, directory bottom sheet. GPU auto-tiering for phones.
-- 🌍 **Google Earth controls** extended to the whole heliosphere — drag, scroll, double-click-to-fly, keyboard pan, inertia, pole-flip.
-- 🚶 **Land and walk** on 19 solid worlds with real surface gravity. Jump 6× higher on the Moon. Dive underwater on Earth.
-- 🌅 **Ray-marched atmospheres** — Rayleigh+Mie scattering: blue limb from space, red sunsets, butterscotch Martian sky. Dive into Jupiter's cloud deck.
-- 🪐 **Saturn's rings** — NASA gold-brown tint, ice-particle grazing scatter, shadow cast onto the planet body.
-- 🚀 **6DOF free flight** 1 m/s → 2 AU/s, time warp ×10 years/s, instant freeze anywhere.
-- ☄️ **Full heliosphere** — asteroid belt, Kuiper belt, 28 real TNOs, zodiacal light, termination shock, heliopause, Oort Cloud.
-- 🔭 **21 real bright stars** (Hipparcos catalog, Chinese/Western names, light-years displayed) with real 3D parallax.
-- 🌐 **Bilingual** — Chinese / English UI, auto-detected from your browser language.
-- 🔬 **Verifiable** — `npm run verify` cross-checks live against the JPL Horizons API.
+Solar Wanderer already works. But to become *indistinguishable from reality* and reach billions of people, we need your help.
+
+We are building toward four pillars:
+
+1. **🪐 Realism that is indistinguishable from reality**
+   - Real DEM terrain for the Moon (LOLA), Mars (MOLA/HiRISE), and Earth (SRTM)
+   - Real solar/lunar/planetary eclipse shadows
+   - Dynamic weather, clouds, dust storms, auroras
+   - High-resolution 16K–32K textures
+   - Real spacecraft with 3D models and mission histories
+
+2. **🥽 Immersion that makes you feel you are there**
+   - WebXR / VR support
+   - First-person spacesuit HUD
+   - Environmental storytelling: Apollo landing sites, rover tracks, landmarks
+   - Dynamic time-of-day and seasonal visuals
+   - Spatial orientation aids and scale references
+
+3. **📚 A public science education system**
+   - Structured guided tours and courses
+   - Voice narration in multiple languages
+   - Teacher/classroom/museum toolkits
+   - Real-time astronomical event simulations
+   - A scalable content platform for facts, stories, and lessons
+
+4. **🌍 Reach: let the world know**
+   - Multi-language support
+   - Video content, blogs, SEO
+   - Partnerships with schools, museums, planetariums, and space agencies
+   - Community-driven content and translations
+
+**👉 See the full master plan:** [`ROADMAP.md`](ROADMAP.md)
 
 ---
 
-## Quick Start
+## 🙌 How to contribute
+
+We welcome contributors of all kinds: developers, astronomers, educators, translators, designers, writers, video creators, and space enthusiasts.
+
+### Quick start
 
 ```bash
 git clone https://github.com/hyqzz/Solar-Wanderer.git
 cd Solar-Wanderer
 npm install
 npm run dev      # → http://localhost:5173
+npm test         # 33 precision tests (no network needed)
+npm run verify   # live cross-check against NASA JPL Horizons (needs internet)
 ```
 
-Or just open **[sw.icodestar.net](https://sw.icodestar.net)** on any device — nothing to install.
+### Most wanted contributions
+
+| Area | What's needed | Good first issue? |
+|------|--------------|-------------------|
+| **Real terrain** | USGS LOLA (Moon) / MOLA (Mars) DEM tile streaming | ⭐ Yes |
+| **Eclipse shadows** | Sun–Moon–Earth shadow volumes | Advanced |
+| **Sound** | Ambient radio hiss, surface crunch, underwater | ⭐ Yes |
+| **Translations** | English/Chinese already done; Japanese, Spanish, French, Arabic… | ⭐ Yes |
+| **Education content** | Guided tours, facts, quizzes, lesson plans | ⭐ Yes |
+| **VR / WebXR** | Immersive headset support | Advanced |
+| **Accuracy** | VSOP87 + ELP2000 for ±3000 year validity | Advanced |
+| **Bookmarks** | Save/restore position + time | ⭐ Yes |
+| **Spacecraft models** | Voyager, New Horizons, Juno, Cassini 3D models and trajectories | ⭐ Yes |
+| **Outreach** | Blog posts, videos, social media, school partnerships | ⭐ Yes |
+
+**Check our [Issues](https://github.com/hyqzz/Solar-Wanderer/issues) tab** — we are turning the master plan into actionable issues. Pick one, comment, and jump in.
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for code style and PR process.
 
 ---
 
-## Controls
+## 🎮 Try it now
 
-> Press **H** in-game (or tap **❓**) for the full control reference.
+**[https://sw.icodestar.net](https://sw.icodestar.net)**
 
-### 🖱 Desktop
+No install. No account. Just open and go.
 
-| Action | Control |
-|--------|---------|
-| Rotate around focus | Left-drag |
-| Zoom (screen-center) | Scroll wheel / PageUp PageDown |
-| Pan space | Right-drag |
-| **Fly to a body** | Double-click its label, or pick it in the 🪐 directory |
-| **Click a body** | Lock focus — then scroll zooms straight toward it |
-| Scroll all the way in | **Seamless landing** → surface walking |
-| Scroll out while walking | **Seamless takeoff** back to orbit |
-| Dive underwater | Scroll in at water surface |
-| Surface walk | Mouse look + WASD, Space to jump |
-| Free flight | `F` — 6DOF, `X` to freeze, `Esc` back |
-| Time warp | `[` / `]` slower/faster · `P` pause · `N` back to now |
-| Inertial view | `V` — watch moons orbit while time-warping |
-
-### 📱 Mobile
-
-| Action | Gesture |
-|--------|---------|
-| Rotate around focus | One-finger drag |
-| Zoom | Pinch in / out |
-| Pan space | Two-finger drag |
-| **Fly to a body** | Tap its label, or pick it in the directory sheet (☰) |
-| Land / take off | Pinch all the way in to land · use the on-screen **Takeoff** button to leave |
-| Walk / fly | On-screen joystick + look-drag |
-| Time & display | Tap the clock (top-right) to expand time warp + toggles |
-| Directory | Tap **☰** (bottom-right) for the full body catalog |
-
-**Try this:** open the directory → tap *Moon* → pinch all the way in → you land on the surface → look up: the blue Earth hangs in the Moon's black sky.
+**Recommended first experiences:**
+1. Open the directory → tap **Moon** → pinch all the way in → land → look up: the blue Earth hangs in the black sky.
+2. Pull back from Earth until the planets become dots, then keep going until the Oort Cloud appears.
+3. Double-click **Saturn** and zoom in until you can see the Cassini Division in the rings.
 
 ---
 
-## Accuracy
+## 🛠 Tech stack
+
+- Three.js 0.165 · Vite 5 · native ESM · WebGL2 · logarithmic depth buffer
+- Pure-function ephemeris layer (Node-testable)
+- Floating-origin rendering for 1:1 km scale
+- GPU auto-tiering for mobile and low-end devices
+
+---
+
+## 📊 Accuracy
 
 | Body | vs NASA JPL Horizons |
 |------|----------------------|
@@ -155,56 +166,18 @@ Or just open **[sw.icodestar.net](https://sw.icodestar.net)** on any device — 
 | Moons (21) | 0° at epoch · ≤ 0.22° after 10 days |
 | Earth rotation | Sub-second meridian · 23.4° summer solstice · 1 sidereal day |
 
-```bash
-npm test          # 33 unit/accuracy tests (offline JPL fixtures)
-npm run verify    # live cross-check against NASA JPL Horizons API
-npm run fit-moons # refit moon orbits to today's epoch
-npm run build     # → dist/ (684 kB JS, ~200 kB gzip) — pure static deploy
-```
-
 ---
 
-## Architecture
+## 📣 Spread the word
 
-```
-src/
-├── astro/          # Pure-function ephemeris (Node-testable, no deps)
-│   ├── planets.js  # JPL Standish elements → heliocentric ecliptic J2000
-│   ├── moon.js     # Truncated ELP lunar theory
-│   ├── moons.js    # Horizons-fitted satellite elements
-│   └── bodies.js   # IAU/WGCCRE rotation models
-├── engine/
-│   ├── orbitCamera.js  # Google Earth–style camera (GE controls + pole-flip)
-│   ├── ship.js         # 6DOF flight + surface walking + buoyancy
-│   ├── world.js        # Floating-origin scene graph
-│   └── quality.js      # GPU auto-tiering (discrete GPU detect, FPS guard)
-├── scene/          # Renderers: sun shader, atmospheres, rings, terrain, starfield…
-└── ui/             # HUD, labels, directory, edu-facts, i18n, touch controls
-```
+If Solar Wanderer made you feel small in a good way, please:
 
-Three.js 0.165 · Vite 5 · native ESM · WebGL2 · logarithmic depth buffer.
+- ⭐ Star this repo
+- 🔗 Share [sw.icodestar.net](https://sw.icodestar.net)
+- 📺 Make a video or write a post about your experience
+- 🏫 Tell a teacher, a student, or a museum curator
 
----
-
-## Roadmap
-
-- [ ] USGS real DEM terrain (LOLA for Moon, MOLA for Mars)
-- [ ] Solar/lunar eclipse shadow volumes
-- [ ] Ambient sound (radio hiss in space, surface crunch, underwater)
-- [ ] Save/restore bookmarks (position + time)
-- [ ] VSOP87 + ELP2000 for ±3000 year validity
-
-✅ **Done in v2.0.0:** full mobile touch support.
-
----
-
-## Contributing
-
-Issues and PRs are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Ideas especially wanted: translations, real terrain DEMs, eclipse shadows, ambient sound.
-
-**⭐ Star the repo** if it made you feel small in a good way.
+Together, we can make the solar system feel like home — and prepare humanity for the stars.
 
 ---
 
