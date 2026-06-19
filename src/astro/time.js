@@ -50,14 +50,14 @@ export class SimClock {
   }
 
   /**
-   * 正常帧用 dtReal；若 wallElapsed 比 dtReal 多出 1 秒以上（tab 后台恢复），
-   * 则用实际挂钟经过时间（上限 60s），让仿真时钟追上真实时间。
+   * 正常帧用 dtReal；若 wallElapsed 比 dtReal 多出 1 秒以上（tab 后台、系统睡眠/休眠恢复），
+   * 则用完整挂钟经过时间追赶，确保左上角仿真时刻始终与真实流逝时间严格同步。
    */
   tick(dtReal) {
     const nowMs = Date.now();
     if (!this.paused) {
       const wallElapsed = (nowMs - this._wallMs) / 1000;
-      const elapsed = wallElapsed > dtReal + 1 ? Math.min(wallElapsed, 60) : dtReal;
+      const elapsed = wallElapsed > dtReal + 1 ? wallElapsed : dtReal;
       this.jdTT += (elapsed * this.rate) / DAY_SECONDS;
     }
     this._wallMs = nowMs;

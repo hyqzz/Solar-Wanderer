@@ -220,6 +220,33 @@ async function init() {
   hud.loadingDone();
   window.__game = { ship, simClock, select, flyTo, orbitCam, builder, registry, input, terrainMgr, camera, getMode: () => appMode };
   renderer.setAnimationLoop(loop);
+
+  // ── 生命周期：后台/标签切换/睡眠恢复后强制同步仿真时钟 ──
+  // requestAnimationFrame 在隐藏标签或系统睡眠时会暂停，导致 simClock 落后。
+  // 这些事件触发时立即用完整挂钟经过时间追赶，确保左上角时间与真实流逝严格一致。
+  function syncClockAfterWake() {
+    if (simClock.paused) return;
+    const jdBefore = simClock.jdTT;
+    simClock.tick(0);
+    const jdAfter = simClock.jdTT;
+    // 若时间确实跳跃，立即驱动星历/场景更新一帧，避免画面滞后
+    if (Math.abs(jdAfter - jdBefore) > 1e-12) {
+      builder.update(jdAfter);
+      comets.update(jdAfter);
+      tnoScene.update(jdAfter, ship.posKm);
+      for (const v of voyagerEntries) {
+        const p = voyagerPosition(v.vg, jdAfter);
+        const w = eclToWorldArr(p);
+        v.posKm[0] = w[0]; v.posKm[1] = w[1]; v.posKm[2] = w[2];
+      }
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncClockAfterWake();
+  });
+  window.addEventListener('pageshow', syncClockAfterWake);
+  window.addEventListener('focus', syncClockAfterWake);
 }
 
 function buildRegistry() {
