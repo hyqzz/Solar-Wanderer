@@ -62,5 +62,4 @@ docs/sdlc/screenshots/*
 *.avi
 *.mkv
 
-# campaign/ 已取消忽略，推广资产纳入版本库
-# campaign/
+campaign/
