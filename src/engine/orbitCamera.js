@@ -493,7 +493,11 @@ export class OrbitCamera {
 
     // ---- 拖拽 → 角速度（直接响应 + 松手惯性，随航向旋转） ----
     // 灵敏度随离地高度收敛（≈"抓住地面拖动"：近地慢、高空快，R7 #7）
-    const sens = THREE.MathUtils.clamp(0.00123 * alt / f.radiusKm, 2e-6, 0.0052);
+    // 移动版近地表下限适度提高：完全贴地时若下限过低，单指拖动几乎无响应，
+    // 会被误认为"操控失效"；同时仍保持明显低于高空的灵敏度。
+    let sensMin = 2e-6;
+    if (IS_MOBILE && alt < f.radiusKm * 0.5) sensMin = 1.2e-5;
+    const sens = THREE.MathUtils.clamp(0.00123 * alt / f.radiusKm, sensMin, 0.0052);
     if (drag.active) {
       const ch = Math.cos(this.heading), sh = Math.sin(this.heading);
       this.vLat = ((drag.dy * ch - drag.dx * sh) * sens) / Math.max(dt, 1e-3);
@@ -557,8 +561,13 @@ export class OrbitCamera {
     // - 无平移但视线仍指向径向：显式点击切换焦点后可能保留 tilt 补偿，此时仍应以
     //   焦点为中心进行远离/接近，而不是进入 dolly 导致目标偏移。
     // - 有横向平移且视线仍径向：保持 look-at 点不甩回焦点方向。
+    // - 移动版纯双指缩放：强制走径向。触控近地表时 auto-tilt 使视线偏离径向，
+    //   若按桌面规则进入 dolly，屏幕中心常指向太空或地形深度极小，导致"双指
+    //   拉远"几乎没有可见效果（与桌面滚轮可用手感不一致）。
+    const mobilePinchRadial = IS_MOBILE && zoomActive &&
+      input.pan.dx === 0 && input.pan.dy === 0 && this.panOffset.lengthSq() === 0;
     const shouldBeRadial = (this.panOffset.lengthSq() === 0 &&
-      (Math.abs(this.tilt) <= 0.02 || viewRadial)) ||
+      (Math.abs(this.tilt) <= 0.02 || viewRadial || mobilePinchRadial)) ||
       (panMostlyPerp && viewRadial);
     const canStartRadial = zoomActive && !inDollyGesture && !this._radialGesture && shouldBeRadial;
     // 外部设置 distTarget 后（如起飞/返回探索的抬升），即使没有缩放输入也要平滑过渡到目标
@@ -572,7 +581,14 @@ export class OrbitCamera {
       const minD = this.minDist(f);
       const base = minD - 0.002; // 基准 = 下限略下方（贴地时高度步长 ≥ 2m 起步）
       const a = Math.max(this.distTarget - base, 0.0008);
-      this.distTarget = THREE.MathUtils.clamp(base + a * zoomMul, minD, MAX_DIST);
+      let target = base + a * zoomMul;
+      // 移动版：近距离 zoom out（远离）时原公式几乎拉不动相机，导致地表附近
+      // 双指远离"操控不生效"。保证每次 zoom out 至少远离 2% 半径，提供与
+      // 桌面版滚轮相当的可用拉远手感，同时 zoom in 仍保持精细着陆控制。
+      if (IS_MOBILE && zoomMul > 1 && this.distTarget < minD * 1.5) {
+        target = Math.max(target, this.distTarget + f.radiusKm * 0.02);
+      }
+      this.distTarget = THREE.MathUtils.clamp(target, minD, MAX_DIST);
       this.dist += (this.distTarget - this.dist) * Math.min(dt * 7, 1);
     } else {
       this.distTarget = this.dist; // 冻结径向缩放通道

@@ -162,21 +162,29 @@ export class Input {
         const newMid  = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
 
         // Pinch → wheel equivalent (spread = zoom in = wheel < 0)
+        let pinchActive = false;
         if (this._pinchDist > 5 && newDist > 5) {
           const ratio = newDist / this._pinchDist;
           // 1.5% 死区：双指平移时手指间距微变产生虚假滚轮事件 → 叠加缩放与平移、干扰平移手势
           if (ratio > 0.1 && ratio < 10 && Math.abs(ratio - 1) > 0.015) {
             const wEq = -(Math.log(ratio) / Math.log(1.12)) * 1.6;
             this.wheel += wEq;
+            pinchActive = true;
           }
         }
         this._pinchDist = newDist;
 
         // Two-finger translation → pan
-        if (this._pinchMid) {
-          this.pan.active = true;
-          this.pan.dx += newMid.x - this._pinchMid.x;
-          this.pan.dy += newMid.y - this._pinchMid.y;
+        // 缩放主导时忽略中点偏移，防止对称捏合/张开被错误地解释成平移，
+        // 导致 look-at 点被甩到数万 km 外、后续单指拖动几乎无效（移动版起飞后）。
+        if (this._pinchMid && (!pinchActive || !this._wasPinching)) {
+          const dmx = newMid.x - this._pinchMid.x;
+          const dmy = newMid.y - this._pinchMid.y;
+          if (Math.hypot(dmx, dmy) > 0.5) {
+            this.pan.active = true;
+            this.pan.dx += dmx;
+            this.pan.dy += dmy;
+          }
         }
         this._pinchMid = newMid;
       }
@@ -246,12 +254,17 @@ export class Input {
     // Without this, a second touch on a non-canvas element is never registered,
     // so canvas never enters pinch mode. Only allow promotion from exactly 1
     // existing pointer → 2; ignore 3rd+ fingers to keep state machine simple.
+    // 阻止 TouchControls 按钮等后续监听器 capture 这根 pointer，否则 pinch
+    // 手势会被按钮的 setPointerCapture 打断，导致移动版双指远离/缩放失效。
     window.addEventListener('pointerdown', (e) => {
       if (e.target === canvas) return;               // canvas already handled it
       if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
       if (this._pointers.size !== 1) return;         // only promote a lone pointer to pinch
       if (this._pointers.has(e.pointerId)) return;   // duplicate
       try { canvas.setPointerCapture(e.pointerId); } catch { return; }
+      // 必须阻止按钮（如 TouchControls）在同事件上调用 setPointerCapture，
+      // 否则第二根手指的事件会全部被按钮吞掉，canvas 无法完成 pinch。
+      e.stopImmediatePropagation();
       this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this._ptrDownPos.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (this._pointers.size === 2) {

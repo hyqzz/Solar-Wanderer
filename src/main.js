@@ -437,15 +437,10 @@ function switchToOrbit() {
   // 滚轮进入 dolly。复位后由 auto-tilt 在抬升过程中自然接管。
   orbitCam.tilt = 0;
   orbitCam.panOffset.set(0, 0, 0); // 重置平移偏置以确保下次滚轮缩放走径向而非 dolly
-  // 从行走/飞行切回探索时，若相机贴地则抬升到半径 2.5 倍以上，保证 GE 式拖拽/缩放
-  // 灵敏度可用；若已在舒适高度则保持当前距离，避免把高空相机推得更远。
-  const orbitBody = orbitEnv.get(orbitCam.focusId);
-  const comfortableDist = Math.max(orbitBody.radiusKm * 2.5, 10);
-  if (orbitCam.dist < comfortableDist) {
-    orbitCam.distTarget = Math.max(orbitCam.dist * 1.5, comfortableDist);
-  } else {
-    orbitCam.distTarget = orbitCam.dist;
-  }
+  orbitCam.distTarget = orbitCam.dist + Math.max(orbitCam.dist * 0.002, 0.05);
+  // 从 walk/fly 切回探索时同样给予 0.8s 自动登陆冷却，避免用户刚切回就
+  // 因近地表被重新吸回 walk，导致“单指/双指操控不生效”。
+  lastTakeoff = performance.now();
   input.cancelGestures(); // 清理旧手势状态，防止平移/捏合泄漏到新模式
 }
 
@@ -503,8 +498,11 @@ function loop() {
     // 登陆：按 G，或滚轮一路拉近贴地自动转行走（NMS 式无缝衔接，R7 #1）
     const landRange = nearest ? Math.max(20, nearest.radiusKm * 0.05) : 0;
     let autoLand = false;
+    // 手势活跃时不自动登陆：双指捏合/平移时的中点偏移可能短暂把相机推近地表，
+    // 此时应让用户完成手势后再判断是否真正靠近，避免"刚切回探索就吸回行走"。
+    const inputIdle = !input.drag.active && !input.pan.active && input.wheel === 0;
     if (nearest?.landable && !orbitCam.flight && nearest.distSurface < 30 &&
-      performance.now() - lastTakeoff > 800) {
+      performance.now() - lastTakeoff > 800 && inputIdle) {
       _rel.set(
         ship.posKm[0] - nearest.posKm[0], ship.posKm[1] - nearest.posKm[1], ship.posKm[2] - nearest.posKm[2]
       );
@@ -533,12 +531,9 @@ function loop() {
       orbitCam.adoptPosition(orbitEnv, ship.walk.bodyId, ship.posKm, ship.quat);
       // 滚轮起飞后复位 tilt 并抬升相机，避免 adoptPosition 留下的 -autoTilt 在 auto-tilt
       // 消失后导致视线指向地平线下方，进而使径向缩放条件失效、滚轮进入 dolly。
-      // 移动版：起飞后必须直接抬升到星球半径 2.5 倍以上，否则地表附近 drag/pinch
-      // 灵敏度过低，用户会感觉“操控完全失效”（只能再点前往按钮恢复）。
-      const takeoffBody = orbitEnv.get(ship.walk.bodyId);
-      orbitCam.distTarget = Math.max(orbitCam.dist * 1.5, takeoffBody.radiusKm * 2.5, 10);
       orbitCam.tilt = 0;
       orbitCam.panOffset.set(0, 0, 0); // 重置平移偏置：起飞后应能径向缩放重新着陆
+      orbitCam.distTarget = orbitCam.dist + Math.max(orbitCam.dist * 0.002, 0.05);
       appMode = 'orbit';
       ship.mode = 'fly';
       ship.vel.set(0, 0, 0);
