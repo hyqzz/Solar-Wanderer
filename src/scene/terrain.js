@@ -96,10 +96,14 @@ export class HeightField {
     if (sp.craters > 0) {
       h += sp.craters * (this.crater(dir, 22) * 0.9 + this.crater(dir, 85) * 0.45);
     }
-    // 细节频率（行走尺度起伏：~2km / ~200m / ~40m 波长）
-    h += 0.05 * n.fbm(dir.x * 900, dir.y * 900, dir.z * 900, 3);
-    h += 0.022 * n.fbm(dir.x * 8000, dir.y * 8000, dir.z * 8000, 2);
-    h += 0.009 * n.fbm(dir.x * 42000, dir.y * 42000, dir.z * 42000, 2);
+    // 细节频率（行走尺度起伏：~2km / ~200m / ~40m 波长）。
+    // 小天体（R < 400 km）上固定振幅的高频细节会按半径比例放大尖刺感，
+    // 因此按半径衰减，使 Phobos、Mimas 等呈现月球般的平滑表面。
+    const bodyR = this.phys.radiusKm;
+    const detailScale = Math.min(1, bodyR / 400);
+    h += 0.05 * detailScale * n.fbm(dir.x * 900, dir.y * 900, dir.z * 900, 3);
+    h += 0.022 * detailScale * n.fbm(dir.x * 8000, dir.y * 8000, dir.z * 8000, 2);
+    h += 0.009 * detailScale * n.fbm(dir.x * 42000, dir.y * 42000, dir.z * 42000, 2);
     // 安全上限：噪声幅度不超过天体平均半径的 5%，防止小天体（Phobos 等）山脉过高
     const effAmp = Math.min(sp.ampKm, this.phys.radiusKm * 0.05);
     // 抬升保证地形在全球光滑球面之上
@@ -184,9 +188,11 @@ export class HeightField {
 /** 地形材质（每 LOD 级一份）：StandardMaterial + 片元级三尺度细节噪声注入（近看不糊）。
  * uFade: 0→1 淡入 uniform，LOD 级重建时从 0 淡起，800ms 后归 1（避免突然弹出感）。
  * vSlope: 顶点坡度属性，驱动粗糙度 PBR（陡岩面更粗糙，水面最光滑）。
+ * radiusKm: 用于缩放高频细节/凹凸幅度，避免小天体（Phobos 等）表面出现尖锐片元噪声。
  * 岸边泡沫：land/water 过渡区（vWater∈(0,1)）叠加动态白沫噪声。
  * 水面波纹：三向行进波叠加（SpaceEngine 式海面）。 */
-function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits) {
+function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371) {
+  const detailScale = Math.min(1, radiusKm / 400); // 与 HeightField.height() 一致
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true, roughness: 0.95, metalness: 0.0, fog: true,
     side: THREE.DoubleSide, // 水下仰望可见海面（R9-2b）
@@ -194,10 +200,12 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits) {
     polygonOffset: polyUnits > 0, polygonOffsetFactor: polyUnits > 0 ? 1 : 0,
     polygonOffsetUnits: polyUnits, // 粗级后推，消除 LOD 环带重叠区 z-fight（R9-2a）
   });
+  const uDetailScale = { value: detailScale };
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uPatchRel = uPatchRel;
     shader.uniforms.uTime = uTime;
     shader.uniforms.uFade = uFade;
+    shader.uniforms.uDetailScale = uDetailScale;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
         uniform vec3 uPatchRel;
@@ -217,6 +225,7 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits) {
         varying float vSlope;
         uniform float uTime;
         uniform float uFade;
+        uniform float uDetailScale;
         float thash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         float tnoise(vec3 p) {
           vec3 i = floor(p), f = fract(p);
@@ -228,13 +237,14 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits) {
         }`)
       .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
         {
-          // 三尺度细节：~28m / ~2.4m / ~20cm（对象空间稳定）；高频项随距离淡出防远处沙噪
+          // 三尺度细节：~28m / ~2.4m / ~20cm（对象空间稳定）；高频项随距离淡出防远处沙噪。
+          // 小天体上额外按 uDetailScale 衰减中高频，避免片元噪声形成尖锐视觉尖峰。
           float vd = length(vViewPosition);
           float f2 = 1.0 - smoothstep(0.15, 0.9, vd);   // 2.4m 细节 900m 外淡出
           float f3 = 1.0 - smoothstep(0.015, 0.09, vd); // 20cm 细节 90m 外淡出
           float d1 = tnoise(vObjPos * 35.0);
-          float d2 = tnoise(vObjPos * 420.0) * f2;
-          float d3 = tnoise(vObjPos * 5200.0) * f3;
+          float d2 = tnoise(vObjPos * 420.0) * f2 * uDetailScale;
+          float d3 = tnoise(vObjPos * 5200.0) * f3 * uDetailScale;
           float dm = 0.78 + 0.46 * (d1 * 0.45 + d2 * 0.33 + d3 * 0.22)
                    + (1.0 - f2) * 0.075 + (1.0 - f3) * 0.05;
           diffuseColor.rgb *= mix(dm, 1.0, vWater);
@@ -254,7 +264,7 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits) {
           // 程序化凹凸（屏幕导数法）；水面 = 三向行进波叠加（SpaceEngine 式海面，#21）
           float vdb = length(vViewPosition);
           float bf = 1.0 - smoothstep(0.1, 1.2, vdb);
-          float hRock = (tnoise(vObjPos * 420.0) * 0.68 + tnoise(vObjPos * 5200.0) * 0.32) * 0.0016 * bf;
+          float hRock = (tnoise(vObjPos * 420.0) * 0.68 + tnoise(vObjPos * 5200.0) * 0.32) * 0.0016 * bf * uDetailScale;
           float wf = 1.0 - smoothstep(0.05, 14.0, vdb);
           float hWave = (tnoise(vObjPos * 820.0  + vec3(uTime * 0.07,  0.0,          uTime * 0.05 )) * 0.50
                        + tnoise(vObjPos * 2800.0 - vec3(uTime * 0.12,  uTime * 0.04, 0.0          )) * 0.35
@@ -403,7 +413,7 @@ export class TerrainPatchSet {
       // 级原点相对几何（R9-2a 修闪烁）：每级独立原点 + 独立材质（粗级 polygonOffset 后推）
       const uPatchRel = { value: new THREE.Vector3() };
       const uFade = { value: 0 }; // 新建级从 0 淡入，避免 LOD 突然弹出（#18）
-      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 2);
+      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 2, R);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.frustumCulled = false;
       this.group.add(mesh);

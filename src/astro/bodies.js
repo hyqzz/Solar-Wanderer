@@ -120,13 +120,14 @@ export const MOON_PHYS = {
                desc: '地球唯一的天然卫星，潮汐锁定使其永远以同一面朝向地球。人类唯一踏足过的地外天体。' },
   phobos:    { nameZh: '火卫一', nameEn: 'Phobos', parent: 'mars', radiusKm: 11.27, gm: 7.087e-4,
                landable: true, shape: { dims: [27.0, 18.4, 22.0] }, // 真实土豆状（长轴指向火星）
-               // ampKm 从 1.5 降至 0.5（≈4.4% R）：原值 13% R 使山脉视觉上远超真实 Phobos 地形起伏
-               surface: { ampKm: 0.5, roughness: 0.7, craters: 1.0, palette: 'gray' },
+               // 降低相对起伏：真实 Phobos 虽有大撞击坑，但程序噪声在高 roughness 下会生成尖锐山脊；
+               // 目标为月球般的平滑撞击坑地貌（amp ≈ 0.4% R）。
+               surface: { ampKm: 0.05, roughness: 0.45, craters: 0.7, palette: 'gray' },
                desc: '火星的大卫星，土豆状（27×22×18 km），轨道极低（9376 km），正以每百年 1.8 米的速度向火星坠落。' },
   deimos:    { nameZh: '火卫二', nameEn: 'Deimos', parent: 'mars', radiusKm: 6.2, gm: 9.6e-5,
                landable: true, shape: { dims: [15.0, 11.0, 12.2] }, // 不规则（15×12.2×11 km）
-               // ampKm 从 0.8 降至 0.25（≈4% R）：与 Phobos 同理，小天体噪声幅度需按半径缩放
-               surface: { ampKm: 0.25, roughness: 0.7, craters: 1.0, palette: 'gray' },
+               // 与 Phobos 同理：小天体噪声幅度按半径缩放，避免尖峰。
+               surface: { ampKm: 0.03, roughness: 0.45, craters: 0.7, palette: 'gray' },
                desc: '火星较小较远的卫星，不规则状，表面覆盖细腻尘埃层。' },
   io:        { nameZh: '木卫一', nameEn: 'Io', parent: 'jupiter', radiusKm: 1821.6, gm: 5.916e3,
                landable: true, surface: { ampKm: 4, roughness: 0.5, craters: 0.1, palette: 'io' },
@@ -145,7 +146,10 @@ export const MOON_PHYS = {
                textures: { map: 'callisto.jpg' },
                desc: '太阳系遭受撞击最严重的天体，表面古老的撞击坑层层叠叠，已有 40 亿年历史。' },
   mimas:     { nameZh: '土卫一', nameEn: 'Mimas', parent: 'saturn', radiusKm: 198.2, gm: 2.504,
-               landable: true, surface: { ampKm: 3, roughness: 0.6, craters: 1.4, palette: 'gray' },
+               landable: true,
+               // 降低起伏与坑缘锐度：真实 Mimas 以巨大赫歇尔坑为主，但程序 crater rim 会生成尖峰；
+               // 目标为月球般平滑的撞击坑表面（amp ≈ 0.4% R）。
+               surface: { ampKm: 0.8, roughness: 0.5, craters: 0.8, palette: 'gray' },
                desc: '巨大的赫歇尔撞击坑使它酷似“死星”。' },
   enceladus: { nameZh: '土卫二', nameEn: 'Enceladus', parent: 'saturn', radiusKm: 252.1, gm: 7.211,
                landable: true, surface: { ampKm: 1, roughness: 0.35, craters: 0.3, palette: 'ice' },
@@ -170,7 +174,10 @@ export const MOON_PHYS = {
                landable: true, surface: { ampKm: 4, roughness: 0.55, craters: 1.0, palette: 'iapetus' },
                desc: '阴阳脸卫星：前导半球漆黑如煤，尾随半球洁白如雪，赤道上有一圈神秘的山脊。' },
   miranda:   { nameZh: '天卫五', nameEn: 'Miranda', parent: 'uranus', radiusKm: 235.8, gm: 4.4,
-               landable: true, surface: { ampKm: 5, roughness: 0.65, craters: 0.6, palette: 'gray' },
+               landable: true,
+               // Miranda 虽有维罗纳断崖，但程序噪声在高 roughness 下会生成尖锐山脊；
+               // 降低为月球般的平滑撞击坑地貌（amp ≈ 0.4% R）。
+               surface: { ampKm: 0.9, roughness: 0.5, craters: 0.6, palette: 'gray' },
                desc: '地质最混乱的卫星，拥有太阳系最高的悬崖维罗纳断崖（20 km）。' },
   ariel:     { nameZh: '天卫一', nameEn: 'Ariel', parent: 'uranus', radiusKm: 578.9, gm: 86.4,
                landable: true, surface: { ampKm: 2, roughness: 0.5, craters: 0.7, palette: 'ice' },
