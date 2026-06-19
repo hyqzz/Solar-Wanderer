@@ -49,10 +49,8 @@ export const BODIES = {
     surface: { ampKm: 8, roughness: 0.6, craters: 0.6, palette: 'mars' },
     atmosphere: {
       // 火星白昼天空呈奶油黄褐色——主要来自悬浮尘埃的散射（红光占优），实拍：海盗号/毅力号
-      // mieG 从 0.55 降至 0.32：单散射 Mie 前向不对称在 0.55 时造成日照半球亮度约 66 倍于
-      // 逆日半球，呈现不真实的"半球更亮"——实拍显示火星天空亮度梯度更温和（多重散射填充阴影侧）。
       heightKm: 80, rayleighScaleKm: 11.1, mieScaleKm: 9,
-      rayleigh: [5.0e-7, 3.0e-7, 1.2e-7], mie: 1.2e-6, mieG: 0.32, multiplier: 2.2,
+      rayleigh: [5.0e-7, 3.0e-7, 1.2e-7], mie: 1.5e-6, mieG: 0.55, multiplier: 2.2,
       haze: 0.28, // 悬浮尘埃近地面雾霾（实拍：毅力号地平线可见奶油色大气带）
     },
     textures: { map: 'mars.jpg' },
