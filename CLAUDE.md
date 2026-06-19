@@ -8,40 +8,58 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 这是一个基于真实 NASA JPL 星历的浏览器端 1:1 太阳系实时探索应用，范围从太阳表面延伸至 10 万 AU 的奥尔特云。
 
+- 在线演示： https://sw.icodestar.net
+- GitHub Pages（main 分支自动部署）： https://hyqzz.github.io/Solar-Wanderer/
+- 演示视频： https://youtu.be/3rwShi6oF0o
+
 ## 常用命令
 
 ```bash
 npm install          # 安装 three + vite + puppeteer
 npm run dev          # Vite 开发服务器 → http://localhost:5173
 npm run build        # 生产构建 → dist/（纯静态部署）
-npm run preview      # 预览构建产物
+npm run preview      # 预览构建产物（先 build）
 npm test             # 33 项离线单元/星历精度测试（Node 原生 test runner）
 node --test tests/ephemeris.test.mjs   # 运行单个测试文件
+node --test tests/*.test.mjs           # 运行全部测试文件
 npm run verify       # 在线与 NASA JPL Horizons 实时对照（需联网）
 npm run fit-moons    # 重新拟合卫星轨道到当前历元
 npm run fetch-textures # 重新下载贴图资产
 ```
 
-运行时验证/探针工具（位于 `tools/`）：
-
-```bash
-node tools/repro-r8.mjs          # 屏幕中心缩放三场景断言
-node tools/repro-r9.mjs          # 镜头/地形/海洋/惯性模式断言
-node tools/repro-r10.mjs         # 焦点/水体/V 连续性断言
-node tools/repro-issue1.mjs      # 返回探索模式后 GE 操控生效
-node tools/repro-issue2.mjs      # 右键平移后滚轮不跳回原空间
-node tools/repro-issue18.mjs     # 轨道→地表无缝过渡：提前激活/由外向内/逐级淡入
-node tools/repro-issue21.mjs     # 登陆视觉真实感：极冠霜冻/坡度 PBR/气溶胶 haze/步进
-node tools/repro-fixbatch.mjs    # 批量修复回归：#12 火星天空/#17 时钟追赶/#19 小天体地形/#20 平移/#1/#13/#14/#15/#16
-node tools/repro-label-focus.mjs # 点击标签后滚动平滑切换焦点
-node tools/probe-r7.mjs          # 自动登陆/起飞/气巨入气（需 dev server）
-node tools/smoke-i18n.mjs        # 中英双语 UI 冒烟（需 dev server）
-node tools/smoke-mobile.mjs      # 移动端触控 UI 冒烟（需 dev server）
-node tools/probe-maxdist.mjs     # 400 AU 远距标签可见性（需 dev server）
-node tools/repro-occlusion.mjs   # 土卫一遮挡土星（需 dev server）
-```
-
 构建失败时先跑 `npm test`；`npm run verify` 失败通常是网络或 JPL API 可达性问题。
+
+## 构建与部署
+
+- Vite 配置为 `base: './'`，产物是纯静态文件，可直接复制 `dist/` 到任意 CDN/静态服务器。
+- 多入口构建：`index.html`（中文）和 `en/index.html`（英文）会分别输出到 `dist/` 和 `dist/en/`。
+- GitHub Pages 自动部署由 `.github/workflows/deploy.yml` 处理，push 到 `main` 时自动触发：
+  - `npm ci` → `npm test` → `npm run build` → `actions/deploy-pages@v4`
+  - 部署地址：https://hyqzz.github.io/Solar-Wanderer/
+
+## 运行时验证 / 探针工具
+
+`tools/` 目录下的脚本按用途分为三类，多数需要本地 dev server 已启动：
+
+- **离线生成/拟合/验证**
+  - `node tools/verify-ephemeris.mjs` — 在线与 JPL Horizons 交叉验证（`npm run verify` 的入口）
+  - `node tools/make-fixtures.mjs` — 重新生成 `tests/fixtures.json`（需联网）
+  - `node tools/fit-moons.mjs` — 用 Horizons 状态向量重新拟合 21 颗卫星轨道
+  - `node tools/fetch-textures.mjs` — 下载贴图资产
+- **回归 / 冒烟（需 dev server）**
+  - `node tools/repro-r8.mjs` — 屏幕中心缩放三场景断言
+  - `node tools/repro-r9.mjs` — 镜头/地形/海洋/惯性模式断言
+  - `node tools/repro-r10.mjs` — 焦点/水体/V 连续性断言
+  - `node tools/repro-issue*.mjs` — 具体 issue 的回归验证
+  - `node tools/repro-fixbatch.mjs` — 批量修复回归
+  - `node tools/smoke-i18n.mjs` — 中英双语 UI 冒烟
+  - `node tools/smoke-mobile.mjs` — 移动端触控 UI 冒烟
+- **主动探测 / 截图（需 dev server）**
+  - `node tools/probe-r7.mjs` — 自动登陆/起飞/气巨入气
+  - `node tools/probe-r8-shot.mjs` — 截图探测
+  - `node tools/probe-maxdist.mjs` — 400 AU 远距标签可见性
+  - `node tools/audit-visuals.mjs` — 视觉审查
+  - `node tools/capture-demo.mjs` / `capture-mobile.mjs` — 生成演示截图
 
 ## 技术栈
 
@@ -61,7 +79,7 @@ node tools/repro-occlusion.mjs   # 土卫一遮挡土星（需 dev server）
 关键文件：
 
 - `src/astro/time.js` — UTC → TT → JD 换算，所有星历的输入时间基准。
-- `src/astro/planets.js` / `moons.js` / `moon.js` / `tno.js` — 轨道根数与位置计算。
+- `src/astro/planets.js` / `moon.js` / `moons.js` / `tno.js` — 轨道根数与位置计算。
 - `src/astro/bodies.js` — 天体物理/自转参数与 IAU 自转模型。
 - `src/engine/orbitCamera.js` — 探索模式相机：体固系 `lat/lon/dist`、焦点管理、延迟焦点过渡、自动登陆/起飞。
 - `src/engine/ship.js` — 6DOF 飞行 + 地表行走 + 水下浮力。
@@ -95,7 +113,13 @@ node tools/repro-occlusion.mjs   # 土卫一遮挡土星（需 dev server）
 
 ## 测试与验证
 
-- 单元测试在 `tests/*.test.mjs`，离线基准数据在 `tests/fixtures.json`。
+- 单元测试在 `tests/*.test.mjs`：
+  - `tests/ephemeris.test.mjs` — 行星/月球/卫星/TNO 位置精度
+  - `tests/kepler.test.mjs` — 开普勒轨道计算
+  - `tests/physics.test.mjs` — 物理常数与运动学
+  - `tests/rotation.test.mjs` — IAU 自转模型
+  - `tests/time.test.mjs` — UTC/TT/JD 换算
+- 离线基准数据在 `tests/fixtures.json`。
 - 若 `npm test` 因 fixtures 缺失失败，可运行 `node tools/make-fixtures.mjs`（需联网）重新生成。
 - 新增星历或轨道改动后，应跑 `npm run verify` 与 `npm test`。
 
@@ -121,3 +145,4 @@ node tools/repro-occlusion.mjs   # 土卫一遮挡土星（需 dev server）
 - `docs/sdlc/test-report.md` — 测试报告与基准。
 - `docs/sdlc/screenshots/` — 冒烟与审查截图。
 - `README.md` — 项目介绍、演示链接、控制说明。
+- `CONTRIBUTING.md` — 贡献指南、PR 流程、最想要的贡献方向。
