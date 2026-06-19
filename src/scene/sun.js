@@ -1,5 +1,6 @@
-// 太阳：动态表面着色器（米粒组织流动）+ 日冕辉光 + 镜头光晕精灵。
-// HDR 强度高于 1，交给 ACES 色调映射与泛光形成真实曝光观感。
+// 太阳：动态表面着色器（米粒组织流动）。
+// 刻意不渲染日冕辉光与镜头光晕：真实太空中肉眼/相机不会看到这类叠加光晕，
+// 本项目以 1:1 物理真实为最高目标，因此仅保留太阳圆面本身。
 
 import * as THREE from 'three';
 
@@ -69,52 +70,12 @@ export function createSun(radiusKm, mapTex) {
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(radiusKm, 96, 64), mat);
   group.add(mesh);
 
-  // 日冕：面向相机的多层径向衰减精灵
-  const coronaTex = makeCoronaTexture();
-  const corona = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: coronaTex, color: 0xffd9a0, transparent: true, opacity: 0.85,
-    blending: THREE.AdditiveBlending, depthWrite: false,
-  }));
-  corona.scale.setScalar(radiusKm * 7);
-  group.add(corona);
-
-  // depthTest: true（原为 false）：允许不透明行星写入深度缓冲后遮挡光晕精灵，
-  // 使行星凌日时太阳光晕被正确遮蔽而不穿透行星表面。
-  const glare = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: coronaTex, color: 0xfff4e0, transparent: true, opacity: 0.95,
-    blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true,
-  }));
-  glare.scale.setScalar(radiusKm * 2.6);
-  group.add(glare);
-
   return {
     group, mesh,
     update(timeSec, camDistKm) {
       uniforms.uTime.value = timeSec;
-      // 光晕双向缩放：远处保持可见亮星；近处随辐照度增强
-      //（水星处阳光为地球 6 倍，太阳应是炫目光团——人眼/相机眩光半径随光通量增长）
-      const kFar = Math.min(60, Math.max(1, camDistKm / (radiusKm * 220)));
-      const dAU = camDistKm / 1.495978707e8;
-      const kNear = Math.min(8, Math.max(1, Math.pow(1 / Math.max(dAU, 0.02), 0.9)));
-      glare.scale.setScalar(radiusKm * 2.6 * Math.max(kFar, kNear));
-      corona.scale.setScalar(radiusKm * 7 * Math.min(kNear, 2.5));
+      // 不再更新 corona/glare：已移除非物理光晕。
     },
   };
 }
 
-function makeCoronaTexture(size = 256) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.08, 'rgba(255,240,210,0.85)');
-  g.addColorStop(0.25, 'rgba(255,210,140,0.28)');
-  g.addColorStop(0.6, 'rgba(255,180,100,0.07)');
-  g.addColorStop(1, 'rgba(255,160,80,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}

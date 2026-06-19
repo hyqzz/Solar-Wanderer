@@ -1,4 +1,5 @@
-// 小行星主带与柯伊伯带（统计分布点云，确定性种子）+ 黄道尘光 + 奥尔特云统计粒子层。
+// 小行星主带与柯伊伯带（统计分布点云，确定性种子）+ 奥尔特云统计粒子层。
+// 注：不渲染黄道尘光/黄道光晕，因为真实宇宙中肉眼不可见此叠加光晕。
 
 import * as THREE from 'three';
 import { KM_PER_AU } from '../config.js';
@@ -42,27 +43,6 @@ export function createBelts() {
     color: 0x8fa3b8, size: 1.3, opacity: 0.42, seed: 7777,
   }));
 
-  // 黄道尘光：黄道面内暗淡光晕盘
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
-  const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(128, 128, 4, 128, 128, 128);
-  g.addColorStop(0, 'rgba(255,240,220,0.5)');
-  g.addColorStop(0.25, 'rgba(255,235,210,0.12)');
-  g.addColorStop(1, 'rgba(255,230,200,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
-  const tex = new THREE.CanvasTexture(c);
-  const dust = new THREE.Mesh(
-    new THREE.PlaneGeometry(6 * KM_PER_AU, 6 * KM_PER_AU),
-    new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, opacity: 0.11, depthWrite: false,
-      blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
-    })
-  );
-  dust.rotation.x = -Math.PI / 2; // 置于黄道面（世界 XZ）
-  dust.renderOrder = -5;
-  group.add(dust);
   return group;
 }
 

@@ -8,7 +8,6 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 import { SimClock } from './astro/time.js';
@@ -52,11 +51,7 @@ scene.add(ambient);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth / QUALITY.bloomDiv, window.innerHeight / QUALITY.bloomDiv),
-  0.38, 0.5, 1.1
-);
-composer.addPass(bloom);
+// 注：已移除 UnrealBloomPass。真实太空中不存在后期泛光光晕，本项目以 1:1 物理真实为最高目标。
 composer.addPass(new OutputPass());
 
 // 运行时帧率兜底：识别失败的弱 GPU 在持续低帧时一次性降档
