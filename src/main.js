@@ -437,7 +437,15 @@ function switchToOrbit() {
   // 滚轮进入 dolly。复位后由 auto-tilt 在抬升过程中自然接管。
   orbitCam.tilt = 0;
   orbitCam.panOffset.set(0, 0, 0); // 重置平移偏置以确保下次滚轮缩放走径向而非 dolly
-  orbitCam.distTarget = orbitCam.dist + Math.max(orbitCam.dist * 0.002, 0.05);
+  // 从行走/飞行切回探索时，若相机贴地则抬升到半径 2.5 倍以上，保证 GE 式拖拽/缩放
+  // 灵敏度可用；若已在舒适高度则保持当前距离，避免把高空相机推得更远。
+  const orbitBody = orbitEnv.get(orbitCam.focusId);
+  const comfortableDist = Math.max(orbitBody.radiusKm * 2.5, 10);
+  if (orbitCam.dist < comfortableDist) {
+    orbitCam.distTarget = Math.max(orbitCam.dist * 1.5, comfortableDist);
+  } else {
+    orbitCam.distTarget = orbitCam.dist;
+  }
   input.cancelGestures(); // 清理旧手势状态，防止平移/捏合泄漏到新模式
 }
 
@@ -525,9 +533,12 @@ function loop() {
       orbitCam.adoptPosition(orbitEnv, ship.walk.bodyId, ship.posKm, ship.quat);
       // 滚轮起飞后复位 tilt 并抬升相机，避免 adoptPosition 留下的 -autoTilt 在 auto-tilt
       // 消失后导致视线指向地平线下方，进而使径向缩放条件失效、滚轮进入 dolly。
+      // 移动版：起飞后必须直接抬升到星球半径 2.5 倍以上，否则地表附近 drag/pinch
+      // 灵敏度过低，用户会感觉“操控完全失效”（只能再点前往按钮恢复）。
+      const takeoffBody = orbitEnv.get(ship.walk.bodyId);
+      orbitCam.distTarget = Math.max(orbitCam.dist * 1.5, takeoffBody.radiusKm * 2.5, 10);
       orbitCam.tilt = 0;
       orbitCam.panOffset.set(0, 0, 0); // 重置平移偏置：起飞后应能径向缩放重新着陆
-      orbitCam.distTarget = orbitCam.dist + Math.max(orbitCam.dist * 0.002, 0.05);
       appMode = 'orbit';
       ship.mode = 'fly';
       ship.vel.set(0, 0, 0);

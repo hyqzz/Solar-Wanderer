@@ -51,6 +51,7 @@ npm run fetch-textures # 重新下载贴图资产
   - `node tools/repro-r9.mjs` — 镜头/地形/海洋/惯性模式断言
   - `node tools/repro-r10.mjs` — 焦点/水体/V 连续性断言
   - `node tools/repro-issue*.mjs` — 具体 issue 的回归验证
+  - `node tools/repro-mobile-takeoff.mjs` — 移动版起飞后 GE 式拖拽/缩放灵敏度回归
   - `node tools/repro-fixbatch.mjs` — 批量修复回归
   - `node tools/smoke-i18n.mjs` — 中英双语 UI 冒烟
   - `node tools/smoke-mobile.mjs` — 移动端触控 UI 冒烟
