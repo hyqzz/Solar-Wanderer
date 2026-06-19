@@ -51,6 +51,7 @@ export class Input {
     this._lastTapPos  = { x: 0, y: 0 };
     this.muteUntil    = 0;
     this._wasPinching = false;      // true during/after 2-finger gesture → suppresses tap
+    this._canvas      = canvas;     // for releasing pointer capture on gesture cancel
 
     // ── Keyboard ──────────────────────────────────────────────────────────
     dom.addEventListener('keydown', (e) => {
@@ -266,8 +267,19 @@ export class Input {
   down(code) { return this.keys.has(code); }
   tapped(code) { return this.justPressed.has(code); }
 
-  /** 模式切换时重置所有手势状态（拖拽 / 平移 / 捏合），防止旧手势"泄漏"到新模式 */
+  /**
+   * 模式切换时彻底重置所有手势状态（拖拽 / 平移 / 捏合 / 触控点）。
+   * 必须清空 _pointers，否则旧触控点残留会导致新模式下第一次手势被误判为
+   * 多指（如从行走起飞回探索后，单指拖拽被当作双指缩放，GE 操控"失效"）。
+   */
   cancelGestures() {
+    if (this._canvas) {
+      for (const id of this._pointers.keys()) {
+        try { this._canvas.releasePointerCapture(id); } catch { /* 可能已被释放 */ }
+      }
+    }
+    this._pointers.clear();
+    this._ptrDownPos.clear();
     this.drag.active = false; this.pan.active = false; this.look.active = false;
     this._pinchDist = 0; this._pinchMid = null;
     this._wasPinching = false;
