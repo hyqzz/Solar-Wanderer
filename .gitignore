@@ -56,10 +56,10 @@ docs/sdlc/screenshots/*
 !docs/sdlc/screenshots/example/**
 
 # ---- 大体积视频素材(防止误提交,本项目无需跟踪任何视频)----
+# campaign/ 已纳入版本控制，其下所有素材需同步跟踪；其余位置视频仍忽略。
 *.mp4
 *.mov
 *.webm
 *.avi
 *.mkv
-
-campaign/
+!campaign/**
