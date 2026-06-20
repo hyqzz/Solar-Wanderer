@@ -63,3 +63,9 @@ docs/sdlc/screenshots/*
 *.avi
 *.mkv
 !campaign/**
+
+# 以下 campaign 子目录为中间生成物或大体积系统字体，不纳入版本控制
+campaign/assets/fonts/
+campaign/assets/video-sequences/
+campaign/assets/video-preview-frames/
+campaign/assets/bright-tests/
