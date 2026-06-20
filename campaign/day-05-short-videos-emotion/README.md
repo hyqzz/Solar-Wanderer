@@ -142,3 +142,17 @@
 - "真实 NASA 数据，浏览器里身临其境。"
 - "今天带你去 [天体名]。"
 - "你最想站在哪个星球上看日落？"
+
+---
+
+## 参考资料（发布时可选附在评论区或描述底部）
+
+- **阿波罗 8 号《地出》** – NASA: https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/
+  - “the astronauts caught sight of the Earth appearing above the lunar limb. Anders snapped some of the most iconic photos of the Apollo program... the more famous color Earthrise images.”
+- **火星蓝色日落** – NASA Science: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+  - “Fine dust in the atmosphere permits blue light to penetrate the atmosphere more efficiently than colors with longer wavelengths.”
+- **土卫六甲烷湖** – NASA Science: https://science.nasa.gov/saturn/moons/titan/
+  - “Titan is the only place besides Earth known to have liquids on its surface. It has clouds, rain, rivers, lakes and seas of liquid hydrocarbons like methane and ethane.”
+- **NASA 蜻蜓号** – NASA Science: https://science.nasa.gov/mission/dragonfly/
+- **冥王星心形平原** – NASA Science / New Horizons: https://science.nasa.gov/mission/new-horizons/
+  - “a vast heart-shaped nitrogen glacier (named Sputnik Planitia...) on the surface. It’s about 600 miles wide (1,000 kilometers), undoubtedly the largest known glacier in the solar system.”

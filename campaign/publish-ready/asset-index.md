@@ -1,7 +1,7 @@
 # Campaign 资产总索引
 
 > 本目录所有文件均已在 `.gitignore` 中排除，不会进入 Git 版本控制。
-> 生成日期：2026-06-19
+> 生成日期：2026-06-20
 
 ---
 
@@ -13,6 +13,7 @@
 | `publish-ready/day-02-chinese.md` | 中文次日完整发布包 | V2EX、知乎、B站、小红书、即刻/微博 |
 | `publish-ready/day-03-blogs.md` | 技术博客与 Newsletter | Dev.to、Medium、掘金、CSDN、Substack/小报童 |
 | `publish-ready/short-video-kit.md` | 短视频标题/文案/标签/封面 | 抖音、小红书、B站竖版、YouTube Shorts、TikTok、Reels |
+| `publish-ready/SOURCES.md` | 所有科学事实的引用来源索引 | 发布时附在描述/评论区 |
 | `day-01-producthunt-hn/*.md` | 海外首日原始脚本 | 备用/拆分 |
 | `day-02-chinese-dev/*.md` | 中文次日原始脚本 | 备用/拆分 |
 | `day-03-tech-blogs/*.md` | 博客原始脚本 | 备用 |
@@ -89,10 +90,15 @@
 
 ## 四、原始帧序列
 
-`campaign/assets/video-sequences/` 下保存了部分场景的逐帧 PNG：
-- `earth-to-oort/` — 150 帧，从地球缩放到奥尔特云
-- `moon-earthrise/` — 60 帧
-- `mars-sunset/` — 60 帧
+`campaign/assets/video-sequences/` 下保存了各场景的逐帧 PNG：
+- `earth-to-oort-vert/` — 360 帧
+- `moon-earthrise-vert/` — 360 帧
+- `mars-sunset-vert/` — 360 帧
+- `saturn-rings-vert/` — 360 帧
+- `jupiter-redspot-vert/` — 360 帧
+- `sun-closeup-vert/` — 360 帧
+- `earth-orbit-vert/` — 360 帧
+- `pluto-heart-vert/` — 360 帧
 
 如需重新剪辑、调速或生成更高码率视频，可直接用这些帧序列。
 
@@ -100,9 +106,10 @@
 
 ## 五、字体文件
 
-`campaign/assets/fonts/`
+`campaign/assets/fonts/`（已加入 `.gitignore`，不参与版本控制）
 - `msyh.ttc` — 微软雅黑，用于中文 drawtext
 - `arial.ttf` — Arial，用于英文 drawtext
+- 若本地缺失，生成脚本会自动从系统字体目录复制。
 
 ---
 
@@ -166,7 +173,8 @@ node tools/generate-short-videos.mjs
 
 ## 八、注意事项
 
-- `campaign/` 目录已被 `.gitignore` 排除，不会提交到 Git。
+- `campaign/assets/fonts/`、`video-sequences/`、`video-preview-frames/` 已加入 `.gitignore`，不提交到 Git。
 - 大体积文件（视频、字体、帧序列）请勿手动拖入仓库。
 - 如需分享给协作者，直接打包 `campaign/` 目录或使用网盘/云存储。
 - 所有视频已烧录字幕，但 B站/YouTube 仍可上传独立 SRT（如需要可另行生成）。
+- 发布时请附带 `SOURCES.md` 中的 NASA 引用，或在描述/评论区置顶来源链接。

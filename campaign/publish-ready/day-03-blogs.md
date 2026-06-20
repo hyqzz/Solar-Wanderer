@@ -256,3 +256,13 @@ Try it and let me know your favorite view.
 - [ ] Twitter/X 技术 Thread 发布
 - [ ] 将博客链接分享到 Day 1 的 HN/Reddit 帖子评论区
 - [ ] 收集读者反馈，整理到 Day 4-5 短视频选题
+
+---
+
+## 参考资料（博客文末可附）
+
+- **土星环尺寸** – NASA Science: https://science.nasa.gov/saturn/facts/
+- **木星大红斑** – NASA Science / Juno: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- **火星蓝色日落** – NASA Science: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- **奥尔特云** – NASA Science: https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **项目精度与测试** – `docs/sdlc/test-report.md`、 `tests/ephemeris.test.mjs`

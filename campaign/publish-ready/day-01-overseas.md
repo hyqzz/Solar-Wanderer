@@ -218,3 +218,17 @@ If you try it, reply with your favorite view.
 - [ ] Twitter/X Thread 发布
 - [ ] 回复前 10 条评论
 - [ ] 置顶 GitHub 链接和 demo 链接
+
+---
+
+## 参考资料（发布时可选附在评论区或描述底部）
+
+- **土星环尺寸** – NASA Science: https://science.nasa.gov/saturn/facts/
+  - “Saturn's ring system extends up to 175,000 miles (282,000 kilometers) from the planet, yet the vertical height is typically about 30 feet (10 meters) in the main rings.”
+- **木星大红斑** – NASA Science / Juno: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+  - “the Great Red Spot is 1.3 times as wide as Earth... possibly existed for more than 350 years”
+- **火星蓝色日落** – NASA Science: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+  - “Fine dust in the atmosphere permits blue light to penetrate the atmosphere more efficiently than colors with longer wavelengths.”
+- **奥尔特云** – NASA Science: https://science.nasa.gov/solar-system/oort-cloud/facts/
+  - “outer edge being located somewhere between 10,000 and 100,000 AU from the Sun”
+- **项目星历精度** – 见 `docs/sdlc/test-report.md` 与 `tests/ephemeris.test.mjs`（`npm test` 可复现）。

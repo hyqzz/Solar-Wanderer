@@ -265,3 +265,13 @@ Solar Wanderer（遨游太阳系）上线了，完全免费、无需安装。
 - [ ] 小红书 1 篇笔记（9 图）
 - [ ] 即刻 1 条 + 微博 1 条
 - [ ] 将各平台链接汇总到发布跟踪表
+
+---
+
+## 参考资料（发布时可选附在评论区或描述底部）
+
+- **土星环** – NASA Science: https://science.nasa.gov/saturn/facts/
+- **木星大红斑** – NASA Science / Juno: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- **火星蓝色日落** – NASA Science: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- **奥尔特云** – NASA Science: https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **项目星历精度** – 见 `docs/sdlc/test-report.md` 与 `tests/ephemeris.test.mjs`。

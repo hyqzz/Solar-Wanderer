@@ -146,3 +146,18 @@
 - "一个网页，装下整个太阳系"
 - "不用下载，点开就是宇宙"
 - "把太阳系放进你的口袋"
+
+---
+
+## 参考资料（发布时可选附在评论区或描述底部）
+
+- **土星环** – NASA Science: https://science.nasa.gov/saturn/facts/
+  - “Saturn's ring system extends up to 175,000 miles (282,000 kilometers) from the planet, yet the vertical height is typically about 30 feet (10 meters) in the main rings.”
+- **木星大红斑** – NASA Science / Juno: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+  - “the Great Red Spot is 1.3 times as wide as Earth... possibly existed for more than 350 years”
+- **太阳体积** – NASA Science: https://science.nasa.gov/sun/facts/
+  - “it would take 1.3 million Earths to fill the Sun's volume”
+- **奥尔特云** – NASA Science: https://science.nasa.gov/solar-system/oort-cloud/facts/
+  - “with the outer edge being located somewhere between 10,000 and 100,000 AU from the Sun”
+- **旅行者 1 号** – NASA Science: https://science.nasa.gov/mission/voyager/voyager-1/
+  - “No spacecraft has gone farther than NASA's Voyager 1” / “Voyager 1 crossed into interstellar space in August 2012”

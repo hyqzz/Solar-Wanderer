@@ -37,6 +37,9 @@
   #太阳系 #NASA #真实比例 #视觉震撼 #遨游太阳系
   ```
 - **封面**：`campaign/assets/social-cards/scale_zh_1080x1920.png`
+- **来源**（发布时可选附在评论区或描述底部）：
+  - 奥尔特云外缘约 10 万 AU：NASA Science – Oort Cloud Facts https://science.nasa.gov/solar-system/oort-cloud/facts/
+  - 本项目 1:1 尺度与范围见 `docs/sdlc/test-report.md`
 
 ### English
 - **Title**: From Earth to the edge of the solar system
@@ -49,6 +52,9 @@
   #space #nasa #solarsystem #scale #solarsystemsimulation
   ```
 - **Thumbnail**: `campaign/assets/social-cards/scale_en_1080x1920.png`
+- **Sources** (add to caption or first comment):
+  - Oort Cloud outer edge ~100,000 AU: NASA Science – Oort Cloud Facts https://science.nasa.gov/solar-system/oort-cloud/facts/
+  - Project scale & range: `docs/sdlc/test-report.md`
 
 ---
 
@@ -65,6 +71,8 @@
   #土星 #宇宙 #科普 #冷知识 #土星环
   ```
 - **封面**：`campaign/assets/social-cards/saturn_zh_1080x1920.png`
+- **来源**：
+  - 土星环宽 28.2 万公里、厚约 10 米：NASA Science – Saturn Facts https://science.nasa.gov/saturn/facts/
 
 ### English
 - **Title**: Saturn's rings are unbelievably thin
@@ -77,6 +85,8 @@
   #saturn #space #astronomy #facts #solarsystem
   ```
 - **Thumbnail**: `campaign/assets/social-cards/saturn_en_1080x1920.png`
+- **Sources**:
+  - NASA Science – Saturn Facts: https://science.nasa.gov/saturn/facts/
 
 ---
 
@@ -93,6 +103,8 @@
   #木星 #大红斑 #天文 #震撼 #太阳系
   ```
 - **封面**：`campaign/assets/social-cards/jupiter_zh_1080x1920.png`
+- **来源**：
+  - 木星大红斑宽约 1.3 倍地球直径、已存在 350 年以上：NASA Science – NASA's Juno Probes the Depths of Jupiter's Great Red Spot https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
 
 ### English
 - **Title**: A storm bigger than Earth
@@ -105,6 +117,8 @@
   #jupiter #greatredspot #space #astronomy
   ```
 - **Thumbnail**: `campaign/assets/social-cards/jupiter_en_1080x1920.png`
+- **Sources**:
+  - NASA Science – Juno / Great Red Spot: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
 
 ---
 
@@ -121,6 +135,8 @@
   #月球 #地球升起 #NASA #真实 #遨游太阳系
   ```
 - **封面**：`campaign/assets/social-cards/moon_zh_1080x1920.png`
+- **来源**：
+  - 阿波罗 8 号《地出》照片：NASA – 50 Years Ago: Apollo 8 in Lunar Orbit https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/
 
 ### English
 - **Title**: Watch Earth rise from the Moon
@@ -133,6 +149,8 @@
   #moon #earthrise #nasa #space #solarsystem
   ```
 - **Thumbnail**: `campaign/assets/social-cards/moon_en_1080x1920.png`
+- **Sources**:
+  - Apollo 8 Earthrise: NASA – 50 Years Ago: Apollo 8 in Lunar Orbit https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/
 
 ---
 
@@ -149,6 +167,8 @@
   #火星 #日落 #科普 #蓝色 #NASA
   ```
 - **封面**：`campaign/assets/social-cards/mars_zh_1080x1920.png`
+- **来源**：
+  - 火星日落呈蓝色机制：NASA Science – What Do Sunrises and Sunsets Look Like on Mars? https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
 
 ### English
 - **Title**: Mars sunsets are blue
@@ -161,6 +181,8 @@
   #mars #sunset #space #nasa #astronomy
   ```
 - **Thumbnail**: `campaign/assets/social-cards/mars_en_1080x1920.png`
+- **Sources**:
+  - NASA Science – Mars Sunsets: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
 
 ---
 
