@@ -218,7 +218,7 @@ async function init() {
   };
   window.addEventListener('resize', onResize);
   hud.loadingDone();
-  window.__game = { ship, simClock, select, flyTo, orbitCam, builder, registry, input, terrainMgr, camera, getMode: () => appMode };
+  window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; } };
   renderer.setAnimationLoop(loop);
 
   // ── 生命周期：后台/标签切换/睡眠恢复后强制同步仿真时钟 ──

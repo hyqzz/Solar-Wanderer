@@ -18,6 +18,8 @@ function renderFromSequence(name, seqDir, lang, title, sub, dur) {
   const fps = 30;
   const vf = [
     `fps=${fps}`,
+    'scale=1080:1920:force_original_aspect_ratio=increase',
+    'crop=1080:1920:(iw-1080)/2:(ih-1920)/2',
     drawtextLine(lang, title, 'H-320', lang === 'zh' ? 64 : 58),
     drawtextLine(lang, sub, 'H-230', lang === 'zh' ? 34 : 30, 0.9),
     drawtextLine(lang, 'sw.icodestar.net', 'H-120', 26, 0.85, true)
@@ -33,7 +35,7 @@ function renderFromImage(name, img, lang, title, sub, dur) {
   const vf = [
     'scale=1080:1920:force_original_aspect_ratio=increase',
     'crop=1080:1920:(iw-1080)/2:(ih-1920)/2',
-    `zoompan=z='1+0.35*on/${totalFrames}':d=1:fps=${fps}`,
+    `zoompan=z='1+0.35*on/${totalFrames}':d=1:fps=${fps}:s=1080x1920`,
     drawtextLine(lang, title, 'H-320', lang === 'zh' ? 64 : 58),
     drawtextLine(lang, sub, 'H-230', lang === 'zh' ? 34 : 30, 0.9),
     drawtextLine(lang, 'sw.icodestar.net', 'H-120', 26, 0.85, true)
@@ -43,9 +45,7 @@ function renderFromImage(name, img, lang, title, sub, dur) {
   console.log('Rendered', name);
 }
 
-// 1. Scale: Earth to Oort Cloud
-renderFromSequence('short-earth-to-oort-zh.mp4', `${ASSETS}/video-sequences/earth-to-oort`, 'zh', '从地球缩放到太阳系边缘', '真实 1:1 比例 · 0.5 米到 10 万 AU', 15);
-renderFromSequence('short-earth-to-oort-en.mp4', `${ASSETS}/video-sequences/earth-to-oort`, 'en', 'From Earth to the edge of the solar system', 'True 1:1 scale · 0.5 m to 100,000 AU', 15);
+// 1. Scale: Earth to Oort Cloud — handled by generate-earth-to-oort-short.mjs
 
 // 2. Saturn rings
 renderFromImage('short-saturn-rings-zh.mp4', `${ASSETS}/screenshots/saturn-rings_1920x1080.png`, 'zh', '土星环薄到难以置信', '宽 28 万公里，厚仅 10-20 米', 12);
@@ -56,8 +56,8 @@ renderFromImage('short-jupiter-storm-zh.mp4', `${ASSETS}/screenshots/jupiter-red
 renderFromImage('short-jupiter-storm-en.mp4', `${ASSETS}/screenshots/jupiter-redspot_1920x1080.png`, 'en', 'A storm bigger than Earth', 'The Great Red Spot', 12);
 
 // 4. Moon earthrise
-renderFromImage('short-moon-earthrise-zh.mp4', `${ASSETS}/screenshots/earth-orbit_1920x1080.png`, 'zh', '站在月球看地球升起', '真实 NASA JPL 星历驱动', 12);
-renderFromImage('short-moon-earthrise-en.mp4', `${ASSETS}/screenshots/earth-orbit_1920x1080.png`, 'en', 'Watch Earth rise from the Moon', 'Real positions · Real scale', 12);
+renderFromImage('short-moon-earthrise-zh.mp4', `${ASSETS}/screenshots/moon-earthrise_1920x1080.png`, 'zh', '站在月球看地球升起', '真实 NASA JPL 星历驱动', 12);
+renderFromImage('short-moon-earthrise-en.mp4', `${ASSETS}/screenshots/moon-earthrise_1920x1080.png`, 'en', 'Watch Earth rise from the Moon', 'Real positions · Real scale', 12);
 
 // 5. Mars sunset
 renderFromImage('short-mars-sunset-zh.mp4', `${ASSETS}/screenshots/mars-sunset_1920x1080.png`, 'zh', '火星的日落是蓝色的', '尘埃散射红光，蓝光留了下来', 12);
