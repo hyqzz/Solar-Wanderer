@@ -52,14 +52,14 @@ Source: https://github.com/hyqzz/Solar-Wanderer
 
 请按以下顺序上传 6 张素材：
 
-1. **主图/视频**：[`main-demo-en.mp4`](../../assets/videos/main-demo-en.mp4)（48 秒 demo，16:9）或 [`earth-orbit_1920x1080.png`](../../assets/screenshots/earth-orbit_1920x1080.png)
-2. **站在月球看地球升起**：[`moon-earthrise_1920x1080.png`](../../assets/screenshots/moon-earthrise_1920x1080.png)
-3. **土星环特写**：[`saturn-rings_1920x1080.png`](../../assets/screenshots/saturn-rings_1920x1080.png)
-4. **木星大红斑与云带**：[`jupiter-redspot_1920x1080.png`](../../assets/screenshots/jupiter-redspot_1920x1080.png)
-5. **火星蓝色日落**：[`mars-sunset_1920x1080.png`](../../assets/screenshots/mars-sunset_1920x1080.png)
-6. **奥尔特云回望太阳系**：[`earth-orbit_1920x1080.png`](../../assets/screenshots/earth-orbit_1920x1080.png) 或 [`scale_en_1080x1350.png`](../../assets/social-cards/scale_en_1080x1350.png)
+1. **主图/视频**：[`main-demo-en.mp4`](../assets/videos/main-demo-en.mp4)（48 秒 demo，16:9）或 [`earth-orbit_1920x1080.png`](../assets/screenshots/earth-orbit_1920x1080.png)
+2. **站在月球看地球升起**：[`moon-earthrise_1920x1080.png`](../assets/screenshots/moon-earthrise_1920x1080.png)
+3. **土星环特写**：[`saturn-rings_1920x1080.png`](../assets/screenshots/saturn-rings_1920x1080.png)
+4. **木星大红斑与云带**：[`jupiter-redspot_1920x1080.png`](../assets/screenshots/jupiter-redspot_1920x1080.png)
+5. **火星蓝色日落**：[`mars-sunset_1920x1080.png`](../assets/screenshots/mars-sunset_1920x1080.png)
+6. **奥尔特云回望太阳系**：[`earth-orbit_1920x1080.png`](../assets/screenshots/earth-orbit_1920x1080.png) 或 [`scale_en_1080x1350.png`](../assets/social-cards/scale_en_1080x1350.png)
 
-Logo/Icon：暂无专用 `logo.png`，可用 [`sun-closeup_1920x1080.png`](../../assets/screenshots/sun-closeup_1920x1080.png) 裁剪为 1:1 临时代替
+Logo/Icon：暂无专用 `logo.png`，可用 [`sun-closeup_1920x1080.png`](../assets/screenshots/sun-closeup_1920x1080.png) 裁剪为 1:1 临时代替
 
 ---
 

@@ -12,7 +12,7 @@ No install. No account. Just open and go.
 
 🌕🌍
 
-视频：[`short-moon-earthrise-en.mp4`](../../assets/videos/short-moon-earthrise-en.mp4)（12 秒竖屏，已烧录字幕）或 [`main-demo-en.mp4`](../../assets/videos/main-demo-en.mp4)（48 秒）
+视频：[`short-moon-earthrise-en.mp4`](../assets/videos/short-moon-earthrise-en.mp4)（12 秒竖屏，已烧录字幕）或 [`main-demo-en.mp4`](../assets/videos/main-demo-en.mp4)（48 秒）
 
 ---
 
@@ -28,7 +28,7 @@ Open source. MIT. Free forever.
 
 → https://github.com/hyqzz/Solar-Wanderer
 
-图片：[`earth-orbit_1920x1080.png`](../../assets/screenshots/earth-orbit_1920x1080.png) 或 [`scale_en_1080x1350.png`](../../assets/social-cards/scale_en_1080x1350.png)
+图片：[`earth-orbit_1920x1080.png`](../assets/screenshots/earth-orbit_1920x1080.png) 或 [`scale_en_1080x1350.png`](../assets/social-cards/scale_en_1080x1350.png)
 
 ---
 
@@ -44,7 +44,7 @@ If you want to help make the solar system accessible to everyone, check the issu
 
 → https://github.com/hyqzz/Solar-Wanderer/issues
 
-图片：[`earth-orbit_1920x1080.png`](../../assets/screenshots/earth-orbit_1920x1080.png) 或 GitHub repo 截图
+图片：[`earth-orbit_1920x1080.png`](../assets/screenshots/earth-orbit_1920x1080.png) 或 GitHub repo 截图
 
 ---
 

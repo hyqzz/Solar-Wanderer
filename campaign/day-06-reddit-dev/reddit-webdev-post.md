@@ -37,9 +37,9 @@ Would love feedback on the architecture or the code.
 
 ## 配图
 
-- 架构图：浮动原点示意（可手绘或用 [`earth-orbit_1920x1080.png`](../../assets/screenshots/earth-orbit_1920x1080.png) 代替）
+- 架构图：浮动原点示意（可手绘或用 [`earth-orbit_1920x1080.png`](../assets/screenshots/earth-orbit_1920x1080.png) 代替）
 - 性能对比图：自行截图帧率/FPS
-- 站在月球看地球：[`moon-earthrise_1920x1080.png`](../../assets/screenshots/moon-earthrise_1920x1080.png)
+- 站在月球看地球：[`moon-earthrise_1920x1080.png`](../assets/screenshots/moon-earthrise_1920x1080.png)
 
 ---
 

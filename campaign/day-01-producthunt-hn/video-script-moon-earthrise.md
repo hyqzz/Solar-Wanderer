@@ -12,9 +12,9 @@
 
 ## 视频文件
 
-录制完成后，导出并替换/对应：[`short-moon-earthrise-en.mp4`](../../assets/videos/short-moon-earthrise-en.mp4)
+录制完成后，导出并替换/对应：[`short-moon-earthrise-en.mp4`](../assets/videos/short-moon-earthrise-en.mp4)
 
-如果做中文版本，对应：[`short-moon-earthrise-zh.mp4`](../../assets/videos/short-moon-earthrise-zh.mp4)
+如果做中文版本，对应：[`short-moon-earthrise-zh.mp4`](../assets/videos/short-moon-earthrise-zh.mp4)
 
 ---
 

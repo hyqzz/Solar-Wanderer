@@ -36,8 +36,8 @@ Would love your thoughts — especially if anything looks scientifically off.
 
 ## 图片/GIF
 
-- 主图：[`moon-earthrise_1920x1080.png`](../../assets/screenshots/moon-earthrise_1920x1080.png)
-- 可选 GIF/视频：[`short-moon-earthrise-en.mp4`](../../assets/videos/short-moon-earthrise-en.mp4)（12 秒）
+- 主图：[`moon-earthrise_1920x1080.png`](../assets/screenshots/moon-earthrise_1920x1080.png)
+- 可选 GIF/视频：[`short-moon-earthrise-en.mp4`](../assets/videos/short-moon-earthrise-en.mp4)（12 秒）
 
 ---
 
