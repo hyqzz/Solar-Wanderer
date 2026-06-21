@@ -6,10 +6,10 @@
 
 ## 文件清单
 
-- `week-2-calendar.md` — 第二周日历
-- `retention-tactics.md` — 留存策略
-- `content-repurposing-plan.md` — 内容再利用计划
-- `milestone-goals.md` — 第二周里程碑
+- `week-2-calendar.md` — 第二周日历（待创建）
+- [retention-tactics.md](retention-tactics.md) — 留存策略
+- [content-repurposing-plan.md](content-repurposing-plan.md) — 内容再利用计划
+- [milestone-goals.md](milestone-goals.md) — 第二周里程碑
 
 ---
 

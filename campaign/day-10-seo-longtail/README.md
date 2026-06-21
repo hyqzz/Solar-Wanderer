@@ -6,10 +6,10 @@
 
 ## 文件清单
 
-- `seo-keywords.md` — 中英文长尾关键词列表
-- `landing-page-copy.md` — 三个 SEO 着陆页文案
-- `schema-markup.md` — 网页结构化数据建议
-- `backlink-list.md` — 值得获取外链的网站列表
+- [seo-keywords.md](seo-keywords.md) — 中英文长尾关键词列表
+- [landing-page-copy.md](landing-page-copy.md) — 三个 SEO 着陆页文案
+- [schema-markup.md](schema-markup.md) — 网页结构化数据建议
+- [backlink-list.md](backlink-list.md) — 值得获取外链的网站列表
 
 ---
 

@@ -6,10 +6,10 @@
 
 ## 文件清单
 
-- `ugc-contest-readme.md` — UGC 活动规则
-- `screenshot-challenge-template.md` — 截图挑战模板
-- `user-story-template.md` — 用户故事征集模板
-- `feature-wall-idea.md` — 网站用户作品墙方案
+- [ugc-contest-readme.md](ugc-contest-readme.md) — UGC 活动规则
+- [screenshot-challenge-template.md](screenshot-challenge-template.md) — 截图挑战模板
+- [user-story-template.md](user-story-template.md) — 用户故事征集模板
+- [feature-wall-idea.md](feature-wall-idea.md) — 网站用户作品墙方案
 
 ---
 

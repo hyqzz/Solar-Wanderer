@@ -6,10 +6,10 @@
 
 ## 文件清单
 
-- `discord-setup-guide.md` — Discord 服务器设置指南
-- `wechat-group-announcement.md` — 微信群/QQ群公告
-- `community-rules.md` — 社区规则
-- `welcome-message.md` — 新成员欢迎语
+- [discord-setup-guide.md](discord-setup-guide.md) — Discord 服务器设置指南
+- [wechat-group-announcement.md](wechat-group-announcement.md) — 微信群/QQ群公告
+- [community-rules.md](community-rules.md) — 社区规则
+- [welcome-message.md](welcome-message.md) — 新成员欢迎语
 
 ---
 

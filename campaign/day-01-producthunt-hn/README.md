@@ -16,12 +16,12 @@
 
 ## 文件清单
 
-- `producthunt-post.md` — Product Hunt 发布文案
-- `hackernews-post.md` — HN Show HN 帖子
-- `reddit-space-post.md` — Reddit r/space 帖子
-- `twitter-thread.md` — 3 条推文
-- `linkedin-post.md` — LinkedIn 帖子
-- `video-script-moon-earthrise.md` — 主视频脚本：站在月球看地球
+- [producthunt-post.md](producthunt-post.md) — Product Hunt 发布文案
+- [hackernews-post.md](hackernews-post.md) — HN Show HN 帖子
+- [reddit-space-post.md](reddit-space-post.md) — Reddit r/space 帖子
+- [twitter-thread.md](twitter-thread.md) — 3 条推文
+- [linkedin-post.md](linkedin-post.md) — LinkedIn 帖子
+- [video-script-moon-earthrise.md](video-script-moon-earthrise.md) — 主视频脚本：站在月球看地球
 
 ---
 

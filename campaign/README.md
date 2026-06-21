@@ -73,7 +73,7 @@
 - **中文一句话**：基于真实 NASA JPL 星历的浏览器端 1:1 实时太阳系探索应用。
 - **使命**：人类成为星际文明的第一站。
 - **核心体验**：从地球海面出发，一镜到底降落在月球、火星、木卫一……
-- **关键数据**：行星误差 ≤0.074°（见 `docs/sdlc/test-report.md`），范围 0.5m–100,000 AU（奥尔特云外缘参考 NASA Science: https://science.nasa.gov/solar-system/oort-cloud/facts/），压缩后约 200KB。
+- **关键数据**：行星误差 ≤0.074°（见 [`docs/sdlc/test-report.md`](../docs/sdlc/test-report.md)），范围 0.5m–100,000 AU（奥尔特云外缘参考 NASA Science: https://science.nasa.gov/solar-system/oort-cloud/facts/），压缩后约 200KB。
 - **CTA**：打开 sw.icodestar.net，免费，无需安装。
 
 ---

@@ -15,11 +15,11 @@
 
 ## 文件清单
 
-- `english-tech-blog.md` — 英文技术博客
-- `chinese-tech-blog.md` — 中文技术博客
-- `twitter-tech-thread.md` — 10 条 Twitter thread
-- `devto-post.md` — Dev.to 版本
-- `juejin-post.md` — 掘金版本
+- [english-tech-blog.md](english-tech-blog.md) — 英文技术博客
+- [chinese-tech-blog.md](chinese-tech-blog.md) — 中文技术博客
+- [twitter-tech-thread.md](twitter-tech-thread.md) — 10 条 Twitter thread
+- `devto-post.md` — Dev.to 版本（待创建）
+- `juejin-post.md` — 掘金版本（待创建）
 
 ---
 

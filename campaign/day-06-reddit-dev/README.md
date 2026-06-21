@@ -17,11 +17,11 @@
 
 ## 文件清单
 
-- `reddit-webdev-post.md` — r/webdev 技术贴
-- `reddit-threejs-post.md` — r/threejs 技术贴
-- `reddit-astronomy-post.md` — r/astronomy 科普贴
-- `reddit-dataisbeautiful-post.md` — r/dataisbeautiful 数据可视化贴
-- `github-discussion-welcome.md` — GitHub Discussions 欢迎帖
+- [reddit-webdev-post.md](reddit-webdev-post.md) — r/webdev 技术贴
+- `reddit-threejs-post.md` — r/threejs 技术贴（待创建）
+- `reddit-astronomy-post.md` — r/astronomy 科普贴（待创建）
+- `reddit-dataisbeautiful-post.md` — r/dataisbeautiful 数据可视化贴（待创建）
+- `github-discussion-welcome.md` — GitHub Discussions 欢迎帖（待创建）
 
 ---
 

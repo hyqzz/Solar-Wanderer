@@ -16,12 +16,12 @@
 
 ## 文件清单
 
-- `v2ex-post.md` — V2EX 帖子
-- `zhihu-answer.md` — 知乎回答
-- `bilibili-post.md` — B站视频文案
-- `xiaohongshu-post.md` — 小红书图文文案
-- `jike-weibo-post.md` — 即刻/微博文案
-- `video-script-moon-earthrise-cn.md` — B站主视频脚本（中文版）
+- [v2ex-post.md](v2ex-post.md) — V2EX 帖子
+- [zhihu-answer.md](zhihu-answer.md) — 知乎回答
+- [bilibili-post.md](bilibili-post.md) — B站视频文案
+- [xiaohongshu-post.md](xiaohongshu-post.md) — 小红书图文文案
+- [jike-weibo-post.md](jike-weibo-post.md) — 即刻/微博文案
+- [video-script-moon-earthrise-cn.md](video-script-moon-earthrise-cn.md) — B站主视频脚本（中文版）
 
 ---
 

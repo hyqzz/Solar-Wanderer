@@ -46,9 +46,9 @@
 
 ## 应用自身精度声明
 
-- **项目测试报告**：`docs/sdlc/test-report.md`
+- **项目测试报告**：[`docs/sdlc/test-report.md`](../../docs/sdlc/test-report.md)
   - 说明：行星位置误差 ≤0.074°、月球 ≈0.12°、主要卫星 10 天内 ≤0.22° 等数据来自本项目的离线回归测试，与 NASA JPL Horizons 对比生成。
-- **项目测试代码**：`tests/ephemeris.test.mjs`
+- **项目测试代码**：[`tests/ephemeris.test.mjs`](../../tests/ephemeris.test.mjs)
   - 说明：可在本地运行 `npm test` 复现上述精度。
 
 ---

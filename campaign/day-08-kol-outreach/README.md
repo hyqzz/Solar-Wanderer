@@ -6,10 +6,10 @@
 
 ## 文件清单
 
-- `email-chinese-kol-template.md` — 中文 KOL 邀请邮件
-- `email-english-kol-template.md` — 英文 KOL 邀请邮件
-- `media-pitch-template.md` — 科技媒体 pitch
-- `kol-briefing-one-pager.md` — KOL  briefing 一页纸
+- [email-chinese-kol-template.md](email-chinese-kol-template.md) — 中文 KOL 邀请邮件
+- [email-english-kol-template.md](email-english-kol-template.md) — 英文 KOL 邀请邮件
+- [media-pitch-template.md](media-pitch-template.md) — 科技媒体 pitch
+- [kol-briefing-one-pager.md](kol-briefing-one-pager.md) — KOL briefing 一页纸
 
 ---
 

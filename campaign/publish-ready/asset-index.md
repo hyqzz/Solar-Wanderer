@@ -9,61 +9,61 @@
 
 | 文件 | 用途 | 平台 |
 |---|---|---|
-| `publish-ready/day-01-overseas.md` | 海外首日完整发布包 | Product Hunt、HN、Reddit、LinkedIn、Twitter/X |
-| `publish-ready/day-02-chinese.md` | 中文次日完整发布包 | V2EX、知乎、B站、小红书、即刻/微博 |
-| `publish-ready/day-03-blogs.md` | 技术博客与 Newsletter | Dev.to、Medium、掘金、CSDN、Substack/小报童 |
-| `publish-ready/short-video-kit.md` | 短视频标题/文案/标签/封面 | 抖音、小红书、B站竖版、YouTube Shorts、TikTok、Reels |
-| `publish-ready/SOURCES.md` | 所有科学事实的引用来源索引 | 发布时附在描述/评论区 |
-| `day-01-producthunt-hn/*.md` | 海外首日原始脚本 | 备用/拆分 |
-| `day-02-chinese-dev/*.md` | 中文次日原始脚本 | 备用/拆分 |
-| `day-03-tech-blogs/*.md` | 博客原始脚本 | 备用 |
-| `day-04-short-videos-scale/README.md` | 第 4 天短视频计划 | 参考 |
-| `day-05-short-videos-emotion/README.md` | 第 5 天短视频计划 | 参考 |
-| `day-06` ~ `day-14` | 后续运营脚本 | 社群、KOL、教育、SEO、UGC、分析、复盘 |
+| [day-01-overseas.md](day-01-overseas.md) | 海外首日完整发布包 | Product Hunt、HN、Reddit、LinkedIn、Twitter/X |
+| [day-02-chinese.md](day-02-chinese.md) | 中文次日完整发布包 | V2EX、知乎、B站、小红书、即刻/微博 |
+| [day-03-blogs.md](day-03-blogs.md) | 技术博客与 Newsletter | Dev.to、Medium、掘金、CSDN、Substack/小报童 |
+| [short-video-kit.md](short-video-kit.md) | 短视频标题/文案/标签/封面 | 抖音、小红书、B站竖版、YouTube Shorts、TikTok、Reels |
+| [SOURCES.md](SOURCES.md) | 所有科学事实的引用来源索引 | 发布时附在描述/评论区 |
+| [day-01-producthunt-hn/](../day-01-producthunt-hn/) | 海外首日原始脚本 | 备用/拆分 |
+| [day-02-chinese-dev/](../day-02-chinese-dev/) | 中文次日原始脚本 | 备用/拆分 |
+| [day-03-tech-blogs/](../day-03-tech-blogs/) | 博客原始脚本 | 备用 |
+| [day-04-short-videos-scale/README.md](../day-04-short-videos-scale/README.md) | 第 4 天短视频计划 | 参考 |
+| [day-05-short-videos-emotion/README.md](../day-05-short-videos-emotion/README.md) | 第 5 天短视频计划 | 参考 |
+| [day-06-reddit-dev/](../day-06-reddit-dev/) ～ [day-14-week2-plan/](../day-14-week2-plan/) | 后续运营脚本 | 社群、KOL、教育、SEO、UGC、分析、复盘 |
 
 ---
 
 ## 二、视频素材
 
-所有视频位于 `campaign/assets/videos/`。
+所有视频位于 [`assets/videos/`](../assets/videos/)。
 
 | 文件名 | 时长 | 分辨率 | 语言 | 建议用途 |
 |---|---|---|---|---|
-| `main-demo-zh.mp4` | 48s | 1080×1920 | 中文 | B站主投稿、视频号、抖音、小红书、知乎视频 |
-| `main-demo-en.mp4` | 48s | 1080×1920 | 英文 | YouTube、Twitter/X、LinkedIn、Product Hunt |
-| `short-earth-to-oort-zh.mp4` | 15s | 1080×1920 | 中文 | 竖屏短视频：比例震撼 |
-| `short-earth-to-oort-en.mp4` | 15s | 1080×1920 | 英文 | YouTube Shorts / TikTok / Reels |
-| `short-saturn-rings-zh.mp4` | 12s | 1080×1920 | 中文 | 竖屏短视频：土星环 |
-| `short-saturn-rings-en.mp4` | 12s | 1080×1920 | 英文 | YouTube Shorts / TikTok / Reels |
-| `short-jupiter-storm-zh.mp4` | 12s | 1080×1920 | 中文 | 竖屏短视频：木星大红斑 |
-| `short-jupiter-storm-en.mp4` | 12s | 1080×1920 | 英文 | YouTube Shorts / TikTok / Reels |
-| `short-moon-earthrise-zh.mp4` | 12s | 1080×1920 | 中文 | 竖屏短视频：月球地球升起 |
-| `short-moon-earthrise-en.mp4` | 12s | 1080×1920 | 英文 | YouTube Shorts / TikTok / Reels |
-| `short-mars-sunset-zh.mp4` | 12s | 1080×1920 | 中文 | 竖屏短视频：火星蓝色日落 |
-| `short-mars-sunset-en.mp4` | 12s | 1080×1920 | 英文 | YouTube Shorts / TikTok / Reels |
-| `earth-to-oort.mp4` | 10s | 1080×1920 | 无字幕 | 备用 raw 序列合成视频 |
+| [main-demo-zh.mp4](../assets/videos/main-demo-zh.mp4) | 48s | 1080×1920 | 中文 | B站主投稿、视频号、抖音、小红书、知乎视频 |
+| [main-demo-en.mp4](../assets/videos/main-demo-en.mp4) | 48s | 1080×1920 | 英文 | YouTube、Twitter/X、LinkedIn、Product Hunt |
+| [short-earth-to-oort-zh.mp4](../assets/videos/short-earth-to-oort-zh.mp4) | 15s | 1080×1920 | 中文 | 竖屏短视频：比例震撼 |
+| [short-earth-to-oort-en.mp4](../assets/videos/short-earth-to-oort-en.mp4) | 15s | 1080×1920 | 英文 | YouTube Shorts / TikTok / Reels |
+| [short-saturn-rings-zh.mp4](../assets/videos/short-saturn-rings-zh.mp4) | 12s | 1080×1920 | 中文 | 竖屏短视频：土星环 |
+| [short-saturn-rings-en.mp4](../assets/videos/short-saturn-rings-en.mp4) | 12s | 1080×1920 | 英文 | YouTube Shorts / TikTok / Reels |
+| [short-jupiter-storm-zh.mp4](../assets/videos/short-jupiter-storm-zh.mp4) | 12s | 1080×1920 | 中文 | 竖屏短视频：木星大红斑 |
+| [short-jupiter-storm-en.mp4](../assets/videos/short-jupiter-storm-en.mp4) | 12s | 1080×1920 | 英文 | YouTube Shorts / TikTok / Reels |
+| [short-moon-earthrise-zh.mp4](../assets/videos/short-moon-earthrise-zh.mp4) | 12s | 1080×1920 | 中文 | 竖屏短视频：月球地球升起 |
+| [short-moon-earthrise-en.mp4](../assets/videos/short-moon-earthrise-en.mp4) | 12s | 1080×1920 | 英文 | YouTube Shorts / TikTok / Reels |
+| [short-mars-sunset-zh.mp4](../assets/videos/short-mars-sunset-zh.mp4) | 12s | 1080×1920 | 中文 | 竖屏短视频：火星蓝色日落 |
+| [short-mars-sunset-en.mp4](../assets/videos/short-mars-sunset-en.mp4) | 12s | 1080×1920 | 英文 | YouTube Shorts / TikTok / Reels |
+| `earth-to-oort.mp4` | 10s | 1080×1920 | 无字幕 | 备用 raw 序列合成视频（待生成） |
 
 ### 视频封面（推荐使用 social-cards）
-- 主 demo：`social-cards/intro_zh_1080x1920.png` / `intro_en_1080x1920.png`
-- 各短视频：对应 `social-cards/{id}_zh_1080x1920.png` / `{id}_en_1080x1920.png`
+- 主 demo：[intro_zh_1080x1920.png](../assets/social-cards/intro_zh_1080x1920.png) / [intro_en_1080x1920.png](../assets/social-cards/intro_en_1080x1920.png)
+- 各短视频：对应 [`assets/social-cards/`](../assets/social-cards/) 下 `{id}_zh_1080x1920.png` / `{id}_en_1080x1920.png`
 
 ---
 
 ## 三、图片素材
 
-### 3.1 场景截图 `campaign/assets/screenshots/`
+### 3.1 场景截图 [`assets/screenshots/`](../assets/screenshots/)
 
 | 文件名（1920×1080） | 文件名（1080×1920） | 场景 |
 |---|---|---|
-| `earth-orbit_1920x1080.png` | `earth-orbit_1080x1920.png` | 地球轨道 |
-| `moon-earthrise_1920x1080.png` | `moon-earthrise_1080x1920.png` | 月球看地球 |
-| `mars-sunset_1920x1080.png` | `mars-sunset_1080x1920.png` | 火星蓝色日落 |
-| `saturn-rings_1920x1080.png` | `saturn-rings_1080x1920.png` | 土星环 |
-| `jupiter-redspot_1920x1080.png` | `jupiter-redspot_1080x1920.png` | 木星大红斑 |
-| `sun-closeup_1920x1080.png` | `sun-closeup_1080x1920.png` | 太阳近景 |
-| `pluto-heart_1920x1080.png` | `pluto-heart_1080x1920.png` | 冥王星心形平原 |
+| [earth-orbit_1920x1080.png](../assets/screenshots/earth-orbit_1920x1080.png) | [earth-orbit_1080x1920.png](../assets/screenshots/earth-orbit_1080x1920.png) | 地球轨道 |
+| [moon-earthrise_1920x1080.png](../assets/screenshots/moon-earthrise_1920x1080.png) | [moon-earthrise_1080x1920.png](../assets/screenshots/moon-earthrise_1080x1920.png) | 月球看地球 |
+| [mars-sunset_1920x1080.png](../assets/screenshots/mars-sunset_1920x1080.png) | [mars-sunset_1080x1920.png](../assets/screenshots/mars-sunset_1080x1920.png) | 火星蓝色日落 |
+| [saturn-rings_1920x1080.png](../assets/screenshots/saturn-rings_1920x1080.png) | [saturn-rings_1080x1920.png](../assets/screenshots/saturn-rings_1080x1920.png) | 土星环 |
+| [jupiter-redspot_1920x1080.png](../assets/screenshots/jupiter-redspot_1920x1080.png) | [jupiter-redspot_1080x1920.png](../assets/screenshots/jupiter-redspot_1080x1920.png) | 木星大红斑 |
+| [sun-closeup_1920x1080.png](../assets/screenshots/sun-closeup_1920x1080.png) | [sun-closeup_1080x1920.png](../assets/screenshots/sun-closeup_1080x1920.png) | 太阳近景 |
+| [pluto-heart_1920x1080.png](../assets/screenshots/pluto-heart_1920x1080.png) | [pluto-heart_1080x1920.png](../assets/screenshots/pluto-heart_1080x1920.png) | 冥王星心形平原 |
 
-### 3.2 社交卡片 `campaign/assets/social-cards/`
+### 3.2 社交卡片 [`assets/social-cards/`](../assets/social-cards/)
 
 每种主题生成 4 张：
 - `{id}_zh_1080x1350.png` — 中文，3:4（小红书/Instagram/知乎）
@@ -77,20 +77,20 @@
 
 | 平台 | 推荐尺寸 | 推荐文件 |
 |---|---|---|
-| Product Hunt gallery | 16:9 | `screenshots/*_1920x1080.png` |
-| Twitter/X 单图 | 16:9 或 3:4 | `screenshots/*_1920x1080.png` / `social-cards/*_1080x1350.png` |
-| LinkedIn | 3:4 | `social-cards/*_1080x1350.png` |
-| 小红书笔记 | 3:4 或 9:16 | `social-cards/*_1080x1350.png` |
-| 小红书/抖音视频封面 | 9:16 | `social-cards/*_1080x1920.png` |
-| B站视频封面 | 16:9 | `screenshots/*_1920x1080.png` |
-| 知乎文章首图 | 16:9 或 3:4 | `social-cards/intro_zh_1080x1350.png` |
-| 即刻/微博 | 3:4 | `social-cards/*_1080x1350.png` |
+| Product Hunt gallery | 16:9 | [`screenshots/`](../assets/screenshots/) 下 `*_1920x1080.png` |
+| Twitter/X 单图 | 16:9 或 3:4 | [`screenshots/`](../assets/screenshots/) `*_1920x1080.png` / [`social-cards/`](../assets/social-cards/) `*_1080x1350.png` |
+| LinkedIn | 3:4 | [`social-cards/`](../assets/social-cards/) 下 `*_1080x1350.png` |
+| 小红书笔记 | 3:4 或 9:16 | [`social-cards/`](../assets/social-cards/) 下 `*_1080x1350.png` |
+| 小红书/抖音视频封面 | 9:16 | [`social-cards/`](../assets/social-cards/) 下 `*_1080x1920.png` |
+| B站视频封面 | 16:9 | [`screenshots/`](../assets/screenshots/) 下 `*_1920x1080.png` |
+| 知乎文章首图 | 16:9 或 3:4 | [intro_zh_1080x1350.png](../assets/social-cards/intro_zh_1080x1350.png) |
+| 即刻/微博 | 3:4 | [`social-cards/`](../assets/social-cards/) 下 `*_1080x1350.png` |
 
 ---
 
 ## 四、原始帧序列
 
-`campaign/assets/video-sequences/` 下保存了各场景的逐帧 PNG：
+[`assets/video-sequences/`](../assets/video-sequences/)（本地生成，未纳入 Git）下保存了各场景的逐帧 PNG：
 - `earth-to-oort-vert/` — 360 帧
 - `moon-earthrise-vert/` — 360 帧
 - `mars-sunset-vert/` — 360 帧
@@ -135,7 +135,7 @@
 4. Twitter/X 发技术 Thread。
 
 ### Day 4–5（短视频）
-1. 按 `short-video-kit.md` 的发布节奏上传 5 个竖屏短视频。
+1. 按 [short-video-kit.md](short-video-kit.md) 的发布节奏上传 5 个竖屏短视频。
 2. 每个视频配对应 9:16 封面。
 3. 评论区置顶 demo 链接。
 

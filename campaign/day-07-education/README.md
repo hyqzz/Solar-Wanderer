@@ -15,10 +15,10 @@
 
 ## 文件清单
 
-- `email-schools-template.md` — 给学校的介绍邮件
-- `email-planetarium-template.md` — 给天文馆/科技馆邮件
-- `teacher-one-pager.md` — 教师一页介绍
-- `lesson-plan-template.md` — 课程计划模板
+- [email-schools-template.md](email-schools-template.md) — 给学校的介绍邮件
+- [email-planetarium-template.md](email-planetarium-template.md) — 给天文馆/科技馆邮件
+- [teacher-one-pager.md](teacher-one-pager.md) — 教师一页介绍
+- [lesson-plan-template.md](lesson-plan-template.md) — 课程计划模板
 
 ---
 

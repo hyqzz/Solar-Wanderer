@@ -6,10 +6,10 @@
 
 ## 文件清单
 
-- `reply-playbook.md` — 回复话术手册
-- `dm-follow-up-templates.md` — 私信跟进模板
-- `crisis-response-template.md` — 负面评论应对模板
-- `relationship-tracking-sheet.md` — 关系跟进表
+- [reply-playbook.md](reply-playbook.md) — 回复话术手册
+- [dm-follow-up-templates.md](dm-follow-up-templates.md) — 私信跟进模板
+- [crisis-response-template.md](crisis-response-template.md) — 负面评论应对模板
+- [relationship-tracking-sheet.md](relationship-tracking-sheet.md) — 关系跟进表
 
 ---
 

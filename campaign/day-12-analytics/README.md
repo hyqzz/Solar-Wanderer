@@ -6,10 +6,10 @@
 
 ## 文件清单
 
-- `analytics-setup.md` — 分析工具设置指南
-- `dashboard-kpis.md` — 核心指标看板
-- `event-tracking-plan.md` — 事件追踪计划
-- `weekly-review-template.md` — 周复盘模板
+- [analytics-setup.md](analytics-setup.md) — 分析工具设置指南
+- [dashboard-kpis.md](dashboard-kpis.md) — 核心指标看板
+- [event-tracking-plan.md](event-tracking-plan.md) — 事件追踪计划
+- [weekly-review-template.md](weekly-review-template.md) — 周复盘模板
 
 ---
 
