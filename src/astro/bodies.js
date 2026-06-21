@@ -23,12 +23,22 @@ export const BODIES = {
     rotation: 'iau', landable: true,
     surface: { ampKm: 3, roughness: 0.45, craters: 0.2, palette: 'venus' },
     atmosphere: {
+      // 太空视角：multiplier 从 6 降到 1.5，使云层贴图不被散射光淹没，终结线可见
       heightKm: 90, rayleighScaleKm: 15.9, mieScaleKm: 5,
-      rayleigh: [9e-6, 8.5e-6, 5.5e-6], mie: 6e-6, mieG: 0.85, multiplier: 6,
-      haze: 0.55, // 硫酸云厚重气溶胶层，近地平线乳白色光晕
+      // Rayleigh 橙色偏向：CO₂ + H₂SO₄ 云层优先吸收蓝光（Venera 着陆器实拍：橙琥珀色天空）
+      rayleigh: [8e-6, 4.5e-6, 1.0e-6],
+      mie: 3e-6,   // 降低 Mie（硫酸云为漫射散射，无方向偏向）
+      mieG: 0.65,  // 降低：厚云层使散射更均匀，消除太阳方向过亮
+      multiplier: 1.5,
+      haze: 0.90,  // 极厚气溶胶层
+      // 地表视角：橙色弥散天空（太阳完全遮蔽），能见度约 5~20 km
+      // interiorBoost=5：L.r≈0.93 → ACES≈0.73，橙色保留（boost过高则全通道ACES压缩为白）
+      interiorBoost: 5,
+      interiorBoostM: 0.6,  // Mie 低值：无方向性光晕（太阳不可见于地表）
+      fogDensityMult: 5,    // 地表能见度约 5~20 km（Venera 实测数据）
     },
     textures: { map: 'venus_surface.jpg', clouds: 'venus_atmosphere.jpg', cloudsOpaque: true },
-    desc: '大小与地球相仿的“姊妹星”，却被 92 倍地球气压的 CO₂ 浓密大气与硫酸云覆盖，表面 465°C，自转方向逆行且一天长于一年。',
+    desc: '大小与地球相仿的”姊妹星”，却被 92 倍地球气压的 CO₂ 浓密大气与硫酸云覆盖，表面 465°C，自转方向逆行且一天长于一年。',
   },
   earth: {
     id: 'earth', nameZh: '地球', nameEn: 'Earth', type: 'rocky', parent: 'sun',

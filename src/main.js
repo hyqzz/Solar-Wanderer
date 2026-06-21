@@ -856,9 +856,9 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       } else {
         fogColor.r += dusk * 0.25; fogColor.g += dusk * 0.1;
       }
-      // fogDensity：基础值 + haze 尘埃系数，使火星地表可见大气纵深（20~50km 可见度）
+      // fogDensity：基础值 + haze 系数 + 可选 fogDensityMult（金星等极厚大气）
       const hazeDensity = 1 + (atm.haze ?? 0) * 3;
-      fogDensity = (1 / 180) * Math.exp(-alt / atm.rayleighScaleKm) * hazeDensity;
+      fogDensity = (1 / 180) * Math.exp(-alt / atm.rayleighScaleKm) * hazeDensity * (atm.fogDensityMult ?? 1);
       // 星空淡出：白昼且身处稠密层内
       const density = Math.exp(-alt / (atm.rayleighScaleKm * 2.2));
       // 系数 1.0：正午 day=1 density=1 → skyFade=0，星星完全消失（物理正确，任何有大气的行星白昼均不见星）
