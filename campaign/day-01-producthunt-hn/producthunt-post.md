@@ -59,7 +59,7 @@ Source: https://github.com/hyqzz/Solar-Wanderer
 5. **火星蓝色日落**：[`mars-sunset_1920x1080.png`](campaign/assets/screenshots/mars-sunset_1920x1080.png)
 6. **奥尔特云回望太阳系**：[`earth-orbit_1920x1080.png`](campaign/assets/screenshots/earth-orbit_1920x1080.png) 或 [`scale_en_1080x1350.png`](campaign/assets/social-cards/scale_en_1080x1350.png)
 
-Logo/Icon：[`logo.png`](campaign/assets/logo.png)（如无，暂用 `sun-closeup_1920x1080.png` 裁剪）
+Logo/Icon：暂无专用 `logo.png`，可用 [`sun-closeup_1920x1080.png`](campaign/assets/screenshots/sun-closeup_1920x1080.png) 裁剪为 1:1 临时代替
 
 ---
 

@@ -21,7 +21,7 @@
   4. [`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png) — Saturn rings
   5. [`jupiter-redspot_1920x1080.png`](campaign/assets/screenshots/jupiter-redspot_1920x1080.png) — Great Red Spot
   6. [`sun-closeup_1920x1080.png`](campaign/assets/screenshots/sun-closeup_1920x1080.png) — Sun closeup
-- **Icon/Logo**: [`logo.png`](campaign/assets/logo.png)（如尚未生成，可用太阳截图临时替代）
+- **Icon/Logo**: [`sun-closeup_1920x1080.png`](campaign/assets/screenshots/sun-closeup_1920x1080.png)（裁剪为 1:1 临时代替 logo）
 
 ### Description
 ```

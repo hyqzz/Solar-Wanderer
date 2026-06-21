@@ -71,7 +71,7 @@
 
 **标题**：这颗卫星上，下的是甲烷雨
 
-**成品视频文件**：暂无专用成片，可用 [`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png) 等素材先出图文，或用 `main-demo-zh.mp4` 剪辑土星/卫星片段。
+**成品视频文件**：暂无专用成片，可用 [`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png) 等素材先出图文，或用 [`main-demo-zh.mp4`](campaign/assets/videos/main-demo-zh.mp4) 剪辑土星/卫星片段。
 
 **分镜**：
 - 00:00–00:03：土星和土卫六
@@ -111,7 +111,7 @@
 
 **标题**：从土星环后面看地球
 
-**成品视频文件**：暂无专用成片，可用 [`short-saturn-rings-zh.mp4`](campaign/assets/videos/short-saturn-rings-zh.mp4) 或 `main-demo-zh.mp4` 剪辑相关视角。
+**成品视频文件**：暂无专用成片，可用 [`short-saturn-rings-zh.mp4`](campaign/assets/videos/short-saturn-rings-zh.mp4) 或 [`main-demo-zh.mp4`](campaign/assets/videos/main-demo-zh.mp4) 剪辑相关视角。
 
 **分镜**：
 - 00:00–00:03：土星环正面

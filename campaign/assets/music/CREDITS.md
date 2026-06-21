@@ -1,6 +1,6 @@
 # Campaign 视频背景音乐说明
 
-本目录下的音频用于 [``](campaign/assets/videos/) 中推广视频的背景音乐。
+本目录下的音频用于 `campaign/assets/videos/` 中推广视频的背景音乐。
 
 - **文件名**: `bgm-space-ambient-stasis.mp3`
 - **曲名**: Stasis

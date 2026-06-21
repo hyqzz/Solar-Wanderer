@@ -113,7 +113,7 @@
 
 **标题**：人类飞得最远的探测器，还没飞出太阳系
 
-**成品视频文件**：暂无专用成片，可用 [`short-earth-to-oort-zh.mp4`](campaign/assets/videos/short-earth-to-oort-zh.mp4) 或 `main-demo-zh.mp4` 剪辑旅行者相关片段。
+**成品视频文件**：暂无专用成片，可用 [`short-earth-to-oort-zh.mp4`](campaign/assets/videos/short-earth-to-oort-zh.mp4) 或 [`main-demo-zh.mp4`](campaign/assets/videos/main-demo-zh.mp4) 剪辑旅行者相关片段。
 
 **分镜**：
 - 00:00–00:03：地球出发
