@@ -56,15 +56,15 @@ export const BODIES = {
       rayleigh: [5.0e-7, 3.0e-7, 1.2e-7],
       // betaM [R,G,B]：蓝光消光略高，对应 ~1.5µm 尘埃的 Mie 消光谱
       mie: [1.2e-6, 1.5e-6, 1.8e-6],
-      // mieG [R,G,B]：物理合理范围（实测 Fe₂O₃ 尘埃 g≈0.55–0.75）。
-      // 蓝通道峰略尖 → 日落时 phM_blue/phM_red ≈ 1.8 倍，产生可见蓝色光晕；
-      // 旧值 0.88 使比值达 33.6 倍 → 天空过曝、太阳消失。
+      // mieG [R,G,B]：物理合理范围（实测 Fe₂O₃ g≈0.55–0.75），蓝通道峰略尖产生蓝色日落光晕
       mieG: [0.60, 0.65, 0.72],
-      multiplier: 2.5,
-      haze: 0.50,
-      // interiorBoost=2：地表白昼天空 L≈0.05（微弱琥珀），太阳方向 L≈1（亮晕），
-      // 太阳盘面在 100+ 量级远高于大气散射，可见度好；从太空 uBoost=1 薄气雾不变。
-      interiorBoost: 2,
+      multiplier: 3.0,
+      haze: 0.70,   // 较高尘埃雾霾：地平线橘黄色带 + 大气纵深感
+      // 分离式 interiorBoost：仅在相机进入大气内部后生效，探索模式太空视角完全不受影响
+      // uBoost（Rayleigh）= 8 → 白昼天空明亮琥珀色（地球参考级亮度的约 1/4）
+      // uBoostM（Mie）= 1.5 → 适度前向散射光晕，太阳盘面仍清晰可见
+      interiorBoost: 8,
+      interiorBoostM: 1.5,
     },
     textures: { map: 'mars.jpg' },
     desc: '红色行星。拥有太阳系最高的火山（奥林帕斯山 21.9 km）与最长的峡谷（水手谷 4000 km）。稀薄 CO₂ 大气，尘暴可席卷全球。',

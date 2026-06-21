@@ -796,16 +796,20 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
     if (e.atmoMesh) {
       const gasGiant = e.phys.type === 'gas' || e.phys.type === 'ice';
       const depth = inAtmo ? 1 - Math.max(nearest.distSurface, 0) / atm.heightKm : 0;
-      let boostVal = 1;
+      let boostVal = 1, boostMVal = 1;
       if (gasGiant && inAtmo) {
-        boostVal = 1 + depth * depth * 24;
+        boostVal = boostMVal = 1 + depth * depth * 24;
       } else if (inAtmo && atm.interiorBoost) {
-        // 平滑从大气顶部(depth=0)过渡到低层(depth>0.35)：从 1 升至 interiorBoost
-        boostVal = 1 + (atm.interiorBoost - 1) * THREE.MathUtils.smoothstep(depth, 0.05, 0.35);
+        const t = THREE.MathUtils.smoothstep(depth, 0.05, 0.35);
+        boostVal  = 1 + (atm.interiorBoost          - 1) * t;
+        boostMVal = 1 + ((atm.interiorBoostM ?? 1)  - 1) * t;
       }
-      e.atmoMesh.material.userData.uniforms.uBoost.value = boostVal;
+      const u = e.atmoMesh.material.userData.uniforms;
+      u.uBoost.value  = boostVal;
+      u.uBoostM.value = boostMVal;
       if (lastBoosted && lastBoosted !== e.atmoMesh) {
-        lastBoosted.material.userData.uniforms.uBoost.value = 1;
+        const lu = lastBoosted.material.userData.uniforms;
+        lu.uBoost.value = 1; lu.uBoostM.value = 1;
       }
       lastBoosted = e.atmoMesh;
       if (gasGiant && inAtmo) {
@@ -843,14 +847,18 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       const tint = new THREE.Color(b[0] / m, b[1] / m, b[2] / m);
       const day = THREE.MathUtils.clamp(sunElev * 4 + 0.1, 0, 1);
       const dusk = Math.max(0, 1 - Math.abs(sunElev) * 6);
-      fogColor.copy(tint).multiplyScalar(0.5 * day / Math.max(dSunAU * dSunAU, 1e-4));
+      // 尘埃/气溶胶放大雾色亮度（haze 越大地平线橙色带越明显）
+      const dustAmp = 1 + (atm.haze ?? 0) * 1.5;
+      fogColor.copy(tint).multiplyScalar(0.5 * day * dustAmp / Math.max(dSunAU * dSunAU, 1e-4));
       // 分光 Mie 行星（如火星）日落偏蓝；普通行星日落偏橙红
       if (Array.isArray(atm.mie) && atm.mie[2] > atm.mie[0]) {
-        fogColor.r += dusk * 0.04; fogColor.b += dusk * 0.30;
+        fogColor.r += dusk * 0.06; fogColor.b += dusk * 0.35;
       } else {
         fogColor.r += dusk * 0.25; fogColor.g += dusk * 0.1;
       }
-      fogDensity = (1 / 180) * Math.exp(-alt / atm.rayleighScaleKm) * (atm.multiplier >= 3 ? 4 : 1);
+      // fogDensity：基础值 + haze 尘埃系数，使火星地表可见大气纵深（20~50km 可见度）
+      const hazeDensity = 1 + (atm.haze ?? 0) * 3;
+      fogDensity = (1 / 180) * Math.exp(-alt / atm.rayleighScaleKm) * hazeDensity;
       // 星空淡出：白昼且身处稠密层内
       const density = Math.exp(-alt / (atm.rayleighScaleKm * 2.2));
       // 系数 1.0：正午 day=1 density=1 → skyFade=0，星星完全消失（物理正确，任何有大气的行星白昼均不见星）

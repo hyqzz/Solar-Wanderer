@@ -25,7 +25,8 @@ export function createAtmosphere(phys) {
     uHM: { value: a.mieScaleKm },
     uG: { value: new THREE.Vector3(mieGArr[0], mieGArr[1], mieGArr[2]) }, // 分光 mieG (Henyey-Greenstein 各向异性)
     uSunI: { value: 13.0 * (a.multiplier ?? 1) },
-    uBoost: { value: 1.0 }, // 入气密度增幅（相机在大气外恒 1 → 外观与 R5 审查版逐位一致）
+    uBoost: { value: 1.0 },  // Rayleigh 密度增幅（天空底色，高值 → 明亮白昼天空）
+    uBoostM: { value: 1.0 }, // Mie 密度增幅（独立控制，低值 → 太阳盘面不被前向散射淹没）
     uHaze: { value: a.haze ?? 0.0 }, // 近地面气溶胶/尘埃雾霾（火星沙尘、金星硫酸云、泰坦烟霾）
     // 扁率（R8 #1）：气巨网格按 (1−ob) 压扁，大气求交必须用同一椭球，
     // 否则"地面辉光/遮挡"画在正球 Rg 上，与压扁的真实视边缘错开形成双边界。
@@ -62,7 +63,7 @@ export function createAtmosphere(phys) {
       #include <logdepthbuf_pars_fragment>
       uniform vec3 uCenter;
       uniform vec3 uSunDir;
-      uniform float uRg, uRa, uHR, uHM, uSunI, uBoost, uHaze, uStretch;
+      uniform float uRg, uRa, uHR, uHM, uSunI, uBoost, uBoostM, uHaze, uStretch;
       uniform vec3 uBetaR, uBetaM, uG, uAxis; // uG 分光：蓝光前向峰更尖 → 日落蓝色光晕
       varying vec3 vWorldPos;
 
@@ -107,9 +108,9 @@ export function createAtmosphere(phys) {
         for (int i = 0; i < N; i++) {
           vec3 p = ro + rd * (t0 + (float(i) + 0.5) * ds);
           float h = hAbove(p);
-          float dR = exp(-h / uHR) * uBoost;
-          // 近地面气溶胶层（#21）：低标高指数衰减，对火星/金星/泰坦提供地平线雾霾
-          float dM = (exp(-h / uHM) + uHaze * exp(-h / max(uHM * 0.22, 0.5))) * uBoost;
+          float dR = exp(-h / uHR) * uBoost;   // Rayleigh 密度（天空底色）
+          // 近地面气溶胶层：低标高指数衰减；uBoostM 独立于 uBoost，避免前向散射淹没太阳
+          float dM = (exp(-h / uHM) + uHaze * exp(-h / max(uHM * 0.22, 0.5))) * uBoostM;
           odR += dR * ds;
           odM += dM * ds;
           // 向太阳的光学深度
