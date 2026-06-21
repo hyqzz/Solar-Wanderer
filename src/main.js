@@ -792,12 +792,18 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
     const e = builder.bodies.get(nearest.id);
     const atm = e.phys.atmosphere;
     const inAtmo = atm && nearest.distSurface < atm.heightKm;
-    // 入气密度增幅：仅气巨/冰巨且相机在大气内（在大气外恒 1 → R5 外观零回归）
+    // 入气密度增幅：气巨/冰巨内部放大；岩石行星用 interiorBoost 分离"地表天空亮"与"太空薄气雾"
     if (e.atmoMesh) {
       const gasGiant = e.phys.type === 'gas' || e.phys.type === 'ice';
       const depth = inAtmo ? 1 - Math.max(nearest.distSurface, 0) / atm.heightKm : 0;
-      e.atmoMesh.material.userData.uniforms.uBoost.value =
-        gasGiant && inAtmo ? 1 + depth * depth * 24 : 1;
+      let boostVal = 1;
+      if (gasGiant && inAtmo) {
+        boostVal = 1 + depth * depth * 24;
+      } else if (inAtmo && atm.interiorBoost) {
+        // 平滑从大气顶部(depth=0)过渡到低层(depth>0.35)：从 1 升至 interiorBoost
+        boostVal = 1 + (atm.interiorBoost - 1) * THREE.MathUtils.smoothstep(depth, 0.05, 0.35);
+      }
+      e.atmoMesh.material.userData.uniforms.uBoost.value = boostVal;
       if (lastBoosted && lastBoosted !== e.atmoMesh) {
         lastBoosted.material.userData.uniforms.uBoost.value = 1;
       }
@@ -847,7 +853,8 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       fogDensity = (1 / 180) * Math.exp(-alt / atm.rayleighScaleKm) * (atm.multiplier >= 3 ? 4 : 1);
       // 星空淡出：白昼且身处稠密层内
       const density = Math.exp(-alt / (atm.rayleighScaleKm * 2.2));
-      skyFade = THREE.MathUtils.clamp(1 - day * density * 0.97, 0, 1);
+      // 0.999 使正午地表星星不可见（旧值 0.97 留 3% 残余仍透出星光）
+      skyFade = THREE.MathUtils.clamp(1 - day * density * 0.999, 0, 1);
       // 穿越云层薄纱（R9-2b）：掠过云甲板高度时短暂白雾，入气更有层次
       if (e.cloudMesh && !waterFx) {
         const hc = e.phys.radiusKm * 0.0035;
