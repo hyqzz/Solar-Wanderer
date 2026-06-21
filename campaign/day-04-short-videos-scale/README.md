@@ -32,7 +32,7 @@
 
 **标题**：从地球缩到太阳系边缘，需要多久？
 
-**成品视频文件**：`campaign/assets/videos/short-earth-to-oort-zh.mp4`（15 秒，1080×1920）
+**成品视频文件**：[`short-earth-to-oort-zh.mp4`](campaign/assets/videos/short-earth-to-oort-zh.mp4)（15 秒，1080×1920）
 
 **分镜**：
 - 00:00–00:03：地球海面特写
@@ -54,7 +54,7 @@
 
 **标题**：太阳到底有多大？
 
-**成品视频文件**：暂无专用成片，可用 `campaign/assets/screenshots/sun-closeup_1920x1080.png` 先出图文/轮播，或用 `campaign/assets/videos/main-demo-zh.mp4` 剪辑太阳片段。
+**成品视频文件**：暂无专用成片，可用 [`sun-closeup_1920x1080.png`](campaign/assets/screenshots/sun-closeup_1920x1080.png) 先出图文/轮播，或用 [`main-demo-zh.mp4`](campaign/assets/videos/main-demo-zh.mp4) 剪辑太阳片段。
 
 **分镜**：
 - 00:00–00:03：从地球看太阳
@@ -74,7 +74,7 @@
 
 **标题**：土星环薄到难以置信
 
-**成品视频文件**：`campaign/assets/videos/short-saturn-rings-zh.mp4`（12 秒，1080×1920）
+**成品视频文件**：[`short-saturn-rings-zh.mp4`](campaign/assets/videos/short-saturn-rings-zh.mp4)（12 秒，1080×1920）
 
 **分镜**：
 - 00:00–00:03：土星正面，展示完整环系
@@ -94,7 +94,7 @@
 
 **标题**：木星上的风暴，能吞下地球
 
-**成品视频文件**：`campaign/assets/videos/short-jupiter-storm-zh.mp4`（12 秒，1080×1920）
+**成品视频文件**：[`short-jupiter-storm-zh.mp4`](campaign/assets/videos/short-jupiter-storm-zh.mp4)（12 秒，1080×1920）
 
 **分镜**：
 - 00:00–00:03：木星全景
@@ -113,7 +113,7 @@
 
 **标题**：人类飞得最远的探测器，还没飞出太阳系
 
-**成品视频文件**：暂无专用成片，可用 `campaign/assets/videos/short-earth-to-oort-zh.mp4` 或 `main-demo-zh.mp4` 剪辑旅行者相关片段。
+**成品视频文件**：暂无专用成片，可用 [`short-earth-to-oort-zh.mp4`](campaign/assets/videos/short-earth-to-oort-zh.mp4) 或 `main-demo-zh.mp4` 剪辑旅行者相关片段。
 
 **分镜**：
 - 00:00–00:03：地球出发

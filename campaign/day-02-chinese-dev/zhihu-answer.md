@@ -51,11 +51,11 @@
 
 - 不要只发链接，要讲故事和体验。
 - 配图 3–5 张：
-  - `campaign/assets/screenshots/moon-earthrise_1920x1080.png`
-  - `campaign/assets/screenshots/saturn-rings_1920x1080.png`
-  - `campaign/assets/screenshots/mars-sunset_1920x1080.png`
-  - `campaign/assets/screenshots/earth-orbit_1920x1080.png`
-- 可插入视频：`campaign/assets/videos/main-demo-zh.mp4`
+  - [`moon-earthrise_1920x1080.png`](campaign/assets/screenshots/moon-earthrise_1920x1080.png)
+  - [`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png)
+  - [`mars-sunset_1920x1080.png`](campaign/assets/screenshots/mars-sunset_1920x1080.png)
+  - [`earth-orbit_1920x1080.png`](campaign/assets/screenshots/earth-orbit_1920x1080.png)
+- 可插入视频：[`main-demo-zh.mp4`](campaign/assets/videos/main-demo-zh.mp4)
 - 在结尾加一句互动："你最喜欢哪个天体？"
 - 回答后 2 小时内回复前 10 条评论，提升权重。
 

@@ -32,7 +32,7 @@
 
 **标题**：这才是真正的“地出”
 
-**成品视频文件**：`campaign/assets/videos/short-moon-earthrise-zh.mp4`（12 秒，1080×1920）
+**成品视频文件**：[`short-moon-earthrise-zh.mp4`](campaign/assets/videos/short-moon-earthrise-zh.mp4)（12 秒，1080×1920）
 
 **分镜**：
 - 00:00–00:03：月球灰暗地表
@@ -51,7 +51,7 @@
 
 **标题**：火星的日落，为什么是蓝色的？
 
-**成品视频文件**：`campaign/assets/videos/short-mars-sunset-zh.mp4`（12 秒，1080×1920）
+**成品视频文件**：[`short-mars-sunset-zh.mp4`](campaign/assets/videos/short-mars-sunset-zh.mp4)（12 秒，1080×1920）
 
 **分镜**：
 - 00:00–00:03：火星地表，远处太阳
@@ -71,7 +71,7 @@
 
 **标题**：这颗卫星上，下的是甲烷雨
 
-**成品视频文件**：暂无专用成片，可用 `campaign/assets/screenshots/saturn-rings_1920x1080.png` 等素材先出图文，或用 `main-demo-zh.mp4` 剪辑土星/卫星片段。
+**成品视频文件**：暂无专用成片，可用 [`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png) 等素材先出图文，或用 `main-demo-zh.mp4` 剪辑土星/卫星片段。
 
 **分镜**：
 - 00:00–00:03：土星和土卫六
@@ -91,7 +91,7 @@
 
 **标题**：冥王星上，有一片流动的氮冰海洋
 
-**成品视频文件**：暂无专用成片，可用 `campaign/assets/screenshots/pluto-heart_1920x1080.png` 先出图文/轮播。
+**成品视频文件**：暂无专用成片，可用 [`pluto-heart_1920x1080.png`](campaign/assets/screenshots/pluto-heart_1920x1080.png) 先出图文/轮播。
 
 **分镜**：
 - 00:00–00:03：冥王星远景
@@ -111,7 +111,7 @@
 
 **标题**：从土星环后面看地球
 
-**成品视频文件**：暂无专用成片，可用 `campaign/assets/videos/short-saturn-rings-zh.mp4` 或 `main-demo-zh.mp4` 剪辑相关视角。
+**成品视频文件**：暂无专用成片，可用 [`short-saturn-rings-zh.mp4`](campaign/assets/videos/short-saturn-rings-zh.mp4) 或 `main-demo-zh.mp4` 剪辑相关视角。
 
 **分镜**：
 - 00:00–00:03：土星环正面

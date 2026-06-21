@@ -81,10 +81,10 @@ If you find an ephemeris edge case or a rendering bug, open an issue on GitHub. 
 ```
 
 ### 建议配图
-- 首图：`campaign/assets/screenshots/earth-orbit_1920x1080.png`
+- 首图：[`earth-orbit_1920x1080.png`](campaign/assets/screenshots/earth-orbit_1920x1080.png)
 - 深度缓冲示意图（可引用代码截图）
-- `campaign/assets/screenshots/moon-earthrise_1920x1080.png`
-- `campaign/assets/screenshots/saturn-rings_1920x1080.png`
+- [`moon-earthrise_1920x1080.png`](campaign/assets/screenshots/moon-earthrise_1920x1080.png)
+- [`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png)
 - 结尾视频：`main-demo-en.mp4`
 
 ---
@@ -162,7 +162,7 @@ npm test
 ```
 
 ### 建议配图
-- 首图：`campaign/assets/social-cards/intro_zh_1080x1350.png`
+- 首图：[`intro_zh_1080x1350.png`](campaign/assets/social-cards/intro_zh_1080x1350.png)
 - 文中插图：earth-orbit、moon-earthrise、saturn-rings、jupiter-redspot 截图
 - 结尾视频：`main-demo-zh.mp4`
 

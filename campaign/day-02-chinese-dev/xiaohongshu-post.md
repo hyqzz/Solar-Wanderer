@@ -36,14 +36,14 @@
 
 ## 图片（9 张）
 
-1. 封面：`campaign/assets/social-cards/moon_zh_1080x1350.png`
-2. 地球全景：`campaign/assets/screenshots/earth-orbit_1920x1080.png`
-3. 飞往月球：`campaign/assets/screenshots/moon-earthrise_1920x1080.png`
-4. 月球表面：`campaign/assets/screenshots/moon-earthrise_1920x1080.png`
-5. 土星环：`campaign/assets/screenshots/saturn-rings_1920x1080.png`
-6. 木星大红斑：`campaign/assets/screenshots/jupiter-redspot_1920x1080.png`
-7. 火星蓝色日落：`campaign/assets/screenshots/mars-sunset_1920x1080.png`
-8. 奥尔特云回望：`campaign/assets/screenshots/earth-orbit_1920x1080.png`
+1. 封面：[`moon_zh_1080x1350.png`](campaign/assets/social-cards/moon_zh_1080x1350.png)
+2. 地球全景：[`earth-orbit_1920x1080.png`](campaign/assets/screenshots/earth-orbit_1920x1080.png)
+3. 飞往月球：[`moon-earthrise_1920x1080.png`](campaign/assets/screenshots/moon-earthrise_1920x1080.png)
+4. 月球表面：[`moon-earthrise_1920x1080.png`](campaign/assets/screenshots/moon-earthrise_1920x1080.png)
+5. 土星环：[`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png)
+6. 木星大红斑：[`jupiter-redspot_1920x1080.png`](campaign/assets/screenshots/jupiter-redspot_1920x1080.png)
+7. 火星蓝色日落：[`mars-sunset_1920x1080.png`](campaign/assets/screenshots/mars-sunset_1920x1080.png)
+8. 奥尔特云回望：[`earth-orbit_1920x1080.png`](campaign/assets/screenshots/earth-orbit_1920x1080.png)
 9. 手机截图 + 网址：自行截一张移动端运行图
 
 ---

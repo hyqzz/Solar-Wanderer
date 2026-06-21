@@ -13,15 +13,15 @@
 - **Topics**: Web App, Open Source, Space, Education, Three.js
 - **Website**: https://sw.icodestar.net
 - **GitHub**: https://github.com/hyqzz/Solar-Wanderer
-- **Video**: `campaign/assets/videos/main-demo-en.mp4`（48 秒，16:9，建议上传）
+- **Video**: [`main-demo-en.mp4`](campaign/assets/videos/main-demo-en.mp4)（48 秒，16:9，建议上传）
 - **Gallery**:
-  1. `campaign/assets/screenshots/earth-orbit_1920x1080.png` — Earth orbit
-  2. `campaign/assets/screenshots/moon-earthrise_1920x1080.png` — Earthrise from the Moon
-  3. `campaign/assets/screenshots/mars-sunset_1920x1080.png` — Blue sunset on Mars
-  4. `campaign/assets/screenshots/saturn-rings_1920x1080.png` — Saturn rings
-  5. `campaign/assets/screenshots/jupiter-redspot_1920x1080.png` — Great Red Spot
-  6. `campaign/assets/screenshots/sun-closeup_1920x1080.png` — Sun closeup
-- **Icon/Logo**: `campaign/assets/logo.png`（如尚未生成，可用太阳截图临时替代）
+  1. [`earth-orbit_1920x1080.png`](campaign/assets/screenshots/earth-orbit_1920x1080.png) — Earth orbit
+  2. [`moon-earthrise_1920x1080.png`](campaign/assets/screenshots/moon-earthrise_1920x1080.png) — Earthrise from the Moon
+  3. [`mars-sunset_1920x1080.png`](campaign/assets/screenshots/mars-sunset_1920x1080.png) — Blue sunset on Mars
+  4. [`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png) — Saturn rings
+  5. [`jupiter-redspot_1920x1080.png`](campaign/assets/screenshots/jupiter-redspot_1920x1080.png) — Great Red Spot
+  6. [`sun-closeup_1920x1080.png`](campaign/assets/screenshots/sun-closeup_1920x1080.png) — Sun closeup
+- **Icon/Logo**: [`logo.png`](campaign/assets/logo.png)（如尚未生成，可用太阳截图临时替代）
 
 ### Description
 ```
@@ -184,7 +184,7 @@ Sources:
 ```
 
 ### 配图建议
-- 1 张主图：`campaign/assets/social-cards/intro_en_1080x1350.png`
+- 1 张主图：[`intro_en_1080x1350.png`](campaign/assets/social-cards/intro_en_1080x1350.png)
 - 可附加 4 张场景截图
 
 ---

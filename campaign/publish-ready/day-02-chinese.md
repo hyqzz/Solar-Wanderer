@@ -40,7 +40,7 @@ Solar Wanderer（遨游太阳系）是一个完全在浏览器里运行的实时
 ```
 
 ### 配图
-- 首图：`campaign/assets/social-cards/intro_zh_1080x1350.png`
+- 首图：[`intro_zh_1080x1350.png`](campaign/assets/social-cards/intro_zh_1080x1350.png)
 - 二楼可发 3-4 张场景截图
 
 ---
@@ -179,8 +179,8 @@ UTC → TT → JD 的换算看似简单，但闰秒和历书时会累积误差�
 `【真实1:1太阳系】在浏览器里遨游太阳系是什么体验？`
 
 ### 视频文件
-- 主投稿视频：`campaign/assets/videos/main-demo-zh.mp4`（48 秒，16:9/竖屏均可用，已烧录字幕）
-- 短视频分 P（可选）：`campaign/assets/videos/short-moon-earthrise-zh.mp4`（12 秒）
+- 主投稿视频：[`main-demo-zh.mp4`](campaign/assets/videos/main-demo-zh.mp4)（48 秒，16:9/竖屏均可用，已烧录字幕）
+- 短视频分 P（可选）：[`short-moon-earthrise-zh.mp4`](campaign/assets/videos/short-moon-earthrise-zh.mp4)（12 秒）
 
 ### 简介
 ```
@@ -208,11 +208,11 @@ Solar Wanderer / 遨游太阳系 是一个完全在浏览器里运行的实时�
 ```
 
 ### 视频文件
-- 主投稿视频：`campaign/assets/videos/main-demo-zh.mp4`（48 秒，16:9）
+- 主投稿视频：[`main-demo-zh.mp4`](campaign/assets/videos/main-demo-zh.mp4)（48 秒，16:9）
 - 短视频（可选分 P 或动态）
 
 ### 封面
-- `campaign/assets/social-cards/intro_zh_1080x1350.png` 或 `intro_zh_1080x1920.png`
+- [`intro_zh_1080x1350.png`](campaign/assets/social-cards/intro_zh_1080x1350.png) 或 `intro_zh_1080x1920.png`
 
 ---
 

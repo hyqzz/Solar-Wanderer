@@ -25,7 +25,7 @@
 
 ## 二、视频素材
 
-所有视频位于 `campaign/assets/videos/`。
+所有视频位于 [``](campaign/assets/videos/)。
 
 | 文件名 | 时长 | 分辨率 | 语言 | 建议用途 |
 |---|---|---|---|---|
@@ -51,7 +51,7 @@
 
 ## 三、图片素材
 
-### 3.1 场景截图 `campaign/assets/screenshots/`
+### 3.1 场景截图 [``](campaign/assets/screenshots/)
 
 | 文件名（1920×1080） | 文件名（1080×1920） | 场景 |
 |---|---|---|
@@ -63,7 +63,7 @@
 | `sun-closeup_1920x1080.png` | `sun-closeup_1080x1920.png` | 太阳近景 |
 | `pluto-heart_1920x1080.png` | `pluto-heart_1080x1920.png` | 冥王星心形平原 |
 
-### 3.2 社交卡片 `campaign/assets/social-cards/`
+### 3.2 社交卡片 [``](campaign/assets/social-cards/)
 
 每种主题生成 4 张：
 - `{id}_zh_1080x1350.png` — 中文，3:4（小红书/Instagram/知乎）
@@ -90,7 +90,7 @@
 
 ## 四、原始帧序列
 
-`campaign/assets/video-sequences/` 下保存了各场景的逐帧 PNG：
+[``](campaign/assets/video-sequences/) 下保存了各场景的逐帧 PNG：
 - `earth-to-oort-vert/` — 360 帧
 - `moon-earthrise-vert/` — 360 帧
 - `mars-sunset-vert/` — 360 帧
@@ -106,7 +106,7 @@
 
 ## 五、字体文件
 
-`campaign/assets/fonts/`（已加入 `.gitignore`，不参与版本控制）
+[``](campaign/assets/fonts/)（已加入 `.gitignore`，不参与版本控制）
 - `msyh.ttc` — 微软雅黑，用于中文 drawtext
 - `arial.ttf` — Arial，用于英文 drawtext
 - 若本地缺失，生成脚本会自动从系统字体目录复制。
@@ -173,7 +173,7 @@ node tools/generate-short-videos.mjs
 
 ## 八、注意事项
 
-- `campaign/assets/fonts/`、`video-sequences/`、`video-preview-frames/` 已加入 `.gitignore`，不提交到 Git。
+- [``](campaign/assets/fonts/)、`video-sequences/`、`video-preview-frames/` 已加入 `.gitignore`，不提交到 Git。
 - 大体积文件（视频、字体、帧序列）请勿手动拖入仓库。
 - 如需分享给协作者，直接打包 `campaign/` 目录或使用网盘/云存储。
 - 所有视频已烧录字幕，但 B站/YouTube 仍可上传独立 SRT（如需要可另行生成）。
