@@ -39,10 +39,10 @@ Source: https://github.com/hyqzz/Solar-Wanderer
 
 ## 配图建议
 
-- 主图：[`moon-earthrise_1920x1080.png`](campaign/assets/screenshots/moon-earthrise_1920x1080.png)
-- 第二张：[`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png)
-- 第三张：[`intro_en_1080x1350.png`](campaign/assets/social-cards/intro_en_1080x1350.png)（项目使命文字卡片）
-- 可选视频：[`main-demo-en.mp4`](campaign/assets/videos/main-demo-en.mp4)（48 秒）
+- 主图：[`moon-earthrise_1920x1080.png`](../../assets/screenshots/moon-earthrise_1920x1080.png)
+- 第二张：[`saturn-rings_1920x1080.png`](../../assets/screenshots/saturn-rings_1920x1080.png)
+- 第三张：[`intro_en_1080x1350.png`](../../assets/social-cards/intro_en_1080x1350.png)（项目使命文字卡片）
+- 可选视频：[`main-demo-en.mp4`](../../assets/videos/main-demo-en.mp4)（48 秒）
 
 ---
 

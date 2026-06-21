@@ -38,11 +38,11 @@ GitHub：https://github.com/hyqzz/Solar-Wanderer
 
 ## 配图
 
-- 主图：[`moon_zh_1080x1350.png`](campaign/assets/social-cards/moon_zh_1080x1350.png)
-- 第二张：[`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png)
-- 第三张：[`mars-sunset_1920x1080.png`](campaign/assets/screenshots/mars-sunset_1920x1080.png)
-- 第四张：GitHub 仓库截图或 [`earth-orbit_1920x1080.png`](campaign/assets/screenshots/earth-orbit_1920x1080.png)
-- 可选视频（微博）：[`short-moon-earthrise-zh.mp4`](campaign/assets/videos/short-moon-earthrise-zh.mp4)
+- 主图：[`moon_zh_1080x1350.png`](../../assets/social-cards/moon_zh_1080x1350.png)
+- 第二张：[`saturn-rings_1920x1080.png`](../../assets/screenshots/saturn-rings_1920x1080.png)
+- 第三张：[`mars-sunset_1920x1080.png`](../../assets/screenshots/mars-sunset_1920x1080.png)
+- 第四张：GitHub 仓库截图或 [`earth-orbit_1920x1080.png`](../../assets/screenshots/earth-orbit_1920x1080.png)
+- 可选视频（微博）：[`short-moon-earthrise-zh.mp4`](../../assets/videos/short-moon-earthrise-zh.mp4)
 
 ---
 

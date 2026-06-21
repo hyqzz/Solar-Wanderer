@@ -114,7 +114,7 @@
     Free Download: https://bit.ly/3sI19Af
     Video Link: https://youtu.be/ozb32hgHdo4
     ```
-  - 详细说明见 [`CREDITS.md`](campaign/assets/music/CREDITS.md)。
+  - 详细说明见 [`CREDITS.md`](../assets/music/CREDITS.md)。
 
 ---
 

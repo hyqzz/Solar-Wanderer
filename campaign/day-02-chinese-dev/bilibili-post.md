@@ -8,10 +8,10 @@
 
 ## 视频文件
 
-- **主视频（推荐）**：[`short-moon-earthrise-zh.mp4`](campaign/assets/videos/short-moon-earthrise-zh.mp4)（12 秒，1080×1920，竖屏，已烧录字幕）
-- **完整版 demo（可选分 P）**：[`main-demo-zh.mp4`](campaign/assets/videos/main-demo-zh.mp4)（48 秒，1080×1920，竖屏，已烧录字幕）
+- **主视频（推荐）**：[`short-moon-earthrise-zh.mp4`](../../assets/videos/short-moon-earthrise-zh.mp4)（12 秒，1080×1920，竖屏，已烧录字幕）
+- **完整版 demo（可选分 P）**：[`main-demo-zh.mp4`](../../assets/videos/main-demo-zh.mp4)（48 秒，1080×1920，竖屏，已烧录字幕）
 
-如果发短视频/竖屏版，直接用 `short-moon-earthrise-zh.mp4`；如果发横屏/longer 版本，用 `main-demo-zh.mp4`。
+如果发短视频/竖屏版，直接用 [`short-moon-earthrise-zh.mp4`](../../assets/videos/short-moon-earthrise-zh.mp4)；如果发横屏/longer 版本，用 [`main-demo-zh.mp4`](../../assets/videos/main-demo-zh.mp4)。
 
 ---
 
@@ -42,7 +42,7 @@
 
 ## 封面图建议
 
-- 推荐封面：[`moon_zh_1080x1350.png`](campaign/assets/social-cards/moon_zh_1080x1350.png) 或 [`moon-earthrise_1920x1080.png`](campaign/assets/screenshots/moon-earthrise_1920x1080.png)
+- 推荐封面：[`moon_zh_1080x1350.png`](../../assets/social-cards/moon_zh_1080x1350.png) 或 [`moon-earthrise_1920x1080.png`](../../assets/screenshots/moon-earthrise_1920x1080.png)
 - 标题大字："站在月球看地球"
 - 小字："浏览器里的真实太阳系"
 

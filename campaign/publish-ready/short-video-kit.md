@@ -2,7 +2,7 @@
 
 > 建议平台：抖音、小红书视频、B站竖版、视频号、YouTube Shorts、TikTok、Instagram Reels
 > 竖屏 1080×1920，已烧录中英字幕，可直接上传
-> 所有视频位于 [`campaign/assets/videos/`](campaign/assets/videos/)
+> 所有视频位于 [`campaign/assets/videos/`](../assets/videos/)
 
 ---
 
@@ -10,18 +10,18 @@
 
 | 文件路径 | 时长 | 语言 | 推荐标题 | 推荐话题/标签 |
 |---|---|---|---|---|
-| [`short-earth-to-oort-zh.mp4`](campaign/assets/videos/short-earth-to-oort-zh.mp4) | 15s | 中文 | 从地球缩放到太阳系边缘 | #太阳系 #NASA #真实比例 #视觉震撼 |
-| [`short-earth-to-oort-en.mp4`](campaign/assets/videos/short-earth-to-oort-en.mp4) | 15s | 英文 | From Earth to the edge of the solar system | #space #nasa #solarsystem #scale |
-| [`short-saturn-rings-zh.mp4`](campaign/assets/videos/short-saturn-rings-zh.mp4) | 12s | 中文 | 土星环薄到难以置信 | #土星 #宇宙 #科普 #冷知识 |
-| [`short-saturn-rings-en.mp4`](campaign/assets/videos/short-saturn-rings-en.mp4) | 12s | 英文 | Saturn's rings are unbelievably thin | #saturn #space #astronomy #facts |
-| [`short-jupiter-storm-zh.mp4`](campaign/assets/videos/short-jupiter-storm-zh.mp4) | 12s | 中文 | 木星大红斑能装下地球 | #木星 #大红斑 #天文 #震撼 |
-| [`short-jupiter-storm-en.mp4`](campaign/assets/videos/short-jupiter-storm-en.mp4) | 12s | 英文 | A storm bigger than Earth | #jupiter #greatredspot #space |
-| [`short-moon-earthrise-zh.mp4`](campaign/assets/videos/short-moon-earthrise-zh.mp4) | 12s | 中文 | 站在月球看地球升起 | #月球 #地球升起 #NASA #真实 |
-| [`short-moon-earthrise-en.mp4`](campaign/assets/videos/short-moon-earthrise-en.mp4) | 12s | 英文 | Watch Earth rise from the Moon | #moon #earthrise #nasa |
-| [`short-mars-sunset-zh.mp4`](campaign/assets/videos/short-mars-sunset-zh.mp4) | 12s | 中文 | 火星的日落是蓝色的 | #火星 #日落 #科普 #蓝色 |
-| [`short-mars-sunset-en.mp4`](campaign/assets/videos/short-mars-sunset-en.mp4) | 12s | 英文 | Mars sunsets are blue | #mars #sunset #space #blue |
-| [`main-demo-zh.mp4`](campaign/assets/videos/main-demo-zh.mp4) | 48s | 中文 | 浏览器里的真实 1:1 太阳系 | #太阳系 #浏览器 #开源 #Threejs |
-| [`main-demo-en.mp4`](campaign/assets/videos/main-demo-en.mp4) | 48s | 英文 | A real-time 1:1 solar system in your browser | #threejs #opensource #space #webgl |
+| [`short-earth-to-oort-zh.mp4`](../assets/videos/short-earth-to-oort-zh.mp4) | 15s | 中文 | 从地球缩放到太阳系边缘 | #太阳系 #NASA #真实比例 #视觉震撼 |
+| [`short-earth-to-oort-en.mp4`](../assets/videos/short-earth-to-oort-en.mp4) | 15s | 英文 | From Earth to the edge of the solar system | #space #nasa #solarsystem #scale |
+| [`short-saturn-rings-zh.mp4`](../assets/videos/short-saturn-rings-zh.mp4) | 12s | 中文 | 土星环薄到难以置信 | #土星 #宇宙 #科普 #冷知识 |
+| [`short-saturn-rings-en.mp4`](../assets/videos/short-saturn-rings-en.mp4) | 12s | 英文 | Saturn's rings are unbelievably thin | #saturn #space #astronomy #facts |
+| [`short-jupiter-storm-zh.mp4`](../assets/videos/short-jupiter-storm-zh.mp4) | 12s | 中文 | 木星大红斑能装下地球 | #木星 #大红斑 #天文 #震撼 |
+| [`short-jupiter-storm-en.mp4`](../assets/videos/short-jupiter-storm-en.mp4) | 12s | 英文 | A storm bigger than Earth | #jupiter #greatredspot #space |
+| [`short-moon-earthrise-zh.mp4`](../assets/videos/short-moon-earthrise-zh.mp4) | 12s | 中文 | 站在月球看地球升起 | #月球 #地球升起 #NASA #真实 |
+| [`short-moon-earthrise-en.mp4`](../assets/videos/short-moon-earthrise-en.mp4) | 12s | 英文 | Watch Earth rise from the Moon | #moon #earthrise #nasa |
+| [`short-mars-sunset-zh.mp4`](../assets/videos/short-mars-sunset-zh.mp4) | 12s | 中文 | 火星的日落是蓝色的 | #火星 #日落 #科普 #蓝色 |
+| [`short-mars-sunset-en.mp4`](../assets/videos/short-mars-sunset-en.mp4) | 12s | 英文 | Mars sunsets are blue | #mars #sunset #space #blue |
+| [`main-demo-zh.mp4`](../assets/videos/main-demo-zh.mp4) | 48s | 中文 | 浏览器里的真实 1:1 太阳系 | #太阳系 #浏览器 #开源 #Threejs |
+| [`main-demo-en.mp4`](../assets/videos/main-demo-en.mp4) | 48s | 英文 | A real-time 1:1 solar system in your browser | #threejs #opensource #space #webgl |
 
 ---
 
@@ -37,7 +37,7 @@
   浏览器即可体验：sw.icodestar.net
   #太阳系 #NASA #真实比例 #视觉震撼 #遨游太阳系
   ```
-- **封面**：[`scale_zh_1080x1920.png`](campaign/assets/social-cards/scale_zh_1080x1920.png)
+- **封面**：[`scale_zh_1080x1920.png`](../assets/social-cards/scale_zh_1080x1920.png)
 - **来源**（发布时可选附在评论区或描述底部）：
   - 奥尔特云外缘约 10 万 AU：NASA Science – Oort Cloud Facts https://science.nasa.gov/solar-system/oort-cloud/facts/
   - 本项目 1:1 尺度与范围见 `docs/sdlc/test-report.md`
@@ -52,7 +52,7 @@
   Try it in your browser: sw.icodestar.net
   #space #nasa #solarsystem #scale #solarsystemsimulation
   ```
-- **Thumbnail**: [`scale_en_1080x1920.png`](campaign/assets/social-cards/scale_en_1080x1920.png)
+- **Thumbnail**: [`scale_en_1080x1920.png`](../assets/social-cards/scale_en_1080x1920.png)
 - **Sources** (add to caption or first comment):
   - Oort Cloud outer edge ~100,000 AU: NASA Science – Oort Cloud Facts https://science.nasa.gov/solar-system/oort-cloud/facts/
   - Project scale & range: `docs/sdlc/test-report.md`
@@ -71,7 +71,7 @@
   在线体验：sw.icodestar.net
   #土星 #宇宙 #科普 #冷知识 #土星环
   ```
-- **封面**：[`saturn_zh_1080x1920.png`](campaign/assets/social-cards/saturn_zh_1080x1920.png)
+- **封面**：[`saturn_zh_1080x1920.png`](../assets/social-cards/saturn_zh_1080x1920.png)
 - **来源**：
   - 土星环宽 28.2 万公里、厚约 10 米：NASA Science – Saturn Facts https://science.nasa.gov/saturn/facts/
 
@@ -85,7 +85,7 @@
   Explore it live: sw.icodestar.net
   #saturn #space #astronomy #facts #solarsystem
   ```
-- **Thumbnail**: [`saturn_en_1080x1920.png`](campaign/assets/social-cards/saturn_en_1080x1920.png)
+- **Thumbnail**: [`saturn_en_1080x1920.png`](../assets/social-cards/saturn_en_1080x1920.png)
 - **Sources**:
   - NASA Science – Saturn Facts: https://science.nasa.gov/saturn/facts/
 
@@ -103,7 +103,7 @@
   来亲眼看看：sw.icodestar.net
   #木星 #大红斑 #天文 #震撼 #太阳系
   ```
-- **封面**：[`jupiter_zh_1080x1920.png`](campaign/assets/social-cards/jupiter_zh_1080x1920.png)
+- **封面**：[`jupiter_zh_1080x1920.png`](../assets/social-cards/jupiter_zh_1080x1920.png)
 - **来源**：
   - 木星大红斑宽约 1.3 倍地球直径、已存在 350 年以上：NASA Science – NASA's Juno Probes the Depths of Jupiter's Great Red Spot https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
 
@@ -117,7 +117,7 @@
   See it live: sw.icodestar.net
   #jupiter #greatredspot #space #astronomy
   ```
-- **Thumbnail**: [`jupiter_en_1080x1920.png`](campaign/assets/social-cards/jupiter_en_1080x1920.png)
+- **Thumbnail**: [`jupiter_en_1080x1920.png`](../assets/social-cards/jupiter_en_1080x1920.png)
 - **Sources**:
   - NASA Science – Juno / Great Red Spot: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
 
@@ -135,7 +135,7 @@
   sw.icodestar.net
   #月球 #地球升起 #NASA #真实 #遨游太阳系
   ```
-- **封面**：[`moon_zh_1080x1920.png`](campaign/assets/social-cards/moon_zh_1080x1920.png)
+- **封面**：[`moon_zh_1080x1920.png`](../assets/social-cards/moon_zh_1080x1920.png)
 - **来源**：
   - 阿波罗 8 号《地出》照片：NASA – 50 Years Ago: Apollo 8 in Lunar Orbit https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/
 
@@ -149,7 +149,7 @@
   sw.icodestar.net
   #moon #earthrise #nasa #space #solarsystem
   ```
-- **Thumbnail**: [`moon_en_1080x1920.png`](campaign/assets/social-cards/moon_en_1080x1920.png)
+- **Thumbnail**: [`moon_en_1080x1920.png`](../assets/social-cards/moon_en_1080x1920.png)
 - **Sources**:
   - Apollo 8 Earthrise: NASA – 50 Years Ago: Apollo 8 in Lunar Orbit https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/
 
@@ -167,7 +167,7 @@
   真实模拟：sw.icodestar.net
   #火星 #日落 #科普 #蓝色 #NASA
   ```
-- **封面**：[`mars_zh_1080x1920.png`](campaign/assets/social-cards/mars_zh_1080x1920.png)
+- **封面**：[`mars_zh_1080x1920.png`](../assets/social-cards/mars_zh_1080x1920.png)
 - **来源**：
   - 火星日落呈蓝色机制：NASA Science – What Do Sunrises and Sunsets Look Like on Mars? https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
 
@@ -181,7 +181,7 @@
   See for yourself: sw.icodestar.net
   #mars #sunset #space #nasa #astronomy
   ```
-- **Thumbnail**: [`mars_en_1080x1920.png`](campaign/assets/social-cards/mars_en_1080x1920.png)
+- **Thumbnail**: [`mars_en_1080x1920.png`](../assets/social-cards/mars_en_1080x1920.png)
 - **Sources**:
   - NASA Science – Mars Sunsets: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
 

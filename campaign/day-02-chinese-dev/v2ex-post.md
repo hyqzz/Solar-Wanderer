@@ -34,11 +34,11 @@ GitHub：https://github.com/hyqzz/Solar-Wanderer
 
 ## 配图
 
-- 第一张：[`intro_zh_1080x1350.png`](campaign/assets/social-cards/intro_zh_1080x1350.png)
-- 第二张：[`moon-earthrise_1920x1080.png`](campaign/assets/screenshots/moon-earthrise_1920x1080.png)
-- 第三张：[`saturn-rings_1920x1080.png`](campaign/assets/screenshots/saturn-rings_1920x1080.png)
-- 第四张：[`jupiter-redspot_1920x1080.png`](campaign/assets/screenshots/jupiter-redspot_1920x1080.png)
-- 可选视频：[`short-moon-earthrise-zh.mp4`](campaign/assets/videos/short-moon-earthrise-zh.mp4)
+- 第一张：[`intro_zh_1080x1350.png`](../../assets/social-cards/intro_zh_1080x1350.png)
+- 第二张：[`moon-earthrise_1920x1080.png`](../../assets/screenshots/moon-earthrise_1920x1080.png)
+- 第三张：[`saturn-rings_1920x1080.png`](../../assets/screenshots/saturn-rings_1920x1080.png)
+- 第四张：[`jupiter-redspot_1920x1080.png`](../../assets/screenshots/jupiter-redspot_1920x1080.png)
+- 可选视频：[`short-moon-earthrise-zh.mp4`](../../assets/videos/short-moon-earthrise-zh.mp4)
 
 ---
 
