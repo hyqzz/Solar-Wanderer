@@ -55,14 +55,3 @@ docs/sdlc/screenshots/*
 !docs/sdlc/screenshots/example/
 !docs/sdlc/screenshots/example/**
 
-# ---- 大体积视频素材(防止误提交,本项目无需跟踪任何视频)----
-# 大体积视频素材不纳入版本控制
-*.mp4
-*.mov
-*.webm
-*.avi
-*.mkv
-!campaign/**
-
-# campaign/assets/ 为大体积二进制素材（视频/图片/音乐），保留本地但不追踪
-campaign/assets/
