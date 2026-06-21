@@ -52,19 +52,19 @@ export const BODIES = {
       // 日落：Fe₂O₃ 尘埃（~1.5 µm）分光 mieG 使蓝光前向散射峰远强于红光，
       //       太阳周围形成标志性蓝色/青色光晕——Curiosity Sol-956、Perseverance Sol-257 实拍印证。
       heightKm: 80, rayleighScaleKm: 11.1, mieScaleKm: 9,
-      // Rayleigh 保持物理量级（小值 → 太空看火星只有极薄气雾，真实）；
-      // 白昼天空亮度由 interiorBoost 在相机进入大气后动态放大，两者不冲突。
+      // Rayleigh 保持物理量级（CO₂ 稀薄大气，太空看仅极薄气雾）
       rayleigh: [5.0e-7, 3.0e-7, 1.2e-7],
-      // betaM [R,G,B]：蓝光消光略高（细尘 ~1.5µm），兼顾尘霾外观与日落分光
-      mie: [1.2e-6, 1.8e-6, 2.8e-6],
-      // mieG [R,G,B]：核心——蓝光 Henyey-Greenstein 各向异性峰更尖(0.88)，
-      // 日落时(µ→1) phM_blue 比 phM_red 高 4~8 倍，产生标志性蓝色光晕
-      mieG: [0.62, 0.74, 0.88],
+      // betaM [R,G,B]：蓝光消光略高，对应 ~1.5µm 尘埃的 Mie 消光谱
+      mie: [1.2e-6, 1.5e-6, 1.8e-6],
+      // mieG [R,G,B]：物理合理范围（实测 Fe₂O₃ 尘埃 g≈0.55–0.75）。
+      // 蓝通道峰略尖 → 日落时 phM_blue/phM_red ≈ 1.8 倍，产生可见蓝色光晕；
+      // 旧值 0.88 使比值达 33.6 倍 → 天空过曝、太阳消失。
+      mieG: [0.60, 0.65, 0.72],
       multiplier: 2.5,
-      haze: 0.55,
-      // 相机在大气内部时放大散射密度，使白昼天空呈奶油黄褐色；
-      // 从太空观察时 uBoost=1，大气保持真实的极薄外观
-      interiorBoost: 14,
+      haze: 0.50,
+      // interiorBoost=2：地表白昼天空 L≈0.05（微弱琥珀），太阳方向 L≈1（亮晕），
+      // 太阳盘面在 100+ 量级远高于大气散射，可见度好；从太空 uBoost=1 薄气雾不变。
+      interiorBoost: 2,
     },
     textures: { map: 'mars.jpg' },
     desc: '红色行星。拥有太阳系最高的火山（奥林帕斯山 21.9 km）与最长的峡谷（水手谷 4000 km）。稀薄 CO₂ 大气，尘暴可席卷全球。',

@@ -853,8 +853,8 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       fogDensity = (1 / 180) * Math.exp(-alt / atm.rayleighScaleKm) * (atm.multiplier >= 3 ? 4 : 1);
       // 星空淡出：白昼且身处稠密层内
       const density = Math.exp(-alt / (atm.rayleighScaleKm * 2.2));
-      // 0.999 使正午地表星星不可见（旧值 0.97 留 3% 残余仍透出星光）
-      skyFade = THREE.MathUtils.clamp(1 - day * density * 0.999, 0, 1);
+      // 系数 1.0：正午 day=1 density=1 → skyFade=0，星星完全消失（物理正确，任何有大气的行星白昼均不见星）
+      skyFade = THREE.MathUtils.clamp(1 - day * density, 0, 1);
       // 穿越云层薄纱（R9-2b）：掠过云甲板高度时短暂白雾，入气更有层次
       if (e.cloudMesh && !waterFx) {
         const hc = e.phys.radiusKm * 0.0035;
