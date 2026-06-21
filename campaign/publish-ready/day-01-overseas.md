@@ -40,6 +40,13 @@ It’s open source (MIT), runs on Three.js + WebGL2, and works on desktop and mo
 
 Explore: https://sw.icodestar.net
 Code: https://github.com/hyqzz/Solar-Wanderer
+
+Sources:
+• Saturn rings (280,000 km wide, ~10 m thick): NASA Science https://science.nasa.gov/saturn/facts/
+• Jupiter Great Red Spot (1.3× Earth, 350+ years): NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+• Blue sunsets on Mars: NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+• Oort Cloud outer edge ~100,000 AU: NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+• Accuracy: tested vs JPL Horizons; see docs/sdlc/test-report.md
 ```
 
 ### First Comment（发布后立即评论，增加互动）
@@ -79,6 +86,12 @@ Tech notes:
 The thing I’m most proud of: the orbit paths and positions stay accurate across the full scale range, which is surprisingly hard because standard depth buffers fall apart beyond ~1e6 km.
 
 I’d love feedback on performance on lower-end devices, any ephemeris edge cases, and whether the controls feel intuitive.
+
+Sources for the astronomical claims:
+- Saturn rings: https://science.nasa.gov/saturn/facts/
+- Jupiter Great Red Spot: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- Mars blue sunsets: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- Oort Cloud: https://science.nasa.gov/solar-system/oort-cloud/facts/
 ```
 
 ### 评论回复要点
@@ -105,6 +118,12 @@ I also added a 6DOF flight mode, surface walking/submarine-style underwater phys
 Tech stack: Three.js, WebGL2, Vite, native ESM. Tests run with Node’s built-in test runner.
 
 Would love your thoughts on the code structure or any rendering tricks I could add.
+
+Astronomy sources:
+- Saturn rings: https://science.nasa.gov/saturn/facts/
+- Jupiter Great Red Spot: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- Mars blue sunsets: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- Oort Cloud: https://science.nasa.gov/solar-system/oort-cloud/facts/
 ```
 
 ---
@@ -128,6 +147,12 @@ Some things you can see:
 • The Sun out to the Oort Cloud (100,000 AU)
 
 It’s free, open source, and works on mobile. Let me know what object or view you’d want to see next.
+
+Sources:
+- Saturn rings: https://science.nasa.gov/saturn/facts/
+- Jupiter Great Red Spot: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- Mars blue sunsets: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- Oort Cloud: https://science.nasa.gov/solar-system/oort-cloud/facts/
 ```
 
 ---
@@ -148,6 +173,12 @@ Tech highlights:
 
 Try it: https://sw.icodestar.net
 Code: https://github.com/hyqzz/Solar-Wanderer
+
+Sources:
+- Saturn rings: https://science.nasa.gov/saturn/facts/
+- Jupiter Great Red Spot: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- Mars blue sunsets: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- Oort Cloud: https://science.nasa.gov/solar-system/oort-cloud/facts/
 
 #opensource #threejs #space #webgl #nasa
 ```
@@ -200,6 +231,15 @@ Open source under MIT:
 https://github.com/hyqzz/Solar-Wanderer
 
 If you try it, reply with your favorite view.
+```
+
+### Tweet 5 / Sources
+```
+Sources for the science claims in this thread:
+• Saturn rings: https://science.nasa.gov/saturn/facts/
+• Jupiter Great Red Spot: https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+• Mars blue sunsets: https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+• Oort Cloud: https://science.nasa.gov/solar-system/oort-cloud/facts/
 ```
 
 ### 配图/视频

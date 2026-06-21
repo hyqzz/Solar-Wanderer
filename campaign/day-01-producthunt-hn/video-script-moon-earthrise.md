@@ -104,3 +104,11 @@
 - 漆黑的月空占上方 2/3
 - 一颗小小的蓝色地球在右上角
 - 大字标题："站在月球看地球"
+
+---
+
+## Sources / 素材引用
+
+- **Apollo 8 Earthrise**: NASA https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/
+- **Project ephemeris**: NASA JPL Horizons https://ssd.jpl.nasa.gov/horizons/
+

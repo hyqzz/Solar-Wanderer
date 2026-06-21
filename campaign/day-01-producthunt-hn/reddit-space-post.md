@@ -71,3 +71,13 @@ Would love your thoughts — especially if anything looks scientifically off.
 **“It lags on my phone.”**
 
 > The app auto-detects GPU tier and lowers quality on weaker devices. You can also try `?quality=lite` in the URL. If it still lags, please tell me your device and browser.
+
+---
+
+## Sources / 素材引用
+
+- **Saturn rings** (280,000 km wide, ~10 m thick): NASA Science https://science.nasa.gov/saturn/facts/
+- **Jupiter Great Red Spot** (1.3× Earth, 350+ years): NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- **Blue sunsets on Mars**: NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- **Oort Cloud** (~100,000 AU): NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **Apollo 8 Earthrise**: NASA https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/

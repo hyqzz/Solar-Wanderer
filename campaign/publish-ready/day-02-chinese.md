@@ -31,6 +31,12 @@ Solar Wanderer（遨游太阳系）是一个完全在浏览器里运行的实时
 技术栈：Three.js + WebGL2，对数深度缓冲，浮动原点，原生 ESM，Node 原生 test runner。
 
 源码 MIT 开源。欢迎提 issue/pr，也欢迎抓 bug。
+
+参考资料：
+- 土星环：NASA Science https://science.nasa.gov/saturn/facts/
+- 木星大红斑：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- 火星蓝色日落：NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- 奥尔特云：NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
 ```
 
 ### 配图
@@ -72,6 +78,12 @@ https://sw.icodestar.net
 另外写了一些单元测试和星历精度回归测试，行星位置与 JPL Horizons 对比误差 ≤0.074°。
 
 如果你试用了，欢迎在评论里告诉我最想加的功能。
+
+参考资料：
+- 土星环：NASA Science https://science.nasa.gov/saturn/facts/
+- 木星大红斑：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- 火星蓝色日落：NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- 奥尔特云：NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
 ```
 
 ### 配图
@@ -144,6 +156,14 @@ UTC → TT → JD 的换算看似简单，但闰秒和历书时会累积误差�
 ## 结语
 
 如果你也对真实尺度下的太阳系感兴趣，欢迎打开试试，或者在 GitHub 上 star/issue。
+
+## 参考资料
+
+- 土星环：NASA Science – Saturn Facts https://science.nasa.gov/saturn/facts/
+- 木星大红斑：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- 火星蓝色日落：NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- 奥尔特云：NASA Science – Oort Cloud Facts https://science.nasa.gov/solar-system/oort-cloud/facts/
+- 项目星历精度：见 `docs/sdlc/test-report.md` 与 `tests/ephemeris.test.mjs`
 ```
 
 ### 配图
@@ -173,6 +193,12 @@ Solar Wanderer / 遨游太阳系 是一个完全在浏览器里运行的实时�
 
 在线体验：https://sw.icodestar.net
 开源地址：https://github.com/hyqzz/Solar-Wanderer
+
+参考资料：
+- 土星环：NASA Science https://science.nasa.gov/saturn/facts/
+- 木星大红斑：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- 火星蓝色日落：NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- 奥尔特云：NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
 
 #太阳系 #NASA #Threejs #WebGL #开源 #遨游太阳系
 ```
@@ -207,6 +233,15 @@ Solar Wanderer / 遨游太阳系 是一个完全在浏览器里运行的实时�
 #天文 #太阳系 #NASA #Threejs #浏览器 #小众网站 #知识科普 #独立开发
 ```
 
+### 评论区置顶（复制发布时粘贴）
+```
+天文事实参考：
+- 土星环：NASA Science https://science.nasa.gov/saturn/facts/
+- 木星大红斑：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- 火星蓝色日落：NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- 奥尔特云：NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+```
+
 ### 配图（9 张）
 1. `social-cards/intro_zh_1080x1350.png`
 2. `screenshots/moon-earthrise_1920x1080.png`
@@ -233,6 +268,12 @@ Solar Wanderer / 遨游太阳系 是一个完全在浏览器里运行的实时�
 🔗 sw.icodestar.net
 📦 github.com/hyqzz/Solar-Wanderer
 
+天文事实参考：
+- 土星环：NASA Science https://science.nasa.gov/saturn/facts/
+- 木星大红斑：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- 火星蓝色日落：NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- 奥尔特云：NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+
 #独立开发 #Threejs #NASA #太阳系
 ```
 
@@ -249,6 +290,12 @@ Solar Wanderer（遨游太阳系）上线了，完全免费、无需安装。
 
 🔗 https://sw.icodestar.net
 📦 https://github.com/hyqzz/Solar-Wanderer
+
+参考来源：
+- 土星环：NASA Science https://science.nasa.gov/saturn/facts/
+- 木星大红斑：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- 火星蓝色日落：NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- 奥尔特云：NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
 
 转发抽 3 位送项目纪念贴纸（如有）。
 

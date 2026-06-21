@@ -159,3 +159,13 @@ That tiny blue dot is home.
 - 在 Hacker News 上分享为 "How We Rendered a 1:1 Solar System in 200 KB of JS"。
 - 在 Twitter 上发 10 条 thread（见 `twitter-tech-thread.md`）。
 - 在 Reddit r/webdev, r/threejs, r/programming 分享。
+
+---
+
+## Sources / 素材引用
+
+- **Saturn rings** (280,000 km wide, ~10 m thick): NASA Science https://science.nasa.gov/saturn/facts/
+- **Jupiter Great Red Spot** (1.3× Earth, 350+ years): NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- **Oort Cloud** (~100,000 AU): NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **Project accuracy**: `docs/sdlc/test-report.md`
+

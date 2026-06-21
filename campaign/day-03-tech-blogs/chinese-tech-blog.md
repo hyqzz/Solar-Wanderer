@@ -159,3 +159,13 @@ https://sw.icodestar.net
 - 在 V2EX 上分享为 "两天，我把整个太阳系塞进了网页"。
 - 在微博、即刻上发短版本 + 链接。
 - 在 B站/抖音发视频版（用 Day 2 的视频脚本）。
+
+---
+
+## 参考资料
+
+- **土星环**：NASA Science https://science.nasa.gov/saturn/facts/
+- **木星大红斑**：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- **奥尔特云**：NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **项目星历精度**：见 `docs/sdlc/test-report.md` 与 `tests/ephemeris.test.mjs`
+

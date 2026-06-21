@@ -114,3 +114,14 @@ sw.icodestar.net
 - 抖音：不用下载！在浏览器里探索真实太阳系
 - 小红书：免费网页！站在月球看地球太震撼了
 - 视频号：真实 NASA 数据驱动的太阳系，点开即玩
+
+---
+
+## 参考资料
+
+- **阿波罗 8 号《地出》**：NASA https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/
+- **土星环**：NASA Science https://science.nasa.gov/saturn/facts/
+- **木星大红斑**：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- **火星蓝色日落**：NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- **奥尔特云**：NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+

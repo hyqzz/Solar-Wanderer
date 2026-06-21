@@ -95,3 +95,13 @@ Source: https://github.com/hyqzz/Solar-Wanderer
 **有人问移动端时：**
 
 > Yes, it works on phones and tablets. Pinch to zoom, drag to orbit, tap a body to fly there. GPU auto-tiering keeps it smooth on mid-range devices.
+
+---
+
+## Sources / 素材引用
+
+- **Saturn rings** (280,000 km wide, ~10 m thick): NASA Science https://science.nasa.gov/saturn/facts/
+- **Jupiter Great Red Spot** (1.3× Earth, 350+ years): NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- **Blue sunsets on Mars**: NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- **Oort Cloud** (~100,000 AU): NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **Project accuracy**: tested vs NASA JPL Horizons; see `docs/sdlc/test-report.md`

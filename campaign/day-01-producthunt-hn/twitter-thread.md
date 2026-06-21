@@ -61,3 +61,11 @@ If you want to help make the solar system accessible to everyone, check the issu
 - 推文 #3 面向开发者/贡献者。
 - 在每条推文下回复 2–3 条补充信息，增加互动。
 - @ 相关账号：@ThreeJS @NASA @esa（但不要 spam）。
+
+---
+
+## Sources / 素材引用
+
+- **Oort Cloud** (~100,000 AU): NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **Saturn rings**: NASA Science https://science.nasa.gov/saturn/facts/
+- **Project accuracy**: `docs/sdlc/test-report.md`

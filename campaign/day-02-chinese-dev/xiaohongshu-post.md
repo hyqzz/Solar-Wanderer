@@ -57,3 +57,14 @@
 ## 发布时间
 
 晚上 8:00–10:00（用户活跃高峰）
+
+---
+
+## 参考资料（可置顶评论区）
+
+- **土星环**：NASA Science https://science.nasa.gov/saturn/facts/
+- **木星大红斑**：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- **火星蓝色日落**：NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- **奥尔特云**：NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **阿波罗 8 号《地出》**：NASA https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/
+

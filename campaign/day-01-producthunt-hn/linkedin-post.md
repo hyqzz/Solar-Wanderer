@@ -42,3 +42,11 @@ Source: https://github.com/hyqzz/Solar-Wanderer
 - 主图：站在月球看地球升起（1920x1080）
 - 第二张：土星环特写
 - 第三张：项目使命文字卡片
+
+---
+
+## Sources / 素材引用
+
+- **Saturn rings** (280,000 km wide, ~10 m thick): NASA Science https://science.nasa.gov/saturn/facts/
+- **Oort Cloud** (~100,000 AU): NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **Project accuracy**: `docs/sdlc/test-report.md`

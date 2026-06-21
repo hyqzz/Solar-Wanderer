@@ -61,3 +61,13 @@ A: None. MIT open source, no ads, no tracking. The mission is to make the solar 
 - 发布后 30 分钟内积极回复前几条评论，HN 算法看重早期互动。
 - 如果帖子沉了，不要重复提交。
 - 不要请求朋友帮你 upvote（HN 会检测并惩罚）。
+
+---
+
+## Sources / 素材引用
+
+- **Saturn rings**: NASA Science https://science.nasa.gov/saturn/facts/
+- **Jupiter Great Red Spot**: NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- **Blue sunsets on Mars**: NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- **Oort Cloud** (~100,000 AU): NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **Accuracy claims**: `docs/sdlc/test-report.md` / `npm run verify`

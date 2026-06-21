@@ -95,3 +95,11 @@ If any of that excites you, check the issues. We need contributors.
 - 每条配一张图或 GIF 效果更好。
 - 第 1 条配主视频。
 - 第 4、5、6 条可以配架构示意图（可以手绘或用 Excalidraw）。
+
+---
+
+## Sources / 素材引用
+
+- **Oort Cloud** (~100,000 AU): NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **Project accuracy**: `docs/sdlc/test-report.md`
+

@@ -51,3 +51,14 @@
 - "如果喜欢这个视频，请一键三连，这对我很重要。"
 - "你最想去太阳系的哪个地方？评论区告诉我。"
 - "项目是开源的，GitHub 链接在简介，欢迎 Star。"
+
+---
+
+## 参考资料（可放在简介或评论区置顶）
+
+- **土星环**：NASA Science https://science.nasa.gov/saturn/facts/
+- **木星大红斑**：NASA Science / Juno https://science.nasa.gov/missions/juno/nasas-juno-probes-the-depths-of-jupiters-great-red-spot/
+- **火星蓝色日落**：NASA Science https://science.nasa.gov/solar-system/planets/mars/what-does-a-sunrise-sunset-look-like-on-mars/
+- **奥尔特云**：NASA Science https://science.nasa.gov/solar-system/oort-cloud/facts/
+- **阿波罗 8 号《地出》**：NASA https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/
+
