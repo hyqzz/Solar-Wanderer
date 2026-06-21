@@ -167,6 +167,63 @@ export async function buildSolarSystem(scene, world, onProgress) {
       entry.ringMesh = rings;
     }
 
+    if (id === 'mars') {
+      const rovers = [
+        { name: 'Perseverance', lat: 18.446, lon: 77.451, color: 0xffffff },
+        { name: 'Curiosity', lat: -4.5895, lon: 137.4417, color: 0xffaa00 },
+        { name: 'Opportunity', lat: -1.9462, lon: 354.4734, color: 0x00ff00 },
+        { name: 'Spirit', lat: -14.5684, lon: 175.4726, color: 0x00aaff },
+        { name: 'Zhurong', lat: 25.066, lon: 109.925, color: 0xff0000 }
+      ];
+      
+      const waypointsGeo = new THREE.BufferGeometry();
+      const waypointPos = new Float32Array(rovers.length * 3);
+      const waypointColors = new Float32Array(rovers.length * 3);
+      
+      rovers.forEach((r, idx) => {
+        const latRad = r.lat * Math.PI / 180;
+        const lonRad = r.lon * Math.PI / 180;
+        // Bump slightly above surface to avoid z-fighting
+        const R = phys.radiusKm * 1.002; 
+        waypointPos[idx * 3] = R * Math.cos(latRad) * Math.cos(lonRad);
+        waypointPos[idx * 3 + 1] = R * Math.sin(latRad);
+        waypointPos[idx * 3 + 2] = -R * Math.cos(latRad) * Math.sin(lonRad);
+        
+        const c = new THREE.Color(r.color);
+        waypointColors[idx * 3] = c.r;
+        waypointColors[idx * 3 + 1] = c.g;
+        waypointColors[idx * 3 + 2] = c.b;
+
+        // Traverse path
+        const pathGeo = new THREE.BufferGeometry();
+        const pathPos = [];
+        let curLat = r.lat;
+        let curLon = r.lon;
+        for (let i = 0; i < 20; i++) {
+            const lr = curLat * Math.PI / 180;
+            const ln = curLon * Math.PI / 180;
+            pathPos.push(
+                R * Math.cos(lr) * Math.cos(ln),
+                R * Math.sin(lr),
+                -R * Math.cos(lr) * Math.sin(ln)
+            );
+            curLat += (Math.random() - 0.5) * 0.05;
+            curLon += (Math.random() - 0.5) * 0.05;
+        }
+        pathGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pathPos), 3));
+        const pathMat = new THREE.LineBasicMaterial({ color: r.color, transparent: true, opacity: 0.8 });
+        const pathLine = new THREE.Line(pathGeo, pathMat);
+        mesh.add(pathLine);
+      });
+      
+      waypointsGeo.setAttribute('position', new THREE.BufferAttribute(waypointPos, 3));
+      waypointsGeo.setAttribute('color', new THREE.BufferAttribute(waypointColors, 3));
+      
+      const waypointMat = new THREE.PointsMaterial({ size: 6, vertexColors: true, sizeAttenuation: false });
+      const waypointPoints = new THREE.Points(waypointsGeo, waypointMat);
+      mesh.add(waypointPoints);
+    }
+
     // 远距可见光点（行星在 AU 距离上的"亮星"观感）
     const glint = makeGlint(0xfff6e8);
     group.add(glint);
