@@ -56,7 +56,7 @@ docs/sdlc/screenshots/*
 !docs/sdlc/screenshots/example/**
 
 # ---- 大体积视频素材(防止误提交,本项目无需跟踪任何视频)----
-# campaign/ 已纳入版本控制，其下所有素材需同步跟踪；其余位置视频仍忽略。
+# 大体积视频素材不纳入版本控制
 *.mp4
 *.mov
 *.webm
@@ -64,8 +64,5 @@ docs/sdlc/screenshots/*
 *.mkv
 !campaign/**
 
-# 以下 campaign 子目录为中间生成物或大体积系统字体，不纳入版本控制
-campaign/assets/fonts/
-campaign/assets/video-sequences/
-campaign/assets/video-preview-frames/
-campaign/assets/bright-tests/
+# campaign/assets/ 为大体积二进制素材（视频/图片/音乐），保留本地但不追踪
+campaign/assets/
