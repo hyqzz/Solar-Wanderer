@@ -178,6 +178,10 @@ UTC → TT → JD 的换算看似简单，但闰秒和历书时会累积误差�
 ### 标题
 `【真实1:1太阳系】在浏览器里遨游太阳系是什么体验？`
 
+### 视频文件
+- 主投稿视频：`campaign/assets/videos/main-demo-zh.mp4`（48 秒，16:9/竖屏均可用，已烧录字幕）
+- 短视频分 P（可选）：`campaign/assets/videos/short-moon-earthrise-zh.mp4`（12 秒）
+
 ### 简介
 ```
 Solar Wanderer / 遨游太阳系 是一个完全在浏览器里运行的实时太阳系模拟器。

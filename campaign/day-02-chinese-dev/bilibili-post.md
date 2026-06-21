@@ -6,6 +6,15 @@
 
 ---
 
+## 视频文件
+
+- **主视频（推荐）**：`campaign/assets/videos/short-moon-earthrise-zh.mp4`（12 秒，1080×1920，竖屏，已烧录字幕）
+- **完整版 demo（可选分 P）**：`campaign/assets/videos/main-demo-zh.mp4`（48 秒，1080×1920，竖屏，已烧录字幕）
+
+如果发短视频/竖屏版，直接用 `short-moon-earthrise-zh.mp4`；如果发横屏/longer 版本，用 `main-demo-zh.mp4`。
+
+---
+
 ## 视频简介
 
 这是一个基于真实 NASA JPL 星历的浏览器端 1:1 太阳系探索应用。
