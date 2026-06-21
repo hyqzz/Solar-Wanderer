@@ -48,10 +48,18 @@ export const BODIES = {
     rotation: 'iau', landable: true,
     surface: { ampKm: 8, roughness: 0.6, craters: 0.6, palette: 'mars' },
     atmosphere: {
-      // 火星白昼天空呈奶油黄褐色——主要来自悬浮尘埃的散射（红光占优），实拍：海盗号/毅力号
+      // 白昼：Rayleigh 红>蓝 + Mie 漫射 → 奶油黄褐色天空（海盗号/好奇号/毅力号实拍一致）。
+      // 日落：Fe₂O₃ 尘埃（~1.5 µm）对蓝光的米氏前向散射系数约为红光的 3.5 倍，
+      //       太阳周围形成标志性蓝色/青色光晕——Curiosity Sol-956、Perseverance Sol-257 实拍印证。
       heightKm: 80, rayleighScaleKm: 11.1, mieScaleKm: 9,
-      rayleigh: [5.0e-7, 3.0e-7, 1.2e-7], mie: 1.5e-6, mieG: 0.55, multiplier: 2.2,
-      haze: 0.28, // 悬浮尘埃近地面雾霾（实拍：毅力号地平线可见奶油色大气带）
+      rayleigh: [5.0e-7, 3.0e-7, 1.2e-7],
+      // betaM [R,G,B]：蓝光消光系数略高（细尘，~1.5µm），保持温和比例
+      mie: [0.7e-6, 0.9e-6, 1.3e-6],
+      // mieG [R,G,B]：核心参数——蓝光 Henyey-Greenstein 各向异性峰更尖(0.88)，
+      // 日落时(µ→1) phM_blue 比 phM_red 高 4~8 倍，产生标志性蓝色光晕
+      mieG: [0.62, 0.74, 0.88],
+      multiplier: 2.5,
+      haze: 0.40,        // 近地面 Fe₂O₃ 尘埃雾霾（地平线奶油带）
     },
     textures: { map: 'mars.jpg' },
     desc: '红色行星。拥有太阳系最高的火山（奥林帕斯山 21.9 km）与最长的峡谷（水手谷 4000 km）。稀薄 CO₂ 大气，尘暴可席卷全球。',

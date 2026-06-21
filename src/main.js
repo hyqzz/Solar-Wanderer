@@ -838,7 +838,12 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       const day = THREE.MathUtils.clamp(sunElev * 4 + 0.1, 0, 1);
       const dusk = Math.max(0, 1 - Math.abs(sunElev) * 6);
       fogColor.copy(tint).multiplyScalar(0.5 * day / Math.max(dSunAU * dSunAU, 1e-4));
-      fogColor.r += dusk * 0.25; fogColor.g += dusk * 0.1;
+      // 分光 Mie 行星（如火星）日落偏蓝；普通行星日落偏橙红
+      if (Array.isArray(atm.mie) && atm.mie[2] > atm.mie[0]) {
+        fogColor.r += dusk * 0.04; fogColor.b += dusk * 0.30;
+      } else {
+        fogColor.r += dusk * 0.25; fogColor.g += dusk * 0.1;
+      }
       fogDensity = (1 / 180) * Math.exp(-alt / atm.rayleighScaleKm) * (atm.multiplier >= 3 ? 4 : 1);
       // 星空淡出：白昼且身处稠密层内
       const density = Math.exp(-alt / (atm.rayleighScaleKm * 2.2));

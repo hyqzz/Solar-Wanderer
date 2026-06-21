@@ -10,16 +10,20 @@ export function createAtmosphere(phys) {
   const Rg = phys.radiusKm;
   const Ra = Rg + a.heightKm;
 
+  // mie / mieG 均支持标量（向后兼容）与 [R,G,B] 数组（分光，用于火星蓝色日落）
+  const mieArr  = Array.isArray(a.mie)  ? a.mie  : [a.mie,  a.mie,  a.mie ];
+  const mieGArr = Array.isArray(a.mieG) ? a.mieG : [a.mieG, a.mieG, a.mieG];
+
   const uniforms = {
     uCenter: { value: new THREE.Vector3() },     // 行星中心（相机相对，km）
     uSunDir: { value: new THREE.Vector3(1, 0, 0) },
     uRg: { value: Rg },
     uRa: { value: Ra },
     uBetaR: { value: new THREE.Vector3(a.rayleigh[0] * 1000, a.rayleigh[1] * 1000, a.rayleigh[2] * 1000) }, // m⁻¹→km⁻¹
-    uBetaM: { value: a.mie * 1000 },
+    uBetaM: { value: new THREE.Vector3(mieArr[0] * 1000, mieArr[1] * 1000, mieArr[2] * 1000) }, // 分光 Mie (km⁻¹)
     uHR: { value: a.rayleighScaleKm },
     uHM: { value: a.mieScaleKm },
-    uG: { value: a.mieG },
+    uG: { value: new THREE.Vector3(mieGArr[0], mieGArr[1], mieGArr[2]) }, // 分光 mieG (Henyey-Greenstein 各向异性)
     uSunI: { value: 13.0 * (a.multiplier ?? 1) },
     uBoost: { value: 1.0 }, // 入气密度增幅（相机在大气外恒 1 → 外观与 R5 审查版逐位一致）
     uHaze: { value: a.haze ?? 0.0 }, // 近地面气溶胶/尘埃雾霾（火星沙尘、金星硫酸云、泰坦烟霾）
@@ -58,8 +62,8 @@ export function createAtmosphere(phys) {
       #include <logdepthbuf_pars_fragment>
       uniform vec3 uCenter;
       uniform vec3 uSunDir;
-      uniform float uRg, uRa, uHR, uHM, uG, uSunI, uBetaM, uBoost, uHaze, uStretch;
-      uniform vec3 uBetaR, uAxis;
+      uniform float uRg, uRa, uHR, uHM, uSunI, uBoost, uHaze, uStretch;
+      uniform vec3 uBetaR, uBetaM, uG, uAxis; // uG 分光：蓝光前向峰更尖 → 日落蓝色光晕
       varying vec3 vWorldPos;
 
       // 沿自转轴拉伸：扁椭球 → 正球（uStretch=0 时恒等）
@@ -98,8 +102,7 @@ export function createAtmosphere(phys) {
         const int NL = ${QUALITY.atmoNL};
         float ds = (t1 - t0) / float(N);
         float odR = 0.0, odM = 0.0;
-        vec3 inscR = vec3(0.0);
-        float inscM = 0.0;
+        vec3 inscR = vec3(0.0), inscM = vec3(0.0);
 
         for (int i = 0; i < N; i++) {
           vec3 p = ro + rd * (t0 + (float(i) + 0.5) * ds);
@@ -123,20 +126,21 @@ export function createAtmosphere(phys) {
               olR += exp(-hq / uHR) * sl;
               olM += exp(-hq / uHM) * sl;
             }
-            vec3 T = exp(-(uBetaR * (odR + olR) + vec3(uBetaM) * 1.1 * (odM + olM)));
+            vec3 T = exp(-(uBetaR * (odR + olR) + uBetaM * 1.1 * (odM + olM)));
             inscR += T * dR * ds;
-            inscM += dot(T, vec3(0.3333)) * dM * ds;
+            inscM += T * dM * ds; // 分光 Mie：保留各通道透射率，蓝光前向散射在日落处显现
           }
         }
 
         float mu = dot(rd, uSunDir);
         float phR = 3.0 / (16.0 * PI) * (1.0 + mu * mu);
-        float g2 = uG * uG;
-        float phM = 3.0 / (8.0 * PI) * ((1.0 - g2) * (1.0 + mu * mu)) /
-                    ((2.0 + g2) * pow(1.0 + g2 - 2.0 * uG * mu, 1.5));
+        // 分光 Henyey-Greenstein：uG 为 vec3，蓝通道前向峰更尖，日落时产生蓝色光晕
+        vec3 g2 = uG * uG;
+        vec3 phM = 3.0 / (8.0 * PI) * ((1.0 - g2) * (1.0 + mu * mu)) /
+                   ((2.0 + g2) * pow(max(1.0 + g2 - 2.0 * uG * mu, vec3(1e-6)), vec3(1.5)));
 
-        vec3 L = uSunI * (uBetaR * phR * inscR + vec3(uBetaM) * phM * inscM);
-        vec3 viewT = exp(-(uBetaR * odR + vec3(uBetaM) * 1.1 * odM));
+        vec3 L = uSunI * (uBetaR * phR * inscR + uBetaM * phM * inscM);
+        vec3 viewT = exp(-(uBetaR * odR + uBetaM * 1.1 * odM));
         float alpha = 1.0 - dot(viewT, vec3(0.3333));
 
         // 轻微抖动消除条带（×alpha：仅作用于有大气信号处。R8 #1 修复——
