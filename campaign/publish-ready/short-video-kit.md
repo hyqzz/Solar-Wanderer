@@ -2,25 +2,26 @@
 
 > 建议平台：抖音、小红书视频、B站竖版、视频号、YouTube Shorts、TikTok、Instagram Reels
 > 竖屏 1080×1920，已烧录中英字幕，可直接上传
+> 所有视频位于 `campaign/assets/videos/`
 
 ---
 
 ## 视频清单
 
-| 文件名 | 时长 | 语言 | 推荐标题 | 推荐话题/标签 |
+| 文件路径 | 时长 | 语言 | 推荐标题 | 推荐话题/标签 |
 |---|---|---|---|---|
-| `short-earth-to-oort-zh.mp4` | 15s | 中文 | 从地球缩放到太阳系边缘 | #太阳系 #NASA #真实比例 #视觉震撼 |
-| `short-earth-to-oort-en.mp4` | 15s | 英文 | From Earth to the edge of the solar system | #space #nasa #solarsystem #scale |
-| `short-saturn-rings-zh.mp4` | 12s | 中文 | 土星环薄到难以置信 | #土星 #宇宙 #科普 #冷知识 |
-| `short-saturn-rings-en.mp4` | 12s | 英文 | Saturn's rings are unbelievably thin | #saturn #space #astronomy #facts |
-| `short-jupiter-storm-zh.mp4` | 12s | 中文 | 木星大红斑能装下地球 | #木星 #大红斑 #天文 #震撼 |
-| `short-jupiter-storm-en.mp4` | 12s | 英文 | A storm bigger than Earth | #jupiter #greatredspot #space |
-| `short-moon-earthrise-zh.mp4` | 12s | 中文 | 站在月球看地球升起 | #月球 #地球升起 #NASA #真实 |
-| `short-moon-earthrise-en.mp4` | 12s | 英文 | Watch Earth rise from the Moon | #moon #earthrise #nasa |
-| `short-mars-sunset-zh.mp4` | 12s | 中文 | 火星的日落是蓝色的 | #火星 #日落 #科普 #蓝色 |
-| `short-mars-sunset-en.mp4` | 12s | 英文 | Mars sunsets are blue | #mars #sunset #space #blue |
-| `main-demo-zh.mp4` | 48s | 中文 | 浏览器里的真实 1:1 太阳系 | #太阳系 #浏览器 #开源 #Threejs |
-| `main-demo-en.mp4` | 48s | 英文 | A real-time 1:1 solar system in your browser | #threejs #opensource #space #webgl |
+| `campaign/assets/videos/short-earth-to-oort-zh.mp4` | 15s | 中文 | 从地球缩放到太阳系边缘 | #太阳系 #NASA #真实比例 #视觉震撼 |
+| `campaign/assets/videos/short-earth-to-oort-en.mp4` | 15s | 英文 | From Earth to the edge of the solar system | #space #nasa #solarsystem #scale |
+| `campaign/assets/videos/short-saturn-rings-zh.mp4` | 12s | 中文 | 土星环薄到难以置信 | #土星 #宇宙 #科普 #冷知识 |
+| `campaign/assets/videos/short-saturn-rings-en.mp4` | 12s | 英文 | Saturn's rings are unbelievably thin | #saturn #space #astronomy #facts |
+| `campaign/assets/videos/short-jupiter-storm-zh.mp4` | 12s | 中文 | 木星大红斑能装下地球 | #木星 #大红斑 #天文 #震撼 |
+| `campaign/assets/videos/short-jupiter-storm-en.mp4` | 12s | 英文 | A storm bigger than Earth | #jupiter #greatredspot #space |
+| `campaign/assets/videos/short-moon-earthrise-zh.mp4` | 12s | 中文 | 站在月球看地球升起 | #月球 #地球升起 #NASA #真实 |
+| `campaign/assets/videos/short-moon-earthrise-en.mp4` | 12s | 英文 | Watch Earth rise from the Moon | #moon #earthrise #nasa |
+| `campaign/assets/videos/short-mars-sunset-zh.mp4` | 12s | 中文 | 火星的日落是蓝色的 | #火星 #日落 #科普 #蓝色 |
+| `campaign/assets/videos/short-mars-sunset-en.mp4` | 12s | 英文 | Mars sunsets are blue | #mars #sunset #space #blue |
+| `campaign/assets/videos/main-demo-zh.mp4` | 48s | 中文 | 浏览器里的真实 1:1 太阳系 | #太阳系 #浏览器 #开源 #Threejs |
+| `campaign/assets/videos/main-demo-en.mp4` | 48s | 英文 | A real-time 1:1 solar system in your browser | #threejs #opensource #space #webgl |
 
 ---
 

@@ -42,8 +42,8 @@
 
 ## 封面图建议
 
-- 月球灰暗地表 + 漆黑天空 + 蓝色地球
-- 大标题："站在月球看地球"
+- 推荐封面：`campaign/assets/social-cards/moon_zh_1080x1350.png` 或 `campaign/assets/screenshots/moon-earthrise_1920x1080.png`
+- 标题大字："站在月球看地球"
 - 小字："浏览器里的真实太阳系"
 
 ---

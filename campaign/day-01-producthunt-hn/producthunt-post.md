@@ -50,13 +50,16 @@ Source: https://github.com/hyqzz/Solar-Wanderer
 
 ## 图片/GIF 说明（Gallery）
 
-请按以下顺序上传 5 张图片/GIF：
+请按以下顺序上传 6 张素材：
 
-1. **Hero GIF**: 从地球海面 → 月球表面的一镜到底（5 秒循环）
-2. **JPG**: 站在月球看地球升起
-3. **JPG**: 土星环特写，显示卡西尼缝
-4. **JPG**: 木星大红斑与云带
-5. **JPG**: 奥尔特云回望太阳系
+1. **主图/视频**：`campaign/assets/videos/main-demo-en.mp4`（48 秒 demo，16:9）或 `campaign/assets/screenshots/earth-orbit_1920x1080.png`
+2. **站在月球看地球升起**：`campaign/assets/screenshots/moon-earthrise_1920x1080.png`
+3. **土星环特写**：`campaign/assets/screenshots/saturn-rings_1920x1080.png`
+4. **木星大红斑与云带**：`campaign/assets/screenshots/jupiter-redspot_1920x1080.png`
+5. **火星蓝色日落**：`campaign/assets/screenshots/mars-sunset_1920x1080.png`
+6. **奥尔特云回望太阳系**：`campaign/assets/screenshots/earth-orbit_1920x1080.png` 或 `campaign/assets/social-cards/scale_en_1080x1350.png`
+
+Logo/Icon：`campaign/assets/logo.png`（如无，暂用 `sun-closeup_1920x1080.png` 裁剪）
 
 ---
 

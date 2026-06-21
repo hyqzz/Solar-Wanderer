@@ -36,8 +36,8 @@ Would love your thoughts — especially if anything looks scientifically off.
 
 ## 图片/GIF
 
-- 主图：站在月球看地球的截图（1920x1080，横向）
-- 可选 GIF：从地球海面缩放到月球表面
+- 主图：`campaign/assets/screenshots/moon-earthrise_1920x1080.png`
+- 可选 GIF/视频：`campaign/assets/videos/short-moon-earthrise-en.mp4`（12 秒）
 
 ---
 

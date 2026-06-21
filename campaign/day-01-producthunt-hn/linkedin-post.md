@@ -39,9 +39,10 @@ Source: https://github.com/hyqzz/Solar-Wanderer
 
 ## 配图建议
 
-- 主图：站在月球看地球升起（1920x1080）
-- 第二张：土星环特写
-- 第三张：项目使命文字卡片
+- 主图：`campaign/assets/screenshots/moon-earthrise_1920x1080.png`
+- 第二张：`campaign/assets/screenshots/saturn-rings_1920x1080.png`
+- 第三张：`campaign/assets/social-cards/intro_en_1080x1350.png`（项目使命文字卡片）
+- 可选视频：`campaign/assets/videos/main-demo-en.mp4`（48 秒）
 
 ---
 

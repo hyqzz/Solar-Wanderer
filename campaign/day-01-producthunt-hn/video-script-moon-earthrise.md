@@ -10,6 +10,14 @@
 
 ---
 
+## 视频文件
+
+录制完成后，导出并替换/对应：`campaign/assets/videos/short-moon-earthrise-en.mp4`
+
+如果做中文版本，对应：`campaign/assets/videos/short-moon-earthrise-zh.mp4`
+
+---
+
 ## 分镜脚本
 
 ### 00:00–00:03（3 秒）

@@ -117,6 +117,14 @@ sw.icodestar.net
 
 ---
 
+## 视频文件
+
+成片对应：`campaign/assets/videos/short-moon-earthrise-zh.mp4`（12 秒，1080×1920，已烧录字幕）
+
+如需加长版，可用：`campaign/assets/videos/main-demo-zh.mp4`（48 秒）
+
+---
+
 ## 参考资料
 
 - **阿波罗 8 号《地出》**：NASA https://www.nasa.gov/history/50-years-ago-apollo-8-in-lunar-orbit/
