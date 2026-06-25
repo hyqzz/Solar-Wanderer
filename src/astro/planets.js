@@ -1,10 +1,14 @@
 // 行星星历：JPL《Approximate Positions of the Planets》(E.M. Standish) 开普勒元素表，
 // 有效期 1800 AD – 2050 AD，精度约角分级。元素相对黄道 J2000（mean ecliptic and equinox of J2000）。
 // a(AU)  e  I(deg)  L(deg)  ϖ(deg)  Ω(deg)，第二行为每儒略世纪变化率。
+//
+// 高精度模式（issue #55）：可切换到 VSOP87 截断版（±3000 年 < 0.1°），
+// 默认仍用 Standish 元素（快速、测试基准）。
 
 import { elementsToEcliptic } from './kepler.js';
 import { centuriesTT } from './time.js';
 import { moonGeocentric } from './moon.js';
+import { planetaryPositionVSOP } from './vsop87.js';
 
 const TABLE = {
   mercury: {
@@ -47,8 +51,20 @@ const TABLE = {
 
 export const PLANETS = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
 
-/** 月球质量 / (地+月质量)，用于由地月质心推地心 */
+/** 月球质量 / (地+月质量)，用于由地月质心推得地心 */
 const MOON_MASS_FRACTION = 1 / 82.300577 / (1 + 1 / 82.300577);
+
+/**
+ * 高精度星历开关：true = VSOP87（±3000 年 < 0.1°），false = Standish 元素（默认）。
+ * Standish 元素在 1800–2050 年内精度足够且计算更快，是测试基准；
+ * VSOP87 用于需要长时段外推或更高精度的场景（如 #55）。
+ */
+let useHighPrecision = false;
+
+/** 切换星历源：true→VSOP87，false→Standish（默认） */
+export function setHighPrecision(v) { useHighPrecision = !!v; }
+/** 当前是否使用 VSOP87 高精度星历 */
+export function isHighPrecision() { return useHighPrecision; }
 
 /** 由元素表直接求位置（不含地球特殊处理） */
 function tablePosition(key, jdTT) {
@@ -66,9 +82,26 @@ function tablePosition(key, jdTT) {
 
 /**
  * 行星日心黄道 J2000 坐标（km）。
+ * 默认 Standish 元素；开启高精度后用 VSOP87（±3000 年 < 0.1°）。
  * 地球 = 地月质心 − 月球地心矢量 × 月球质量占比。
  */
 export function planetPosition(name, jdTT) {
+  // VSOP87 高精度路径
+  if (useHighPrecision) {
+    if (name === 'earth') {
+      // VSOP87 给出地月质心 (EMB)，需扣除月球分量得到地心
+      const emb = planetaryPositionVSOP('earth', jdTT);
+      const m = moonGeocentric(jdTT);
+      return {
+        x: emb.x - m.x * MOON_MASS_FRACTION,
+        y: emb.y - m.y * MOON_MASS_FRACTION,
+        z: emb.z - m.z * MOON_MASS_FRACTION,
+      };
+    }
+    return planetaryPositionVSOP(name, jdTT);
+  }
+
+  // Standish 元素路径（默认，测试基准）
   if (name === 'earth') {
     const emb = tablePosition('emb', jdTT);
     const m = moonGeocentric(jdTT);

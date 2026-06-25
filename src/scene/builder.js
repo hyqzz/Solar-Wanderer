@@ -35,6 +35,17 @@ const ORBIT_COLORS = {
   mercury: 0x8a8a8a, venus: 0xc9a06a, earth: 0x4a90d9, mars: 0xd96a4a,
   jupiter: 0xc9a06a, saturn: 0xd9c97a, uranus: 0x7ad9d9, neptune: 0x4a6ad9, pluto: 0x9a8aa9,
 };
+
+// Issue #29：极光模式映射（0=无 1=地球 2=木星 3=土星 4=海卫一）
+// 地球：极地卵形圈 OI 557.7nm 绿光；木星：Io 等离子环驱动 H3+ 蓝紫；
+// 土星：极地极光卵 H3+ 粉紫；海卫一：弱氮极光。
+const AURORA_MODE = { earth: 1, jupiter: 2, saturn: 3, triton: 4 };
+
+// Issue #27：火星太阳黄经 Ls 计算。
+// Ls=0 为火星北半球春分；2024-05-08（JD 2460418）为最近一次 Ls=0 时刻。
+// 火星年 686.98 地球日；Ls 随轨道位置线性增长（近似，忽略轨道离心率）。
+const MARS_YEAR_DAYS = 686.98;
+const MARS_LS_EPOCH = 2460418.0;
 const GAS_BAND_COLORS = {
   jupiter: [[200, 170, 130], [240, 225, 200], [170, 130, 95], [225, 200, 170], [150, 110, 80]],
   saturn: [[225, 205, 165], [240, 230, 200], [205, 180, 140], [230, 215, 185]],
@@ -123,6 +134,10 @@ export async function buildSolarSystem(scene, world, onProgress) {
     const group = new THREE.Group();
     const visualMapFile = phys.textures?.clouds && phys.textures?.cloudsOpaque
       ? phys.textures.clouds : phys.textures?.map;
+    // Issue #26：提前解析云层贴图，同时传给行星材质（地表投影）与云层网格
+    const cloudFile = phys.textures?.clouds && !phys.textures.cloudsOpaque && cache.has(phys.textures.clouds)
+      ? phys.textures.clouds : null;
+    const cloudTex = cloudFile ? cache.get(cloudFile) : null;
     const mat = createPlanetMaterial({
       map: texOf(cache, visualMapFile, id, phys),
       nightMap: phys.textures?.night ? cache.get(phys.textures.night) ?? null : null,
@@ -133,6 +148,8 @@ export async function buildSolarSystem(scene, world, onProgress) {
       } : null,
       detailMode: detailModeOf(phys),
       radiusKm: phys.radiusKm,
+      bodyId: id,       // Issue #26/#27/#28/#36：天体特定效果
+      cloudTex,         // Issue #26：地球云层地表投影
     });
     const mesh = new THREE.Mesh(sphereGeo(phys.radiusKm, true), mat);
     // 可登陆天体不施加扁率缩放（保证地形碰撞与视觉一致；岩质行星扁率<0.6%不可辨）
@@ -145,8 +162,8 @@ export async function buildSolarSystem(scene, world, onProgress) {
     };
 
     // 云层（地球；金星云已作为主贴图）
-    if (phys.textures?.clouds && !phys.textures.cloudsOpaque && cache.has(phys.textures.clouds)) {
-      const cmat = createCloudMaterial(cache.get(phys.textures.clouds));
+    if (cloudTex) {
+      const cmat = createCloudMaterial(cloudTex);
       const cmesh = new THREE.Mesh(sphereGeo(phys.radiusKm * 1.0035, true), cmat);
       cmesh.renderOrder = 10;
       mesh.add(cmesh);
@@ -155,7 +172,7 @@ export async function buildSolarSystem(scene, world, onProgress) {
     }
 
     if (phys.atmosphere) {
-      const atmo = createAtmosphere(phys);
+      const atmo = createAtmosphere(phys, AURORA_MODE[id] ?? 0);
       group.add(atmo);
       entry.atmoMesh = atmo;
     }
@@ -198,11 +215,20 @@ export async function buildSolarSystem(scene, world, onProgress) {
   for (const id of MOON_IDS) {
     const phys = MOON_PHYS[id];
     const fullPhys = { ...phys, id, type: 'moon' };
+    // Issue #29：海卫一有极薄 N2 大气（~1.4 Pa），原数据未含 atmosphere。
+    // 仅为极光渲染创建最小壳层：散射系数极低（太空不可见），仅极光帘幕可见。
+    if (id === 'triton' && !fullPhys.atmosphere) {
+      fullPhys.atmosphere = {
+        heightKm: 20, rayleighScaleKm: 5, mieScaleKm: 5,
+        rayleigh: [1e-9, 1e-9, 1e-9], mie: 1e-9, mieG: 0.5, multiplier: 0.01,
+      };
+    }
     const group = new THREE.Group();
     const mat = createPlanetMaterial({
       map: texOf(cache, phys.textures?.map, id, fullPhys),
       detailMode: detailModeOf(fullPhys),
       radiusKm: phys.radiusKm,
+      bodyId: id, // Issue #36：海卫一等天体的季节/极光效果
     });
     const big = phys.radiusKm > 1000;
     const mesh = new THREE.Mesh(sphereGeo(phys.radiusKm, big), mat);
@@ -215,7 +241,7 @@ export async function buildSolarSystem(scene, world, onProgress) {
     };
 
     if (phys.atmosphere) {
-      const atmo = createAtmosphere(fullPhys);
+      const atmo = createAtmosphere(fullPhys, AURORA_MODE[id] ?? 0);
       group.add(atmo);
       entry.atmoMesh = atmo;
     }
@@ -248,8 +274,21 @@ export async function buildSolarSystem(scene, world, onProgress) {
   // ---------- 每帧更新 ----------
   const _q = new THREE.Quaternion();
   const _sunDir = new THREE.Vector3();
+  const _pole = new THREE.Vector3(); // Issue #36：自转轴世界方向（计算日下点纬度）
 
   function update(jdTT) {
+    // Issue #27/#29/#36：全局季节量（每帧一次，所有天体共享）
+    // 火星太阳黄经 Ls（度，0-360）
+    let ls = ((jdTT - MARS_LS_EPOCH) / MARS_YEAR_DAYS * 360) % 360;
+    if (ls < 0) ls += 360;
+    // 太阳活动：11 年周期近似（调制极光强度）
+    const solarActivity = 0.5 + 0.3 * Math.sin((jdTT - 2451545.0) / (365.25 * 11) * Math.PI * 2);
+    // 火星尘暴强度（Ls 180-360 风暴季）
+    const marsDust = Math.max(0,
+      THREE.MathUtils.smoothstep(ls, 180, 220) * (1 - THREE.MathUtils.smoothstep(ls, 330, 360)));
+    // 极光强度（移动端/降档时关闭）
+    const auroraStrength = QUALITY.detail ? 1.0 : 0.0;
+
     for (const [id, e] of bodies) {
       if (id === 'sun') {
         const m = bodyToEclipticMatrix('sun', jdTT);
@@ -318,6 +357,24 @@ export async function buildSolarSystem(scene, world, onProgress) {
         u.uSunDir.value.copy(_sunDir);
         u.uSunI.value = sunI;
       }
+      // === Issue #27/#29/#36：季节/极光 uniforms ===
+      // 日下点纬度 = arcsin(sunDir · poleAxis)，决定冰冠大小与极昼极夜范围
+      _pole.set(0, 1, 0).applyQuaternion(e.mesh.quaternion);
+      const subsolarLat = Math.asin(
+        THREE.MathUtils.clamp(_sunDir.dot(_pole), -1, 1)) * 180 / Math.PI;
+      if (e.mat) {
+        const u = e.mat.userData.uniforms;
+        u.uLs.value = ls;
+        u.uSubsolarLat.value = subsolarLat;
+        u.uSolarActivity.value = solarActivity;
+      }
+      if (e.atmoMesh) {
+        const u = e.atmoMesh.material.userData.uniforms;
+        u.uSolarActivity.value = solarActivity;
+        u.uAuroraStrength.value = auroraStrength;
+        // 火星尘暴：boost 大气雾霾（仅火星）
+        u.uDustStorm.value = (id === 'mars') ? marsDust : 0;
+      }
     }
   }
 
@@ -331,6 +388,10 @@ export async function buildSolarSystem(scene, world, onProgress) {
       if (e.atmoMesh) e.atmoMesh.material.userData.uniforms.uCenter.value.copy(e.group.position);
       if (e.ringMesh) e.ringMesh.material.userData.uniforms.uCenter.value.copy(e.group.position);
       if (e.phys.rings && e.mat) e.mat.userData.uniforms.uCenter.value.copy(e.group.position);
+      // Issue #26/#28/#29：动画时间 uniform（实时秒，驱动云层旋转/木星条带/极光帘幕）
+      if (e.mat) e.mat.userData.uniforms.uTime.value = simTimeSec;
+      if (e.cloudMat) e.cloudMat.userData.uniforms.uTime.value = simTimeSec;
+      if (e.atmoMesh) e.atmoMesh.material.userData.uniforms.uTime.value = simTimeSec;
       // 远距光点：保持 ~3px 视觉尺寸；近距淡出
       const glintSize = dist * 0.004;
       e.glint.scale.setScalar(glintSize);

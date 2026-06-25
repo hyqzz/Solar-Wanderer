@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Solar Wanderer · 遨游太阳系 — Logo & Visual Identity
+  Issue #54: 项目 logo 和视觉识别
+
+  本文件包含 3 个 logo 概念 + favicon 版本。
+  配色方案：深空黑 #05070f · 恒星白 #e8ecf5 · 行星强调色 #4a9eff / #ffcc55
+
+  使用方式：
+  - 概念 1（推荐）：主 logo，用于 README、网站头部、社交媒体头像
+  - 概念 2：备选，行星-卫星系统，强调"探索"
+  - 概念 3：极简版，适合小尺寸/favicon
+  - Favicon：32x32 极简版，用于浏览器标签页
+
+  在 HTML 中引用：
+  <img src="/logo.svg" alt="Solar Wanderer logo" />
+  或直接内联 SVG（可按需裁剪到单个概念）
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900">
+  <defs>
+    <!-- 深空背景渐变 -->
+    <radialGradient id="deepSpace" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#0c1020"/>
+      <stop offset="100%" stop-color="#05070f"/>
+    </radialGradient>
+    <!-- 太阳/恒星渐变 -->
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff8e0"/>
+      <stop offset="40%" stop-color="#ffcc55"/>
+      <stop offset="100%" stop-color="#ff8800" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 行星渐变（地球蓝） -->
+    <radialGradient id="planetBlue" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#7ab8ff"/>
+      <stop offset="60%" stop-color="#4a9eff"/>
+      <stop offset="100%" stop-color="#1a4a8a"/>
+    </radialGradient>
+    <!-- 行星渐变（火星红） -->
+    <radialGradient id="planetMars" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#e8825a"/>
+      <stop offset="60%" stop-color="#c45a30"/>
+      <stop offset="100%" stop-color="#6a2a10"/>
+    </radialGradient>
+    <!-- 轨道线 -->
+    <linearGradient id="orbitLine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4a9eff" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#4a9eff" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#4a9eff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ============================================================ -->
+  <!-- 概念 1：太阳系之眼（推荐主 logo）                                -->
+  <!-- 一个发光的太阳，一颗蓝色行星沿轨道运行，象征"看见太阳系"           -->
+  <!-- ============================================================ -->
+  <g id="concept-1-eye-of-the-solar-system" transform="translate(0, 0)">
+    <rect x="0" y="0" width="400" height="300" fill="url(#deepSpace)" rx="16"/>
+
+    <!-- 星点装饰 -->
+    <circle cx="50" cy="40" r="0.8" fill="#e8ecf5" opacity="0.6"/>
+    <circle cx="120" cy="60" r="0.5" fill="#e8ecf5" opacity="0.4"/>
+    <circle cx="350" cy="50" r="0.6" fill="#e8ecf5" opacity="0.5"/>
+    <circle cx="80" cy="250" r="0.7" fill="#e8ecf5" opacity="0.5"/>
+    <circle cx="370" cy="240" r="0.5" fill="#e8ecf5" opacity="0.4"/>
+    <circle cx="30" cy="150" r="0.4" fill="#e8ecf5" opacity="0.3"/>
+
+    <!-- 太阳光晕 -->
+    <circle cx="200" cy="150" r="80" fill="url(#sunGlow)" opacity="0.3"/>
+
+    <!-- 轨道椭圆 -->
+    <ellipse cx="200" cy="150" rx="130" ry="50" fill="none"
+             stroke="url(#orbitLine)" stroke-width="1.5"
+             transform="rotate(-15 200 150)"/>
+
+    <!-- 太阳（恒星） -->
+    <circle cx="200" cy="150" r="28" fill="url(#sunGlow)"/>
+    <circle cx="200" cy="150" r="16" fill="#ffcc55"/>
+
+    <!-- 行星（蓝色，在轨道上） -->
+    <circle cx="310" cy="120" r="9" fill="url(#planetBlue)"/>
+    <!-- 行星高光 -->
+    <circle cx="307" cy="117" r="3" fill="#bcd8ff" opacity="0.7"/>
+
+    <!-- 文字 -->
+    <text x="200" y="270" text-anchor="middle"
+          font-family="-apple-system, 'Segoe UI', Roboto, sans-serif"
+          font-size="16" font-weight="700" fill="#e8ecf5"
+          letter-spacing="2">SOLAR WANDERER</text>
+
+    <!-- 概念标签 -->
+    <text x="20" y="25" font-family="sans-serif" font-size="10" fill="#4a9eff" opacity="0.6">
+      Concept 1: Eye of the Solar System (Recommended)
+    </text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- 概念 2：行星-卫星系统（备选）                                    -->
+  <!-- 一颗带环的行星 + 卫星，强调"探索与环绕"                           -->
+  <!-- ============================================================ -->
+  <g id="concept-2-planet-moon-system" transform="translate(400, 0)">
+    <rect x="0" y="0" width="400" height="300" fill="url(#deepSpace)" rx="16"/>
+
+    <!-- 星点装饰 -->
+    <circle cx="450" cy="40" r="0.6" fill="#e8ecf5" opacity="0.5"/>
+    <circle cx="520" cy="70" r="0.5" fill="#e8ecf5" opacity="0.4"/>
+    <circle cx="750" cy="50" r="0.7" fill="#e8ecf5" opacity="0.5"/>
+    <circle cx="480" cy="250" r="0.5" fill="#e8ecf5" opacity="0.4"/>
+    <circle cx="770" cy="240" r="0.6" fill="#e8ecf5" opacity="0.5"/>
+
+    <!-- 行星（土星风格，带环） -->
+    <g transform="translate(600, 140)">
+      <!-- 环（后半） -->
+      <ellipse cx="0" cy="0" rx="70" ry="18" fill="none"
+               stroke="#c8a878" stroke-width="3" opacity="0.6"
+               transform="rotate(-20)"/>
+      <ellipse cx="0" cy="0" rx="60" ry="15" fill="none"
+               stroke="#d8b888" stroke-width="1.5" opacity="0.4"
+               transform="rotate(-20)"/>
+      <!-- 行星本体 -->
+      <circle cx="0" cy="0" r="32" fill="url(#planetMars)"/>
+      <!-- 行星高光 -->
+      <ellipse cx="-8" cy="-10" rx="14" ry="10" fill="#f0a070" opacity="0.4"/>
+      <!-- 环（前半，遮挡行星） -->
+      <path d="M -70,0 Q 0,18 70,0" fill="none"
+            stroke="#c8a878" stroke-width="3" opacity="0.7"
+            transform="rotate(-20)"/>
+    </g>
+
+    <!-- 卫星（小，在行星旁） -->
+    <circle cx="680" cy="100" r="5" fill="#e8ecf5" opacity="0.8"/>
+    <circle cx="678" cy="98" r="1.5" fill="#fff" opacity="0.6"/>
+
+    <!-- 文字 -->
+    <text x="600" y="270" text-anchor="middle"
+          font-family="-apple-system, 'Segoe UI', Roboto, sans-serif"
+          font-size="16" font-weight="700" fill="#e8ecf5"
+          letter-spacing="2">SOLAR WANDERER</text>
+
+    <!-- 概念标签 -->
+    <text x="420" y="25" font-family="sans-serif" font-size="10" fill="#4a9eff" opacity="0.6">
+      Concept 2: Planet-Moon System
+    </text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- 概念 3：极简标志（适合小尺寸）                                    -->
+  <!-- 一个圆（太阳/行星）+ 一条弧线（轨道/路径），极简识别符号            -->
+  <!-- ============================================================ -->
+  <g id="concept-3-minimal-mark" transform="translate(800, 0)">
+    <rect x="0" y="0" width="400" height="300" fill="url(#deepSpace)" rx="16"/>
+
+    <!-- 极简标志：圆 + 弧 -->
+    <g transform="translate(1000, 130)">
+      <!-- 外弧（轨道/路径） -->
+      <path d="M -50,0 A 50,50 0 0,1 50,0" fill="none"
+            stroke="#4a9eff" stroke-width="4" stroke-linecap="round"/>
+      <!-- 中心圆（太阳/行星） -->
+      <circle cx="0" cy="0" r="22" fill="#ffcc55"/>
+      <circle cx="-5" cy="-5" r="8" fill="#fff8e0" opacity="0.5"/>
+      <!-- 行星点（在弧上） -->
+      <circle cx="50" cy="0" r="6" fill="#4a9eff"/>
+    </g>
+
+    <!-- 文字 -->
+    <text x="1000" y="270" text-anchor="middle"
+          font-family="-apple-system, 'Segoe UI', Roboto, sans-serif"
+          font-size="16" font-weight="700" fill="#e8ecf5"
+          letter-spacing="2">SOLAR WANDERER</text>
+
+    <!-- 概念标签 -->
+    <text x="820" y="25" font-family="sans-serif" font-size="10" fill="#4a9eff" opacity="0.6">
+      Concept 3: Minimal Mark
+    </text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Favicon 版本（32x32 极简）                                       -->
+  <!-- 用于浏览器标签页、PWA 图标                                       -->
+  <!-- ============================================================ -->
+  <g id="favicon" transform="translate(0, 300)">
+    <rect x="0" y="0" width="400" height="300" fill="url(#deepSpace)" rx="16"/>
+
+    <!-- 32x32 favicon 放大展示 -->
+    <g transform="translate(80, 70) scale(5)">
+      <rect x="0" y="0" width="32" height="32" fill="#05070f" rx="4"/>
+      <!-- 太阳 -->
+      <circle cx="13" cy="16" r="7" fill="#ffcc55"/>
+      <circle cx="11" cy="14" r="2.5" fill="#fff8e0" opacity="0.5"/>
+      <!-- 行星 -->
+      <circle cx="25" cy="16" r="2.5" fill="#4a9eff"/>
+    </g>
+
+    <text x="200" y="270" text-anchor="middle"
+          font-family="-apple-system, 'Segoe UI', Roboto, sans-serif"
+          font-size="16" font-weight="700" fill="#e8ecf5"
+          letter-spacing="2">FAVICON (32×32)</text>
+
+    <text x="20" y="325" font-family="sans-serif" font-size="10" fill="#4a9eff" opacity="0.6">
+      Favicon: Minimal Sun + Planet (browser tab, PWA icon)
+    </text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- 配色方案展示                                                     -->
+  <!-- ============================================================ -->
+  <g id="color-palette" transform="translate(400, 300)">
+    <rect x="0" y="0" width="400" height="300" fill="url(#deepSpace)" rx="16"/>
+
+    <text x="20" y="30" font-family="sans-serif" font-size="12" font-weight="700" fill="#e8ecf5">
+      Color Palette / 配色方案
+    </text>
+
+    <!-- 深空黑 -->
+    <rect x="20" y="50" width="80" height="80" fill="#05070f" stroke="#1e2540" stroke-width="1" rx="8"/>
+    <text x="60" y="145" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#e8ecf5">深空黑</text>
+    <text x="60" y="158" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#8b93a8">#05070f</text>
+
+    <!-- 恒星白 -->
+    <rect x="110" y="50" width="80" height="80" fill="#e8ecf5" rx="8"/>
+    <text x="150" y="145" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#e8ecf5">恒星白</text>
+    <text x="150" y="158" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#8b93a8">#e8ecf5</text>
+
+    <!-- 行星蓝（强调色） -->
+    <rect x="200" y="50" width="80" height="80" fill="#4a9eff" rx="8"/>
+    <text x="240" y="145" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#e8ecf5">行星蓝</text>
+    <text x="240" y="158" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#8b93a8">#4a9eff</text>
+
+    <!-- 恒星黄（强调色） -->
+    <rect x="290" y="50" width="80" height="80" fill="#ffcc55" rx="8"/>
+    <text x="330" y="145" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#e8ecf5">恒星黄</text>
+    <text x="330" y="158" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#8b93a8">#ffcc55</text>
+
+    <!-- 辅助色 -->
+    <rect x="20" y="180" width="50" height="50" fill="#0c1020" stroke="#1e2540" rx="6"/>
+    <text x="45" y="245" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#8b93a8">#0c1020</text>
+    <text x="45" y="255" text-anchor="middle" font-family="sans-serif" font-size="7" fill="#8b93a8">卡片底</text>
+
+    <rect x="80" y="180" width="50" height="50" fill="#1e2540" rx="6"/>
+    <text x="105" y="245" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#8b93a8">#1e2540</text>
+    <text x="105" y="255" text-anchor="middle" font-family="sans-serif" font-size="7" fill="#8b93a8">边框</text>
+
+    <rect x="140" y="180" width="50" height="50" fill="#8b93a8" rx="6"/>
+    <text x="165" y="245" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#8b93a8">#8b93a8</text>
+    <text x="165" y="255" text-anchor="middle" font-family="sans-serif" font-size="7" fill="#8b93a8">次要文字</text>
+
+    <rect x="200" y="180" width="50" height="50" fill="#c45a30" rx="6"/>
+    <text x="225" y="245" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#8b93a8">#c45a30</text>
+    <text x="225" y="255" text-anchor="middle" font-family="sans-serif" font-size="7" fill="#8b93a8">火星红</text>
+
+    <rect x="260" y="180" width="50" height="50" fill="#4ade80" rx="6"/>
+    <text x="285" y="245" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#8b93a8">#4ade80</text>
+    <text x="285" y="255" text-anchor="middle" font-family="sans-serif" font-size="7" fill="#8b93a8">成功绿</text>
+
+    <rect x="320" y="180" width="50" height="50" fill="#ef4444" rx="6"/>
+    <text x="345" y="245" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#8b93a8">#ef4444</text>
+    <text x="345" y="255" text-anchor="middle" font-family="sans-serif" font-size="7" fill="#8b93a8">错误红</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Favicon 独立 32x32 版本（可直接裁剪使用）                          -->
+  <!-- ============================================================ -->
+  <g id="favicon-standalone" transform="translate(800, 300)">
+    <rect x="0" y="0" width="400" height="300" fill="url(#deepSpace)" rx="16"/>
+
+    <text x="20" y="30" font-family="sans-serif" font-size="12" font-weight="700" fill="#e8ecf5">
+      Standalone Favicon (32×32)
+    </text>
+
+    <!-- 独立 favicon，可从此区域裁剪 -->
+    <g transform="translate(184, 120)">
+      <rect x="0" y="0" width="32" height="32" fill="#05070f" rx="4"/>
+      <circle cx="13" cy="16" r="7" fill="#ffcc55"/>
+      <circle cx="11" cy="14" r="2.5" fill="#fff8e0" opacity="0.5"/>
+      <circle cx="25" cy="16" r="2.5" fill="#4a9eff"/>
+    </g>
+
+    <text x="200" y="200" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#8b93a8">
+      太阳（黄）+ 行星（蓝）= Solar Wanderer
+    </text>
+    <text x="200" y="270" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#4a9eff" opacity="0.6">
+      可从此区域裁剪为 favicon.ico / icon.png
+    </text>
+  </g>
+
+  <!-- 底部标题 -->
+  <text x="600" y="870" text-anchor="middle"
+        font-family="-apple-system, 'Segoe UI', Roboto, sans-serif"
+        font-size="14" font-weight="600" fill="#4a9eff" opacity="0.7">
+    Solar Wanderer · 遨游太阳系 — Logo &amp; Visual Identity v1.0
+  </text>
+  <text x="600" y="890" text-anchor="middle"
+        font-family="sans-serif" font-size="10" fill="#8b93a8">
+    深空黑 #05070f · 恒星白 #e8ecf5 · 行星蓝 #4a9eff · 恒星黄 #ffcc55 · MIT © 2026 hyqzz
+  </text>
+</svg>

@@ -319,6 +319,19 @@ const WALK_EYE_KM = 0.0017;
 const MIN_SPEED = 0.001;
 const MAX_SPEED = 3e8;
 
+// 地表 palette → 音频表面类型映射（供 AudioEngine 选择脚步声滤波参数）。
+// 月球/岩石类 palette 统一为 'rock'；火星/Titan 尘埃为 'sand'；
+// 地球陆地为 'dirt'；冰质天体为 'ice'。
+const SURFACE_PALETTE_TO_AUDIO = {
+  mars: 'sand', titan: 'sand',
+  earth: 'dirt',
+  ice: 'ice', pluto: 'ice', triton: 'ice',
+};
+const surfaceTypeOf = (phys) => {
+  const p = phys?.surface?.palette;
+  return SURFACE_PALETTE_TO_AUDIO[p] || 'rock';
+};
+
 export class Ship {
   constructor() {
     this.mode = 'fly';
@@ -333,6 +346,9 @@ export class Ship {
       yaw: 0, pitch: 0, vAlt: 0, grounded: false,
       smx: 0, smy: 0, diving: false, submerged: false,
     };
+    // 音频状态快照：供外部 AudioEngine 读取（不直接调用 audio，解耦）。
+    // updateWalk / updateFly 每帧刷新，main.js 集成时传给 AudioEngine.update()。
+    this.audioState = { walking: false, speed: 0, submerged: false, surfaceType: 'rock' };
   }
 
   speed() { return this.vel.length(); }
@@ -424,6 +440,14 @@ export class Ship {
         if (vr < 0) this.vel.addScaledVector(_v1, -vr);
       }
     }
+
+    // 刷新音频状态快照：飞行中无脚步 / 速度驱动大气风声 / 表面类型取最近天体
+    this.audioState.walking = false;
+    this.audioState.speed = this.vel.length();
+    this.audioState.submerged = false;
+    this.audioState.surfaceType = env.nearest
+      ? surfaceTypeOf(env.phys(env.nearest.id))
+      : this.audioState.surfaceType;
   }
 
   enterWalk(env) {
@@ -519,7 +543,8 @@ export class Ship {
     const inWater = onWater && w.diving && r < surfR + 1e-7;
     let speed = ((input.down('ShiftLeft') || input.touchSprint) ? 0.009 : 0.003);
     if (inWater) speed *= 0.45;
-    if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed * dt);
+    const moving = move.lengthSq() > 0;
+    if (moving) move.normalize().multiplyScalar(speed * dt);
     w.localPos.add(move);
 
     if (inWater && input.wheel !== 0) {
@@ -572,5 +597,11 @@ export class Ship {
     const camUp  = up.clone().multiplyScalar(Math.cos(w.pitch)).addScaledVector(fwd, -Math.sin(w.pitch));
     lookM.lookAt(new THREE.Vector3(), camFwd, camUp);
     this.quat.setFromRotationMatrix(lookM).premultiply(bodyQuat);
+
+    // 刷新音频状态快照：行走中 / 移动速度 / 潜水 / 表面类型
+    this.audioState.walking = moving;
+    this.audioState.speed = speed;
+    this.audioState.submerged = !!w.submerged;
+    this.audioState.surfaceType = surfaceTypeOf(phys);
   }
 }

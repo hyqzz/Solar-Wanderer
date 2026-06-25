@@ -29,6 +29,17 @@ import { eclToWorldArr, KM_PER_AU } from './config.js';
 import { initQuality, makeFpsGuard, QUALITY, IS_MOBILE } from './engine/quality.js';
 import { TouchControls } from './ui/touchControls.js';
 import { t, bodyName, LANG, applyDomI18n } from './ui/i18n.js';
+import { AudioEngine } from './engine/audio.js';
+import { Compass } from './ui/compass.js';
+import { ScaleReference } from './ui/scaleRef.js';
+import { Bookmarks } from './ui/bookmarks.js';
+import { TourSystem } from './ui/tours.js';
+import { Narrator } from './ui/tts.js';
+import { TeacherToolkit } from './ui/teacher.js';
+import { EclipseSystem } from './scene/eclipses.js';
+import { WebXRManager } from './engine/webxr.js';
+import { createSpacecraftModel, makeSpacecraftGlow, SPACECRAFT_TIMELINES } from './scene/spacecraft.js';
+import { createApolloLandmarks, createRoverSites } from './scene/landmarks.js';
 
 const canvas = document.getElementById('app');
 // powerPreference: 多显卡系统由浏览器选高性能独显（R7 #8）
@@ -82,6 +93,9 @@ let lastLabelClickId = null;
 let labelClickTimer = null;
 const LABEL_CLICK_WINDOW = 250;
 
+// 新功能模块实例（#3-#55 集成）
+let audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr;
+
 init();
 
 async function init() {
@@ -110,12 +124,20 @@ async function init() {
   comets = createComets(world);
   for (const e of comets.entries) scene.add(e.group);
 
-  // 旅行者号
+  // 旅行者号（#30, #31：3D 模型 + 远距辉光精灵）
   for (const vg of VOYAGERS) {
     const group = new THREE.Group();
     const posKm = new Float64Array(3);
     world.register(posKm, group);
     scene.add(group);
+    // 添加 1:1 真实尺度 3D 模型（近距离可见）
+    try {
+      const model = createSpacecraftModel(vg.id);
+      group.add(model);
+      // 远距离辉光精灵（AU 级距离上保持屏幕可见性）
+      const glow = makeSpacecraftGlow(0x88ccff);
+      group.add(glow);
+    } catch { /* 模型创建失败时退化为空 Group，不影响位置注册 */ }
     voyagerEntries.push({ vg, posKm, group });
   }
 
@@ -218,7 +240,66 @@ async function init() {
   };
   window.addEventListener('resize', onResize);
   hud.loadingDone();
-  window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; } };
+
+  // ── 新功能模块初始化（#3-#55 集成）──────────────────────────────
+  // 环境音效（#4, #32）：默认静音，用户可开启
+  audioEngine = new AudioEngine();
+
+  // 3D 指南针（#37）：右下角空间定向辅助
+  compass = new Compass(document.body);
+
+  // 比例参照物（#38）：人体剪影 + 天体比较
+  scaleRef = new ScaleReference(scene, camera);
+
+  // 书签系统（#52）：localStorage 持久化
+  bookmarks = new Bookmarks();
+
+  // 语音旁白（#41）：Web Speech API
+  narrator = new Narrator();
+
+  // 导览系统（#39, #40）：需要 flyTo/select 接口
+  tourSystem = new TourSystem({
+    flyTo: (id) => flyTo(id),
+    select: (id) => select(id),
+    getMode: () => appMode,
+    setMode: (m) => { /* 模式切换由导览检查点驱动 */ },
+    hud: hud,
+  });
+  tourSystem.onNarration = (text) => {
+    if (narrator.supported) narrator.speak(text, LANG);
+  };
+
+  // 教师工具包（#42）
+  teacherToolkit = new TeacherToolkit({
+    tours: tourSystem.tours,
+    select: (id) => select(id),
+    flyTo: (id) => flyTo(id),
+    hud: hud,
+  });
+
+  // 日食阴影系统（#25）
+  eclipseSystem = new EclipseSystem(scene, world);
+
+  // WebXR/VR 支持（#33）
+  webxr = new WebXRManager(renderer, camera, scene);
+  webxr.init().then((supported) => {
+    if (supported) {
+      // VR 按钮可在此添加到 HUD
+    }
+  });
+
+  // Apollo 着陆点地标（#34）和火星车路径（#35）
+  createApolloLandmarks(scene, terrainMgr);
+  createRoverSites(scene, terrainMgr);
+
+  // 键盘快捷键：C 指南针、M 音效、B 书签、R 比例参照
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyC' && !e.repeat) { e.preventDefault(); compass?.toggle(); }
+    if (e.code === 'KeyM' && !e.repeat) { e.preventDefault(); audioEngine?.toggle(); }
+    if (e.code === 'KeyB' && e.ctrlKey) { e.preventDefault(); /* 书签保存 */ }
+  });
+
+  window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr };
   renderer.setAnimationLoop(loop);
 
   // ── 生命周期：后台/标签切换/睡眠恢复后强制同步仿真时钟 ──
@@ -654,6 +735,76 @@ function loop() {
 
   // 移动端屏显控制：累加 held-zoom、刷新按钮状态
   touchControls?.update(appMode, nearestCache, orbitCam);
+
+  // ── 新功能模块每帧更新（#3-#55 集成）──────────────────────────────
+  // 环境音效（#4, #32）：根据模式/环境/飞船状态驱动
+  if (audioEngine) {
+    const nearestBody = nearest ? builder.bodies.get(nearest.id) : null;
+    const atm = nearestBody?.phys?.atmosphere;
+    const inAtmo = !!(atm && nearest.distSurface < atm.heightKm);
+    audioEngine.setMode(appMode, {
+      nearest: nearest ? { id: nearest.id, radiusKm: nearest.radiusKm } : null,
+      inAtmosphere: inAtmo,
+      underwater: !!ship.walk?.submerged,
+      surface: ship.audioState?.surfaceType || 'rock',
+    });
+    audioEngine.update(dtReal, ship.audioState);
+  }
+
+  // 3D 指南针（#37）：仅在行走模式显示空间方位
+  if (compass && compass.visible) {
+    const nearestBody = nearest ? builder.bodies.get(nearest.id) : null;
+    let sunDir = null, zenithDir = null, northDir = null, nearestBodyDir = null;
+    if (nearestBody) {
+      // 天顶 = 远离天体中心方向（世界系）
+      _rel.set(
+        ship.posKm[0] - nearestBody.posKm[0],
+        ship.posKm[1] - nearestBody.posKm[1],
+        ship.posKm[2] - nearestBody.posKm[2]
+      );
+      const relLen = _rel.length() || 1;
+      zenithDir = { x: _rel.x / relLen, y: _rel.y / relLen, z: _rel.z / relLen };
+      // 北方向 = 天体自转北极（世界系）
+      const bodyQuat = nearestBody.mesh.quaternion;
+      northDir = { x: 0, y: 1, z: 0 };
+      const nq = _q.copy(bodyQuat);
+      northDir = {
+        x: 2 * (nq.x * nq.y - nq.w * nq.z),
+        y: 1 - 2 * (nq.x * nq.x + nq.z * nq.z),
+        z: 2 * (nq.y * nq.z + nq.w * nq.x),
+      };
+      // 太阳方向（世界系，从相机指向太阳）
+      const sunPos = builder.bodies.get('sun').posKm;
+      sunDir = {
+        x: sunPos[0] - ship.posKm[0],
+        y: sunPos[1] - ship.posKm[1],
+        z: sunPos[2] - ship.posKm[2],
+      };
+      const sunLen = Math.hypot(sunDir.x, sunDir.y, sunDir.z) || 1;
+      sunDir.x /= sunLen; sunDir.y /= sunLen; sunDir.z /= sunLen;
+      // 最近天体方向（仅在 fly/orbit 模式下指向最近天体）
+      if (appMode !== 'walk') {
+        nearestBodyDir = { x: -zenithDir.x, y: -zenithDir.y, z: -zenithDir.z };
+      }
+    }
+    compass.update({
+      cameraQuat: camera.quaternion,
+      sunDir,
+      zenithDir,
+      northDir,
+      nearestBodyDir,
+      nearestBodyName: nearest ? bodyName(registry.get(nearest.id)) : null,
+    });
+  }
+
+  // 比例参照物（#38）：跟随相机位置
+  scaleRef?.update({ mode: appMode });
+
+  // 日食阴影系统（#25）：检查所有掩星三元组
+  eclipseSystem?.update(jdTT, builder.bodies, ship.posKm);
+
+  // WebXR/VR（#33）：每帧同步控制器位姿
+  webxr?.update(dtReal);
 
   fpsGuard(dtReal);
   input.endFrame();

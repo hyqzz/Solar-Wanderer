@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { makeNoise, hashSeed } from '../util/noise.js';
 import { QUALITY } from '../engine/quality.js';
+import { DEMTileSource } from './demTiles.js';
 
 // 极冠霜冻覆盖颜色（palette → [r,g,b]，仅 color() 有地图时也生效）
 const FROST_PALETTES = {
@@ -46,7 +47,11 @@ export class HeightField {
     this.sp = phys.surface ?? { ampKm: 2, roughness: 0.5, craters: 0.5, palette: 'gray' };
     this.noise = makeNoise(hashSeed(bodyId));
     this.map = mapImageData; // {data,width,height} 用于颜色与海洋掩码
+    this.demSource = null;   // DEM 瓦片源（月球 LOLA / 火星 MOLA），由 setDEMSource 注入
   }
+
+  /** 注入 DEM 瓦片源：启用后 height() 优先查询真实高程，未命中时回退到程序化噪声 */
+  setDEMSource(source) { this.demSource = source; }
 
   /** 撞击坑形态：噪声等值带 → 环形坑缘 + 坑底 */
   crater(dir, f) {
@@ -80,11 +85,42 @@ export class HeightField {
     return this.height(dir);
   }
 
-  /** dir: 网格本地系单位向量（+Y=北极, +X=本初子午线）。返回该方向的表面半径 km */
+  /** dir: 网格本地系单位向量（+Y=北极, +X=本初子午线）。返回该方向的表面半径 km
+   * 优先查询 DEM（真实高程），缓存未命中或离线时回退到程序化噪声（现有行为）。
+   * 融合策略为谱融合：DEM 提供大尺度形状（低频），噪声补充亚分辨率细节（高频），
+   * 两者各负责不同频段，天然无缝——近距离用高分辨率 DEM，远距离用低分辨率 DEM
+   * 或纯噪声，过渡时地形重建 + uFade 淡入（#18）隐藏任何跳变。 */
   height(dir) {
+    const sp = this.sp;
+    // 海洋处返回水面（DEM 不适用于地球海洋）
+    if (sp.ocean && this.isOcean(dir)) return this.phys.radiusKm + 0.001;
+    // DEM 优先：已配置源且缓存命中时，使用真实高程 + 高频噪声细节
+    if (this.demSource) {
+      const demH = this.demSource.getHeightSync(dir);
+      if (demH !== null) return this._heightWithDEM(dir, demH);
+    }
+    // 回退：程序化噪声地形（离线/未配置/缓存未命中）
+    return this._heightNoise(dir);
+  }
+
+  /** DEM + 高频噪声细节融合：DEM 提供大尺度高程，噪声补充 DEM 分辨率以下的米级起伏 */
+  _heightWithDEM(dir, demH) {
+    const R = this.baseRadius(dir);
+    const n = this.noise;
+    const bodyR = this.phys.radiusKm;
+    const detailScale = Math.min(1, bodyR / 400);
+    let detail = 0;
+    detail += 0.05 * detailScale * n.fbm(dir.x * 900, dir.y * 900, dir.z * 900, 3);
+    detail += 0.022 * detailScale * n.fbm(dir.x * 8000, dir.y * 8000, dir.z * 8000, 2);
+    detail += 0.009 * detailScale * n.fbm(dir.x * 42000, dir.y * 42000, dir.z * 42000, 2);
+    const effAmp = Math.min(this.sp.ampKm, bodyR * 0.05);
+    return R + demH + effAmp * detail * 0.5;
+  }
+
+  /** 纯程序化噪声地形（现有行为，DEM 不可用时回退到此） */
+  _heightNoise(dir) {
     const R = this.baseRadius(dir);
     const sp = this.sp;
-    if (sp.ocean && this.isOcean(dir)) return this.phys.radiusKm + 0.001;
     const n = this.noise;
     // 大尺度构造（高原/盆地）
     let h = 0.42 * n.fbm(dir.x * 1.6, dir.y * 1.6, dir.z * 1.6, 4);
@@ -391,6 +427,7 @@ export class TerrainPatchSet {
     // 噪声原点：跟随玩家、每 2km 重新吸附（保证片元噪声参数始终小数精度充足）
     this.noiseOriginU = { value: new THREE.Vector3(1e9, 0, 0) };
     this._initialized = false; // 首次激活后标记：指导首帧由外向内构建各级
+    this.demDirty = false;     // DEM 新瓦片到达标记：驱动最内级重建拾取真实高程
     for (let li = 0; li < this.extents.length; li++) {
       const geo = new THREE.BufferGeometry();
       const verts = (GRID + 1) * (GRID + 1);
@@ -428,6 +465,9 @@ export class TerrainPatchSet {
     this.group.add(this.rocks.mesh);
   }
 
+  /** DEM 新瓦片到达后标记脏：下次 update 强制重建最内级以拾取真实高程 */
+  markDirty() { this.demDirty = true; }
+
   /** dirLocal: 相机在天体本地系中的方向（单位）。timeSec: 水面波纹时基。
    * 每帧最多重建 1 级。首次激活由外向内（最大覆盖先出现）；后续正常内向外优先。
    * 每级重建后触发 0.8s 淡入，避免 LOD 突然弹出（#18）。 */
@@ -454,10 +494,15 @@ export class TerrainPatchSet {
       const li = initMode ? this.levels.length - 1 - i : i;
       const lv = this.levels[li];
       const moveKm = lv.builtAnchor.distanceTo(dirLocal) * R;
-      if (moveKm > lv.extent * 0.25) {
+      // DEM 新数据到达时，强制重建最内级（即使相机静止）以拾取真实高程
+      const demRebuild = this.demDirty && li === 0;
+      if (moveKm > lv.extent * 0.25 || demRebuild) {
         this.build(lv, dirLocal);
         lv.builtAnchor.copy(dirLocal);
-        if (li === 0) this.rocks.rebuild(dirLocal, lv.origin);
+        if (li === 0) {
+          this.rocks.rebuild(dirLocal, lv.origin);
+          this.demDirty = false; // 最内级重建后清除脏标记
+        }
         break; // 分帧：其余级下一帧再建
       }
     }
@@ -534,20 +579,32 @@ export class TerrainPatchSet {
   }
 }
 
-/** 地形管理器：跟踪最近可登陆天体，激活/释放 TerrainPatchSet */
+/** 地形管理器：跟踪最近可登陆天体，激活/释放 TerrainPatchSet，管理 DEM 瓦片流式加载 */
 export class TerrainManager {
   constructor() {
-    this.fields = new Map();   // bodyId -> HeightField
-    this.active = null;        // { bodyId, patches }
-    this.getMapData = null;    // 由 builder 注入：bodyId -> ImageData|null
-    this.physOf = null;        // bodyId -> phys
-    this.meshOf = null;        // bodyId -> 天体网格（地形作为其子节点）
+    this.fields = new Map();     // bodyId -> HeightField
+    this.demSources = new Map(); // bodyId -> DEMTileSource（月球 LOLA / 火星 MOLA）
+    this.active = null;          // { bodyId, patches }
+    this.getMapData = null;      // 由 builder 注入：bodyId -> ImageData|null
+    this.physOf = null;          // bodyId -> phys
+    this.meshOf = null;          // bodyId -> 天体网格（地形作为其子节点）
+  }
+
+  /** 为有天体创建 DEM 源（月球/火星），无配置的天体返回 null（使用纯程序化噪声） */
+  _createDEMFor(bodyId) {
+    if (!DEMTileSource.hasSource(bodyId)) return null;
+    const src = new DEMTileSource(bodyId);
+    this.demSources.set(bodyId, src);
+    return src;
   }
 
   field(bodyId) {
     let f = this.fields.get(bodyId);
     if (!f) {
       f = new HeightField(bodyId, this.physOf(bodyId), this.getMapData?.(bodyId) ?? null);
+      // 挂载 DEM 源（月球 LOLA / 火星 MOLA）；无配置的天体跳过，使用纯程序化噪声
+      const dem = this.demSources.get(bodyId) ?? this._createDEMFor(bodyId);
+      if (dem) f.setDEMSource(dem);
       this.fields.set(bodyId, f);
     }
     return f;
@@ -569,6 +626,17 @@ export class TerrainManager {
     return !!(f.sp.ocean && f.isOcean(dirLocal));
   }
 
+  /** 按相机距表面距离选择 DEM 分辨率层级（近=高分辨率，远=低分辨率） */
+  _demLevelForDistance(distKm) {
+    if (distKm < 1) return 8;   // 地表行走：最高分辨率
+    if (distKm < 5) return 7;
+    if (distKm < 20) return 6;
+    if (distKm < 80) return 5;
+    if (distKm < 200) return 4;
+    if (distKm < 500) return 3;
+    return 2; // 远距离：粗分辨率（大尺度地形形状）
+  }
+
   update(nearest, camLocalDir, timeSec = 0) {
     // 激活半径（#18 提前激活：确保外圈 LOD 在远处建好，接近时无弹出感）
     // 大天体：地球 1147km、火星 610km、月球 500km；小天体比例缩放
@@ -588,7 +656,24 @@ export class TerrainManager {
       const patches = new TerrainPatchSet(this.field(wantId));
       this.meshOf(wantId).add(patches.group);
       this.active = { bodyId: wantId, patches };
+      // 预加载 DEM 基础层级（全球 1×1 瓦片），确保大尺度地形形状先就位
+      const dem = this.demSources.get(wantId);
+      if (dem) dem.preloadBase();
     }
-    if (this.active && camLocalDir) this.active.patches.update(camLocalDir, timeSec);
+    if (this.active && camLocalDir) {
+      this.active.patches.update(camLocalDir, timeSec);
+      // DEM 瓦片流式：按相机位置请求瓦片 + 检查新瓦片到达
+      const dem = this.demSources.get(this.active.bodyId);
+      if (dem && !dem.isOffline) {
+        const dist = nearest ? nearest.distSurface : 100;
+        dem.setPriority(1 / Math.max(0.1, dist)); // 近=高优先级
+        dem.requestTiles(camLocalDir, this._demLevelForDistance(dist));
+        // 新瓦片到达 → 标记地形重建（下帧 update 拾取真实高程）
+        if (dem.hasNewTiles) {
+          this.active.patches.markDirty();
+          dem.clearDirty();
+        }
+      }
+    }
   }
 }

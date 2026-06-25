@@ -7,18 +7,24 @@ export const KM_PER_AU = 149597870.7;
 export const C_KM_S = 299792.458;
 
 // 界面语言优先级：URL 路径或参数 > 浏览器语言 > Node 默认 'zh'。
-// 支持 /en/?lang=en 强制英文，/ 或 ?lang=zh 强制中文。
+// 支持 7 种语言：zh/en/es/ja/fr/de/ru（#3, #44, #45, #46）。
+// ?lang=es 或 /es/ 强制西班牙语，以此类推。
+const SUPPORTED_LANGS = ['zh', 'en', 'es', 'ja', 'fr', 'de', 'ru'];
+
 function detectLang() {
   if (typeof window !== 'undefined' && window.location) {
     const params = new URLSearchParams(window.location.search);
     const paramLang = params.get('lang');
-    if (paramLang === 'en' || paramLang === 'zh') return paramLang;
+    if (SUPPORTED_LANGS.includes(paramLang)) return paramLang;
     const pathLang = window.location.pathname.split('/')[1];
-    if (pathLang === 'en' || pathLang === 'zh') return pathLang;
+    if (SUPPORTED_LANGS.includes(pathLang)) return pathLang;
   }
   if (typeof navigator !== 'undefined') {
-    const nav = navigator.language || navigator.userLanguage || '';
-    return /^zh/i.test(nav) ? 'zh' : 'en';
+    // 取主语言代码（zh-CN → zh, en-US → en, ja-JP → ja 等），匹配已支持语言
+    const nav = (navigator.language || navigator.userLanguage || '').toLowerCase();
+    const primary = nav.split('-')[0];
+    if (SUPPORTED_LANGS.includes(primary)) return primary;
+    return 'en'; // 未支持的语言回退英文
   }
   return 'zh';
 }

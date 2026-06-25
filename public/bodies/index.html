@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>太阳系天体目录 — 1:1 真实太阳系探索 | Solar Wanderer</title>
+  <meta name="description" content="探索太阳系的每一个天体：太阳、八大行星、矮行星、卫星。基于 NASA JPL 星历的 1:1 真实尺度太阳系探索。" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://sw.icodestar.net/bodies/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://sw.icodestar.net/bodies/" />
+  <meta property="og:title" content="太阳系天体目录 — Solar Wanderer" />
+  <meta property="og:description" content="探索太阳系的每一个天体：太阳、八大行星、矮行星、卫星。" />
+  <meta property="og:image" content="https://sw.icodestar.net/preview.png" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='7' fill='%23ffcc55'/><circle cx='26' cy='16' r='2' fill='%234a90d9'/></svg>" />
+  <style>
+    :root { --bg:#05070f; --bg-card:#0c1020; --text:#e8ecf5; --text-dim:#8b93a8; --accent:#4a9eff; --border:#1e2540; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif; line-height:1.7; padding:2rem 1rem 4rem; }
+    .container { max-width:960px; margin:0 auto; }
+    .back-link { color:var(--accent); text-decoration:none; font-size:0.9rem; display:inline-block; margin-bottom:1.5rem; }
+    h1 { font-size:1.8rem; margin-bottom:0.5rem; }
+    .subtitle { color:var(--text-dim); margin-bottom:2rem; }
+    h2 { font-size:1.2rem; color:var(--accent); margin:2rem 0 1rem; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:0.75rem; }
+    .body-card { display:flex; flex-direction:column; gap:0.15rem; background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:1rem; text-decoration:none; transition:border-color 0.2s; }
+    .body-card:hover { border-color:var(--accent); }
+    .body-name-zh { color:var(--text); font-size:1.05rem; font-weight:600; }
+    .body-name-en { color:var(--text-dim); font-size:0.85rem; }
+    .body-type { color:var(--accent); font-size:0.75rem; margin-top:0.25rem; }
+    .footer { text-align:center; margin-top:2rem; padding-top:1.5rem; border-top:1px solid var(--border); color:var(--text-dim); font-size:0.85rem; }
+    .footer a { color:var(--text-dim); }
+    @media (max-width:600px) { .grid { grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="back-link">← 返回 Solar Wanderer</a>
+    <h1>🪐 太阳系天体目录</h1>
+    <p class="subtitle">Solar System Bodies Directory — 31 个天体 · 基于 NASA JPL 星历</p>
+
+    <h2>☀️ 恒星与行星 / Stars & Planets</h2>
+    <div class="grid">
+      <a href="./sun.html" class="body-card">
+      <span class="body-name-zh">太阳</span>
+      <span class="body-name-en">Sun</span>
+      <span class="body-type">恒星</span>
+    </a>
+      <a href="./mercury.html" class="body-card">
+      <span class="body-name-zh">水星</span>
+      <span class="body-name-en">Mercury</span>
+      <span class="body-type">岩石行星</span>
+    </a>
+      <a href="./venus.html" class="body-card">
+      <span class="body-name-zh">金星</span>
+      <span class="body-name-en">Venus</span>
+      <span class="body-type">岩石行星</span>
+    </a>
+      <a href="./earth.html" class="body-card">
+      <span class="body-name-zh">地球</span>
+      <span class="body-name-en">Earth</span>
+      <span class="body-type">岩石行星</span>
+    </a>
+      <a href="./mars.html" class="body-card">
+      <span class="body-name-zh">火星</span>
+      <span class="body-name-en">Mars</span>
+      <span class="body-type">岩石行星</span>
+    </a>
+      <a href="./jupiter.html" class="body-card">
+      <span class="body-name-zh">木星</span>
+      <span class="body-name-en">Jupiter</span>
+      <span class="body-type">气态巨行星</span>
+    </a>
+      <a href="./saturn.html" class="body-card">
+      <span class="body-name-zh">土星</span>
+      <span class="body-name-en">Saturn</span>
+      <span class="body-type">气态巨行星</span>
+    </a>
+      <a href="./uranus.html" class="body-card">
+      <span class="body-name-zh">天王星</span>
+      <span class="body-name-en">Uranus</span>
+      <span class="body-type">冰巨星</span>
+    </a>
+      <a href="./neptune.html" class="body-card">
+      <span class="body-name-zh">海王星</span>
+      <span class="body-name-en">Neptune</span>
+      <span class="body-type">冰巨星</span>
+    </a>
+      <a href="./pluto.html" class="body-card">
+      <span class="body-name-zh">冥王星</span>
+      <span class="body-name-en">Pluto</span>
+      <span class="body-type">矮行星</span>
+    </a>
+    </div>
+
+    <h2>🌙 卫星 / Moons</h2>
+    <div class="grid">
+      <a href="./moon.html" class="body-card">
+      <span class="body-name-zh">月球</span>
+      <span class="body-name-en">Moon</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./phobos.html" class="body-card">
+      <span class="body-name-zh">火卫一</span>
+      <span class="body-name-en">Phobos</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./deimos.html" class="body-card">
+      <span class="body-name-zh">火卫二</span>
+      <span class="body-name-en">Deimos</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./io.html" class="body-card">
+      <span class="body-name-zh">木卫一</span>
+      <span class="body-name-en">Io</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./europa.html" class="body-card">
+      <span class="body-name-zh">木卫二</span>
+      <span class="body-name-en">Europa</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./ganymede.html" class="body-card">
+      <span class="body-name-zh">木卫三</span>
+      <span class="body-name-en">Ganymede</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./callisto.html" class="body-card">
+      <span class="body-name-zh">木卫四</span>
+      <span class="body-name-en">Callisto</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./mimas.html" class="body-card">
+      <span class="body-name-zh">土卫一</span>
+      <span class="body-name-en">Mimas</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./enceladus.html" class="body-card">
+      <span class="body-name-zh">土卫二</span>
+      <span class="body-name-en">Enceladus</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./tethys.html" class="body-card">
+      <span class="body-name-zh">土卫三</span>
+      <span class="body-name-en">Tethys</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./dione.html" class="body-card">
+      <span class="body-name-zh">土卫四</span>
+      <span class="body-name-en">Dione</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./rhea.html" class="body-card">
+      <span class="body-name-zh">土卫五</span>
+      <span class="body-name-en">Rhea</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./titan.html" class="body-card">
+      <span class="body-name-zh">土卫六</span>
+      <span class="body-name-en">Titan</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./iapetus.html" class="body-card">
+      <span class="body-name-zh">土卫八</span>
+      <span class="body-name-en">Iapetus</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./miranda.html" class="body-card">
+      <span class="body-name-zh">天卫五</span>
+      <span class="body-name-en">Miranda</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./ariel.html" class="body-card">
+      <span class="body-name-zh">天卫一</span>
+      <span class="body-name-en">Ariel</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./umbriel.html" class="body-card">
+      <span class="body-name-zh">天卫二</span>
+      <span class="body-name-en">Umbriel</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./titania.html" class="body-card">
+      <span class="body-name-zh">天卫三</span>
+      <span class="body-name-en">Titania</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./oberon.html" class="body-card">
+      <span class="body-name-zh">天卫四</span>
+      <span class="body-name-en">Oberon</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./triton.html" class="body-card">
+      <span class="body-name-zh">海卫一</span>
+      <span class="body-name-en">Triton</span>
+      <span class="body-type">卫星</span>
+    </a>
+      <a href="./charon.html" class="body-card">
+      <span class="body-name-zh">冥卫一</span>
+      <span class="body-name-en">Charon</span>
+      <span class="body-type">卫星</span>
+    </a>
+    </div>
+
+    <div class="footer">
+      <p>Solar Wanderer · 遨游太阳系 — <a href="https://sw.icodestar.net">sw.icodestar.net</a></p>
+      <p style="margin-top:0.5rem">基于 NASA JPL 星历 · MIT 开源 · <a href="https://github.com/hyqzz/Solar-Wanderer" target="_blank" rel="noopener">GitHub</a></p>
+    </div>
+  </div>
+</body>
+</html>
