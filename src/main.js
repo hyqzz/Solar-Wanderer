@@ -288,9 +288,9 @@ async function init() {
     }
   });
 
-  // Apollo 着陆点地标（#34）和火星车路径（#35）
-  createApolloLandmarks(scene, terrainMgr);
-  createRoverSites(scene, terrainMgr);
+  // Apollo 着陆点地标（#34）和火星车路径（#35）—— try-catch 保护，失败不应阻止渲染循环启动
+  try { createApolloLandmarks(scene, terrainMgr); } catch (e) { console.error('[Apollo landmarks]', e); }
+  try { createRoverSites(scene, terrainMgr); } catch (e) { console.error('[Rover sites]', e); }
 
   // 键盘快捷键：C 指南针、M 音效、B 书签、R 比例参照
   window.addEventListener('keydown', (e) => {
@@ -583,21 +583,32 @@ function loop() {
   simClock.rate = hud.warpRate(simClock.paused);
   const jdTT = simClock.tick(dtReal);
 
-  // 星历驱动
-  builder.update(jdTT);
-  comets.update(jdTT);
-  tnoScene.update(jdTT, ship.posKm);
-  for (const v of voyagerEntries) {
-    const p = voyagerPosition(v.vg, jdTT);
-    const w = eclToWorldArr(p);
-    v.posKm[0] = w[0]; v.posKm[1] = w[1]; v.posKm[2] = w[2];
+  // 星历驱动（try-catch 保护：builder.update 改动较多，任何异常不应卡死渲染循环）
+  try {
+    builder.update(jdTT);
+  } catch (e) {
+    if (!loop._builderErr) {
+      loop._builderErr = true;
+      console.error('[builder.update]', e);
+      hud.tip('星历更新错误: ' + e.message);
+    }
   }
+  try { comets.update(jdTT); } catch (e) { loopErr('comets', e); }
+  try { tnoScene.update(jdTT, ship.posKm); } catch (e) { loopErr('tnoScene', e); }
+  try {
+    for (const v of voyagerEntries) {
+      const p = voyagerPosition(v.vg, jdTT);
+      const w = eclToWorldArr(p);
+      v.posKm[0] = w[0]; v.posKm[1] = w[1]; v.posKm[2] = w[2];
+    }
+  } catch (e) { loopErr('voyagers', e); }
 
   const nearest = findNearest();
   nearestCache = nearest;
   const env = makeEnv(nearest);
 
   // ---------- 模式更新 ----------
+  try {
   if (appMode === 'orbit') {
     // 拖拽打断飞行动画（GE 行为）
     if (orbitCam.flight && input.drag.active) orbitCam.cancelFlight(orbitEnv);
@@ -657,29 +668,45 @@ function loop() {
     }
   }
   if (input.tapped('KeyT') && selectedId) flyTo(selectedId);
+  } catch (e) { loopErr('modeUpdate', e); }
 
   // 浮动原点（相机=飞船位姿）
-  world.update(ship.posKm);
-  builder.postWorldUpdate(ship.posKm, performance.now() / 1000);
+  try { world.update(ship.posKm); } catch (e) { loopErr('world', e); }
+  try {
+    builder.postWorldUpdate(ship.posKm, performance.now() / 1000);
+  } catch (e) {
+    if (!loop._postWorldErr) {
+      loop._postWorldErr = true;
+      console.error('[postWorldUpdate]', e);
+    }
+  }
   camera.quaternion.copy(ship.quat);
 
-  // 地形
-  if (nearest && nearest.landable) {
-    const e = builder.bodies.get(nearest.id);
-    _rel.set(
-      ship.posKm[0] - e.posKm[0], ship.posKm[1] - e.posKm[1], ship.posKm[2] - e.posKm[2]
-    );
-    _q.copy(e.mesh.quaternion).invert();
-    _rel.applyQuaternion(_q).normalize();
-    terrainMgr.update(nearest, _rel, performance.now() / 1000);
-  } else {
-    terrainMgr.update(null, null);
+  // 地形（try-catch 保护：DEM 集成改动较多）
+  try {
+    if (nearest && nearest.landable) {
+      const e = builder.bodies.get(nearest.id);
+      _rel.set(
+        ship.posKm[0] - e.posKm[0], ship.posKm[1] - e.posKm[1], ship.posKm[2] - e.posKm[2]
+      );
+      _q.copy(e.mesh.quaternion).invert();
+      _rel.applyQuaternion(_q).normalize();
+      terrainMgr.update(nearest, _rel, performance.now() / 1000);
+    } else {
+      terrainMgr.update(null, null);
+    }
+  } catch (e) {
+    if (!loop._terrainErr) {
+      loop._terrainErr = true;
+      console.error('[terrain]', e);
+    }
   }
 
-  updateAtmosphereFogAndExposure(nearest, dtReal);
-  handleUIKeys();
+  try { updateAtmosphereFogAndExposure(nearest, dtReal); } catch (e) { loopErr('atmoFog', e); }
+  try { handleUIKeys(); } catch (e) { loopErr('uiKeys', e); }
 
   // HUD
+  try {
   hud.updateTime(simClock);
   const flight = orbitCam.flight;
   hud.updateNav({
@@ -735,80 +762,110 @@ function loop() {
 
   // 移动端屏显控制：累加 held-zoom、刷新按钮状态
   touchControls?.update(appMode, nearestCache, orbitCam);
+  } catch (e) { loopErr('hud', e); }
 
   // ── 新功能模块每帧更新（#3-#55 集成）──────────────────────────────
-  // 环境音效（#4, #32）：根据模式/环境/飞船状态驱动
-  if (audioEngine) {
-    const nearestBody = nearest ? builder.bodies.get(nearest.id) : null;
-    const atm = nearestBody?.phys?.atmosphere;
-    const inAtmo = !!(atm && nearest.distSurface < atm.heightKm);
-    audioEngine.setMode(appMode, {
-      nearest: nearest ? { id: nearest.id, radiusKm: nearest.radiusKm } : null,
-      inAtmosphere: inAtmo,
-      underwater: !!ship.walk?.submerged,
-      surface: ship.audioState?.surfaceType || 'rock',
-    });
-    audioEngine.update(dtReal, ship.audioState);
-  }
-
-  // 3D 指南针（#37）：仅在行走模式显示空间方位
-  if (compass && compass.visible) {
-    const nearestBody = nearest ? builder.bodies.get(nearest.id) : null;
-    let sunDir = null, zenithDir = null, northDir = null, nearestBodyDir = null;
-    if (nearestBody) {
-      // 天顶 = 远离天体中心方向（世界系）
-      _rel.set(
-        ship.posKm[0] - nearestBody.posKm[0],
-        ship.posKm[1] - nearestBody.posKm[1],
-        ship.posKm[2] - nearestBody.posKm[2]
-      );
-      const relLen = _rel.length() || 1;
-      zenithDir = { x: _rel.x / relLen, y: _rel.y / relLen, z: _rel.z / relLen };
-      // 北方向 = 天体自转北极（世界系）
-      const bodyQuat = nearestBody.mesh.quaternion;
-      northDir = { x: 0, y: 1, z: 0 };
-      const nq = _q.copy(bodyQuat);
-      northDir = {
-        x: 2 * (nq.x * nq.y - nq.w * nq.z),
-        y: 1 - 2 * (nq.x * nq.x + nq.z * nq.z),
-        z: 2 * (nq.y * nq.z + nq.w * nq.x),
-      };
-      // 太阳方向（世界系，从相机指向太阳）
-      const sunPos = builder.bodies.get('sun').posKm;
-      sunDir = {
-        x: sunPos[0] - ship.posKm[0],
-        y: sunPos[1] - ship.posKm[1],
-        z: sunPos[2] - ship.posKm[2],
-      };
-      const sunLen = Math.hypot(sunDir.x, sunDir.y, sunDir.z) || 1;
-      sunDir.x /= sunLen; sunDir.y /= sunLen; sunDir.z /= sunLen;
-      // 最近天体方向（仅在 fly/orbit 模式下指向最近天体）
-      if (appMode !== 'walk') {
-        nearestBodyDir = { x: -zenithDir.x, y: -zenithDir.y, z: -zenithDir.z };
-      }
+  // 每个模块独立 try-catch：任何新模块出错都不应卡死核心渲染循环
+  try {
+    // 环境音效（#4, #32）：根据模式/环境/飞船状态驱动
+    if (audioEngine) {
+      const nearestBody = nearest ? builder.bodies.get(nearest.id) : null;
+      const atm = nearestBody?.phys?.atmosphere;
+      const inAtmo = !!(atm && nearest.distSurface < atm.heightKm);
+      audioEngine.setMode(appMode, {
+        nearest: nearest ? { id: nearest.id, radiusKm: nearest.radiusKm } : null,
+        inAtmosphere: inAtmo,
+        underwater: !!ship.walk?.submerged,
+        surface: ship.audioState?.surfaceType || 'rock',
+      });
+      audioEngine.update(dtReal, ship.audioState);
     }
-    compass.update({
-      cameraQuat: camera.quaternion,
-      sunDir,
-      zenithDir,
-      northDir,
-      nearestBodyDir,
-      nearestBodyName: nearest ? bodyName(registry.get(nearest.id)) : null,
-    });
+  } catch (e) { console.error('[audioEngine]', e); }
+
+  try {
+    // 3D 指南针（#37）：仅在行走模式显示空间方位
+    if (compass && compass.visible) {
+      const nearestBody = nearest ? builder.bodies.get(nearest.id) : null;
+      let sunDir = null, zenithDir = null, northDir = null, nearestBodyDir = null;
+      if (nearestBody) {
+        // 天顶 = 远离天体中心方向（世界系）
+        _rel.set(
+          ship.posKm[0] - nearestBody.posKm[0],
+          ship.posKm[1] - nearestBody.posKm[1],
+          ship.posKm[2] - nearestBody.posKm[2]
+        );
+        const relLen = _rel.length() || 1;
+        zenithDir = { x: _rel.x / relLen, y: _rel.y / relLen, z: _rel.z / relLen };
+        // 北方向 = 天体自转北极（世界系）
+        const bodyQuat = nearestBody.mesh.quaternion;
+        const nq = _q.copy(bodyQuat);
+        northDir = {
+          x: 2 * (nq.x * nq.y - nq.w * nq.z),
+          y: 1 - 2 * (nq.x * nq.x + nq.z * nq.z),
+          z: 2 * (nq.y * nq.z + nq.w * nq.x),
+        };
+        // 太阳方向（世界系，从相机指向太阳）
+        const sunPos = builder.bodies.get('sun').posKm;
+        sunDir = {
+          x: sunPos[0] - ship.posKm[0],
+          y: sunPos[1] - ship.posKm[1],
+          z: sunPos[2] - ship.posKm[2],
+        };
+        const sunLen = Math.hypot(sunDir.x, sunDir.y, sunDir.z) || 1;
+        sunDir.x /= sunLen; sunDir.y /= sunLen; sunDir.z /= sunLen;
+        // 最近天体方向（仅在 fly/orbit 模式下指向最近天体）
+        if (appMode !== 'walk') {
+          nearestBodyDir = { x: -zenithDir.x, y: -zenithDir.y, z: -zenithDir.z };
+        }
+      }
+      compass.update({
+        cameraQuat: camera.quaternion,
+        sunDir,
+        zenithDir,
+        northDir,
+        nearestBodyDir,
+        nearestBodyName: nearest ? bodyName(registry.get(nearest.id)) : null,
+      });
+    }
+  } catch (e) { console.error('[compass]', e); }
+
+  try {
+    // 比例参照物（#38）：跟随相机位置
+    scaleRef?.update({ mode: appMode });
+  } catch (e) { console.error('[scaleRef]', e); }
+
+  try {
+    // 日食阴影系统（#25）：检查所有掩星三元组
+    eclipseSystem?.update(jdTT, builder.bodies, ship.posKm);
+  } catch (e) { console.error('[eclipseSystem]', e); }
+
+  try {
+    // WebXR/VR（#33）：每帧同步控制器位姿
+    webxr?.update(dtReal);
+  } catch (e) { console.error('[webxr]', e); }
+
+  try { fpsGuard(dtReal); } catch (e) { loopErr('fpsGuard', e); }
+  try { input.endFrame(); } catch (e) { loopErr('input', e); }
+  try {
+    composer.render();
+  } catch (e) {
+    // 渲染本身异常：记录一次，避免每帧刷屏
+    if (!loop._renderErr) {
+      loop._renderErr = true;
+      console.error('[composer.render]', e);
+    }
   }
+}
 
-  // 比例参照物（#38）：跟随相机位置
-  scaleRef?.update({ mode: appMode });
-
-  // 日食阴影系统（#25）：检查所有掩星三元组
-  eclipseSystem?.update(jdTT, builder.bodies, ship.posKm);
-
-  // WebXR/VR（#33）：每帧同步控制器位姿
-  webxr?.update(dtReal);
-
-  fpsGuard(dtReal);
-  input.endFrame();
-  composer.render();
+// 每帧错误兜底：每个区段独立捕获，仅首次报告（避免控制台刷屏），绝不阻止后续区段。
+// 设计目标：任何单帧异常都不能让 composer.render() 被跳过 → 屏幕永不冻结。
+function loopErr(tag, e) {
+  const k = '_e_' + tag;
+  if (!loop[k]) {
+    loop[k] = true;
+    console.error('[' + tag + ']', e);
+    try { hud.tip(tag + ' 错误: ' + (e?.message || e)); } catch { /* hud 可能未就绪 */ }
+  }
 }
 
 function findNearest() {
