@@ -32,7 +32,16 @@ export class HUD {
   warpRate(paused) {
     return paused ? 0 : this.warpSign * WARP_LADDER[this.warpIndex];
   }
-  warpUp() { this.warpIndex = Math.min(WARP_LADDER.length - 1, this.warpIndex + 1); }
+  // 倍率阶梯按符号对称：… −10x ← −1x ← +1x → +10x …
+  // ] 恒向正方向走（负倍率时先降档，到 −1x 再按翻回 +1x）；[ 恒向负方向走
+  warpUp() {
+    if (this.warpSign < 0) {
+      if (this.warpIndex === 0) this.warpSign = 1;
+      else this.warpIndex--;
+    } else {
+      this.warpIndex = Math.min(WARP_LADDER.length - 1, this.warpIndex + 1);
+    }
+  }
   warpDown() {
     if (this.warpIndex === 0 && this.warpSign > 0) this.warpSign = -1;
     else if (this.warpSign < 0) this.warpIndex = Math.min(WARP_LADDER.length - 1, this.warpIndex + 1);

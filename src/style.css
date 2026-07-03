@@ -114,6 +114,9 @@ html, body {
 #directory {
   position: fixed; top: 110px; left: 14px; z-index: 20;
   width: 260px;
+  /* 面板必须限制在视口内，#dir-body 的 overflow 才会生效（issue #58） */
+  max-height: calc(100vh - 124px);
+  max-height: calc(100dvh - 124px);
   background: rgba(8, 16, 28, 0.82); border: 1px solid rgba(110, 160, 210, 0.28);
   border-radius: 10px; backdrop-filter: blur(8px);
   display: flex; flex-direction: column;
@@ -128,7 +131,8 @@ html, body {
   touch-action: manipulation;
 }
 .dir-head:hover { background: rgba(60, 110, 170, 0.15); border-radius: 10px 10px 0 0; }
-#dir-body { overflow-y: auto; padding: 6px 8px; flex: 1; touch-action: pan-y; }
+/* min-height:0：flex 子项默认 min-height:auto 会阻止收缩，导致滚动条永不出现（issue #58） */
+#dir-body { overflow-y: auto; padding: 6px 8px; flex: 1; min-height: 0; touch-action: pan-y; }
 #dir-body details { margin-bottom: 4px; }
 #dir-body summary {
   cursor: pointer; padding: 6px 8px; font-size: 13px; color: #9fc6ea;
