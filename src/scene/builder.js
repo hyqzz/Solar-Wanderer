@@ -37,9 +37,10 @@ const ORBIT_COLORS = {
 };
 
 // Issue #29：极光模式映射（0=无 1=地球 2=木星 3=土星 4=海卫一）
-// 地球：极地卵形圈 OI 557.7nm 绿光；木星：Io 等离子环驱动 H3+ 蓝紫；
-// 土星：极地极光卵 H3+ 粉紫；海卫一：弱氮极光。
-const AURORA_MODE = { earth: 1, jupiter: 2, saturn: 3, triton: 4 };
+// 地球：极地卵形圈 OI 557.7nm 绿光；海卫一：弱氮极光。
+// 木星/土星已移除：发射累积 auroraL += aColor*auroraInt*ds 中 ds 为 km，
+// 气巨大气壳跨度数千 km，累积辐亮度被 ACES 压成白色 → 两极整块刷白盖掉云带贴图。
+const AURORA_MODE = { earth: 1, triton: 4 };
 
 // Issue #27：火星太阳黄经 Ls 计算。
 // Ls=0 为火星北半球春分；2024-05-08（JD 2460418）为最近一次 Ls=0 时刻。

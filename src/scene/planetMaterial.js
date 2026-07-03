@@ -170,20 +170,10 @@ export function createPlanetMaterial({
                       * (1.0 - smoothstep(0.0, 0.16, grsLatDist));
             albedo = mix(albedo, vec3(0.62, 0.28, 0.16), grs * 0.6);
           }
-          // === Issue #36：季节性极地冰冠 ===
-          // 日下点纬度驱动冰冠可见性：冬季半球冰冠增大，夏季缩小。
-          // 火星北极冠冬季增大（CO₂ 凝华）；地球极冠轻微变化。
-          if (uBodyId == 4) { // 火星：轴倾角 25°，CO₂+H₂O 冰冠
-            float lat = vObjPos.y / uRadius;
-            float ss = uSubsolarLat / 25.0; // 归一化 -1..1
-            // 北极冠：冬季（ss<0）增大，夏季（ss>0）缩小
-            float nCapBase = 0.78 - ss * 0.12;
-            float nCap = smoothstep(nCapBase, nCapBase + 0.08, lat);
-            float sCapBase = 0.78 + ss * 0.12;
-            float sCap = smoothstep(sCapBase, sCapBase + 0.08, -lat);
-            float cap = max(nCap, sCap);
-            albedo = mix(albedo, vec3(0.85, 0.88, 0.92), cap * 0.7);
-          } else if (uBodyId == 3) { // 地球：轴倾角 23.5°，水冰极冠
+          // === Issue #36：季节性极地冰冠（仅地球保留） ===
+          // 火星分支已移除：程序冰冠低至纬度 ~51° 且混入 70% 白色，远大于真实
+          // 火星极冠（多在 80°+），把两极整块刷白、盖掉贴图 —— 还原为贴图原色。
+          if (uBodyId == 3) { // 地球：轴倾角 23.5°，水冰极冠（微弱，叠加在贴图真实冰盖上）
             float lat = vObjPos.y / uRadius;
             float ss = uSubsolarLat / 23.5;
             float nCap = smoothstep(0.85 + ss * 0.04, 0.92 + ss * 0.04, lat);
