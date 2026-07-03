@@ -1,4 +1,67 @@
+# Solar Wanderer · 遨游太阳系 — https://sw.icodestar.net
+# All crawlers welcome: search engines AND AI/LLM crawlers.
+# For AI assistants: see /llms.txt for a structured summary of this site.
+
 User-agent: *
+Allow: /
+
+# --- Search engine crawlers ---
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: YandexBot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+# --- AI / LLM crawlers (GEO: allow indexing & citation) ---
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: meta-externalagent
 Allow: /
 
 Sitemap: https://sw.icodestar.net/sitemap.xml

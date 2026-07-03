@@ -43,9 +43,13 @@
   <meta property="og:image" content="https://sw.icodestar.net/preview.png" />
   <meta property="og:image:width" content="1280" />
   <meta property="og:image:height" content="720" />
+  <meta property="og:image:alt" content="Solar Wanderer — 1:1 实时太阳系探索器界面截图" />
+  <meta property="og:site_name" content="Solar Wanderer 遨游太阳系" />
+  <meta property="og:video" content="https://youtu.be/3rwShi6oF0o" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://sw.icodestar.net/" />
   <meta name="twitter:title" content="遨游太阳系 · Solar Wanderer — 浏览器里的 1:1 实时太阳系" />
   <meta name="twitter:description" content="基于 NASA JPL 星历，还原此刻太阳系的真正位置。无缝登陆、行走、飞行、下潜。无需安装。" />
   <meta name="twitter:image" content="https://sw.icodestar.net/preview.png" />
@@ -75,8 +79,18 @@
     "applicationCategory": "EducationalApplication",
     "operatingSystem": "Any (modern web browser, WebGL2)",
     "browserRequirements": "Requires WebGL2",
-    "softwareVersion": "2.0.0",
+    "softwareVersion": "2.2.0",
+    "inLanguage": ["zh-CN", "en"],
     "image": "https://sw.icodestar.net/preview.png",
+    "screenshot": "https://sw.icodestar.net/preview.png",
+    "featureList": [
+      "1:1 真实公里尺度，从太阳表面到 10 万 AU 奥尔特云",
+      "基于 NASA JPL 星历的实时行星/卫星位置（精度 ≤0.074°）",
+      "无缝登陆行星、月面行走、地球海洋下潜、6DOF 自由飞行",
+      "物理级大气散射：火星蓝色日落、金星橙色天空",
+      "时间加速/倒退/暂停，观察轨道与自转",
+      "中英双语界面，桌面与移动端均可运行，无需安装"
+    ],
     "license": "https://opensource.org/licenses/MIT",
     "isAccessibleForFree": true,
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -84,11 +98,85 @@
     "codeRepository": "https://github.com/hyqzz/Solar-Wanderer"
   }
   </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Solar Wanderer 遨游太阳系",
+    "alternateName": ["遨游太阳系", "Solar Wanderer"],
+    "url": "https://sw.icodestar.net/",
+    "inLanguage": ["zh-CN", "en"]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": "Solar Wanderer 遨游太阳系 — 演示视频",
+    "description": "3 分钟演示：在浏览器中登陆行星、月面行走、海洋下潜、自由飞行至太阳系边缘。",
+    "thumbnailUrl": "https://sw.icodestar.net/preview.png",
+    "uploadDate": "2026-06-14",
+    "contentUrl": "https://youtu.be/3rwShi6oF0o",
+    "embedUrl": "https://www.youtube.com/embed/3rwShi6oF0o"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "遨游太阳系（Solar Wanderer）是什么？",
+        "acceptedAnswer": { "@type": "Answer", "text": "一个免费开源的浏览器端 1:1 实时太阳系探索应用，基于真实 NASA JPL 星历。此刻每颗行星和卫星都在真实位置，可无缝登陆、行走、下潜、飞行，无需安装。" }
+      },
+      {
+        "@type": "Question",
+        "name": "行星位置准确吗？",
+        "acceptedAnswer": { "@type": "Answer", "text": "与 NASA JPL Horizons 对照验证：行星位置误差 ≤0.074°，月球约 0.12°，主要卫星 ≤0.22°。时间可加速、倒退、暂停。" }
+      },
+      {
+        "@type": "Question",
+        "name": "可以登陆哪些天体？",
+        "acceptedAnswer": { "@type": "Answer", "text": "所有岩石天体均可登陆行走：水星、金星、地球、月球、火星、冥王星及 21 颗主要卫星。火星有真实的蓝色日落，金星有 Venera 实测风格的橙色天空，地球可下潜海洋。气态巨行星可穿入大气但无固体表面。" }
+      },
+      {
+        "@type": "Question",
+        "name": "需要付费或安装吗？",
+        "acceptedAnswer": { "@type": "Answer", "text": "完全免费，MIT 开源，无广告无注册。任何支持 WebGL2 的现代浏览器（桌面或手机）打开 sw.icodestar.net 即可使用。" }
+      }
+    ]
+  }
+  </script>
 
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
   <canvas id="app"></canvas>
+
+  <!-- 无 JS 环境（搜索引擎/AI 爬虫）可见的语义内容与内链 -->
+  <noscript>
+    <main style="max-width:820px;margin:0 auto;padding:2rem 1rem;color:#e8ecf5;background:#05070f;font-family:sans-serif;line-height:1.7">
+      <h1>遨游太阳系 · Solar Wanderer — 浏览器里的 1:1 实时太阳系</h1>
+      <p>基于真实 NASA JPL 星历的免费开源太阳系探索应用。此刻每颗行星和卫星都在真实位置（精度 ≤0.074°），真实 1:1 公里尺度，范围从太阳表面延伸至 10 万 AU 的奥尔特云。支持无缝登陆行星、月面与火星表面行走、地球海洋下潜、6DOF 自由飞行（最高 2 AU/s）、时间加速与倒退。物理级大气散射还原火星蓝色日落与金星橙色天空。无需安装、无需注册、无广告。</p>
+      <p>Solar Wanderer is a free, open-source, browser-based 1:1 real-time solar system explorer powered by real NASA JPL ephemerides. Land on planets, walk on the Moon and Mars, dive into Earth's oceans, and fly to the Oort Cloud — all in your browser, no install.</p>
+      <p>本应用需要启用 JavaScript 与 WebGL2。/ This app requires JavaScript and WebGL2.</p>
+      <h2>探索天体 / Explore Bodies</h2>
+      <ul>
+        <li><a href="/bodies/sun.html">太阳 Sun</a></li>
+        <li><a href="/bodies/mercury.html">水星 Mercury</a></li>
+        <li><a href="/bodies/venus.html">金星 Venus</a></li>
+        <li><a href="/bodies/earth.html">地球 Earth</a> · <a href="/bodies/moon.html">月球 Moon</a></li>
+        <li><a href="/bodies/mars.html">火星 Mars</a></li>
+        <li><a href="/bodies/jupiter.html">木星 Jupiter</a> · <a href="/bodies/io.html">木卫一 Io</a> · <a href="/bodies/europa.html">木卫二 Europa</a> · <a href="/bodies/ganymede.html">木卫三 Ganymede</a> · <a href="/bodies/callisto.html">木卫四 Callisto</a></li>
+        <li><a href="/bodies/saturn.html">土星 Saturn</a> · <a href="/bodies/titan.html">土卫六 Titan</a> · <a href="/bodies/enceladus.html">土卫二 Enceladus</a></li>
+        <li><a href="/bodies/uranus.html">天王星 Uranus</a> · <a href="/bodies/neptune.html">海王星 Neptune</a> · <a href="/bodies/triton.html">海卫一 Triton</a></li>
+        <li><a href="/bodies/pluto.html">冥王星 Pluto</a> · <a href="/bodies/charon.html">冥卫一 Charon</a></li>
+        <li><a href="/bodies/">全部 31 个天体目录 / All 31 bodies →</a></li>
+      </ul>
+      <p><a href="/en/">English version</a> · <a href="https://github.com/hyqzz/Solar-Wanderer">GitHub (MIT 开源)</a> · <a href="https://youtu.be/3rwShi6oF0o">演示视频 Demo video</a></p>
+    </main>
+  </noscript>
 
   <div id="immersion"></div>
 
@@ -138,7 +226,15 @@
         <span class="star-icon">⭐</span><span data-i18n="start.star">Star on GitHub</span>
       </a>
 
-      <a id="beian" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">陕ICP备2025072864号</a>
+      <!-- ICP 备案号仅在官方域名 *.icodestar.net 显示；自部署到其他域名不展示（issue #60） -->
+      <a id="beian" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" hidden></a>
+      <script>
+        if (/(^|\.)icodestar\.net$/.test(location.hostname)) {
+          var beianEl = document.getElementById('beian');
+          beianEl.textContent = '陕ICP备2025072864号';
+          beianEl.hidden = false;
+        }
+      </script>
     </div>
   </div>
 

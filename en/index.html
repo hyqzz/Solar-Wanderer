@@ -15,9 +15,13 @@
   <meta property="og:image" content="https://sw.icodestar.net/preview.png" />
   <meta property="og:image:width" content="1280" />
   <meta property="og:image:height" content="720" />
+  <meta property="og:image:alt" content="Solar Wanderer — 1:1 real-time solar system explorer screenshot" />
+  <meta property="og:site_name" content="Solar Wanderer 遨游太阳系" />
+  <meta property="og:video" content="https://youtu.be/3rwShi6oF0o" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://sw.icodestar.net/en/" />
   <meta name="twitter:title" content="Solar Wanderer — A 1:1 Real-Time Solar System in Your Browser" />
   <meta name="twitter:description" content="A 1:1 scale solar system explorer powered by NASA JPL ephemerides. Land, walk, dive, fly. No install." />
   <meta name="twitter:image" content="https://sw.icodestar.net/preview.png" />
@@ -47,8 +51,18 @@
     "applicationCategory": "EducationalApplication",
     "operatingSystem": "Any (modern web browser, WebGL2)",
     "browserRequirements": "Requires WebGL2",
-    "softwareVersion": "1.2.0",
+    "softwareVersion": "2.2.0",
+    "inLanguage": ["en", "zh-CN"],
     "image": "https://sw.icodestar.net/preview.png",
+    "screenshot": "https://sw.icodestar.net/preview.png",
+    "featureList": [
+      "True 1:1 km scale, from the Sun's surface to the Oort Cloud at 100,000 AU",
+      "Real-time planet/moon positions from NASA JPL ephemerides (accuracy ≤0.074°)",
+      "Seamless landing, walking on the Moon and Mars, ocean diving on Earth, 6DOF free flight",
+      "Physically-based atmospheres: Mars blue sunset, Venus orange sky",
+      "Time acceleration, reversal and pause to watch orbits and rotations",
+      "Bilingual UI (English/Chinese), works on desktop and mobile, no install"
+    ],
     "license": "https://opensource.org/licenses/MIT",
     "isAccessibleForFree": true,
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -56,11 +70,84 @@
     "codeRepository": "https://github.com/hyqzz/Solar-Wanderer"
   }
   </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Solar Wanderer 遨游太阳系",
+    "alternateName": ["Solar Wanderer", "遨游太阳系"],
+    "url": "https://sw.icodestar.net/",
+    "inLanguage": ["zh-CN", "en"]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": "Solar Wanderer — Demo Video",
+    "description": "3-minute demo: land on planets, walk on the Moon, dive underwater on Earth, and fly to the edge of the solar system — all in a browser.",
+    "thumbnailUrl": "https://sw.icodestar.net/preview.png",
+    "uploadDate": "2026-06-14",
+    "contentUrl": "https://youtu.be/3rwShi6oF0o",
+    "embedUrl": "https://www.youtube.com/embed/3rwShi6oF0o"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is Solar Wanderer?",
+        "acceptedAnswer": { "@type": "Answer", "text": "A free, open-source, browser-based 1:1 real-time solar system explorer powered by real NASA JPL ephemerides. Every planet and moon is at its true position right now. Land, walk, dive, and fly — no install required." }
+      },
+      {
+        "@type": "Question",
+        "name": "How accurate are the planet positions?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Verified against NASA JPL Horizons: planets within 0.074°, the Moon about 0.12°, major moons within 0.22°. Time can be accelerated, reversed, or paused." }
+      },
+      {
+        "@type": "Question",
+        "name": "Which bodies can I land on?",
+        "acceptedAnswer": { "@type": "Answer", "text": "All rocky bodies are landable: Mercury, Venus, Earth, the Moon, Mars, Pluto, and 21 major moons. Mars has a physically accurate blue sunset, Venus has a Venera-style orange sky, and you can dive into Earth's oceans. Gas giants have no solid surface but you can fly into their atmospheres." }
+      },
+      {
+        "@type": "Question",
+        "name": "Is it free? Do I need to install anything?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Completely free, MIT open source, no ads, no account. Any modern browser with WebGL2 (desktop or mobile) can run it at sw.icodestar.net." }
+      }
+    ]
+  }
+  </script>
 
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
   <canvas id="app"></canvas>
+
+  <!-- Semantic content and internal links for no-JS crawlers (search engines / AI) -->
+  <noscript>
+    <main style="max-width:820px;margin:0 auto;padding:2rem 1rem;color:#e8ecf5;background:#05070f;font-family:sans-serif;line-height:1.7">
+      <h1>Solar Wanderer — A 1:1 Real-Time Solar System in Your Browser</h1>
+      <p>A free, open-source solar system explorer powered by real NASA JPL ephemerides. Every planet and moon is at its true position right now (accuracy ≤0.074°), at true 1:1 km scale — from the Sun's surface to the Oort Cloud at 100,000 AU. Land seamlessly on planets, walk on the Moon and Mars, dive into Earth's oceans, fly freely at up to 2 AU/s, and accelerate or reverse time. Physically-based atmospheric scattering reproduces the Mars blue sunset and the Venus orange sky. No install, no account, no ads.</p>
+      <p>This app requires JavaScript and WebGL2.</p>
+      <h2>Explore Bodies</h2>
+      <ul>
+        <li><a href="/bodies/sun.html">Sun 太阳</a></li>
+        <li><a href="/bodies/mercury.html">Mercury 水星</a></li>
+        <li><a href="/bodies/venus.html">Venus 金星</a></li>
+        <li><a href="/bodies/earth.html">Earth 地球</a> · <a href="/bodies/moon.html">Moon 月球</a></li>
+        <li><a href="/bodies/mars.html">Mars 火星</a></li>
+        <li><a href="/bodies/jupiter.html">Jupiter 木星</a> · <a href="/bodies/io.html">Io</a> · <a href="/bodies/europa.html">Europa</a> · <a href="/bodies/ganymede.html">Ganymede</a> · <a href="/bodies/callisto.html">Callisto</a></li>
+        <li><a href="/bodies/saturn.html">Saturn 土星</a> · <a href="/bodies/titan.html">Titan</a> · <a href="/bodies/enceladus.html">Enceladus</a></li>
+        <li><a href="/bodies/uranus.html">Uranus 天王星</a> · <a href="/bodies/neptune.html">Neptune 海王星</a> · <a href="/bodies/triton.html">Triton</a></li>
+        <li><a href="/bodies/pluto.html">Pluto 冥王星</a> · <a href="/bodies/charon.html">Charon</a></li>
+        <li><a href="/bodies/">All 31 bodies directory →</a></li>
+      </ul>
+      <p><a href="/">中文版</a> · <a href="https://github.com/hyqzz/Solar-Wanderer">GitHub (MIT open source)</a> · <a href="https://youtu.be/3rwShi6oF0o">Demo video</a></p>
+    </main>
+  </noscript>
 
   <div id="immersion"></div>
 
@@ -108,7 +195,15 @@
         <span class="star-icon">⭐</span><span data-i18n="start.star">Star on GitHub</span>
       </a>
 
-      <a id="beian" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">陕ICP备2025072864号</a>
+      <!-- ICP filing number only shown on the official *.icodestar.net domain; hidden on self-deployments (issue #60) -->
+      <a id="beian" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" hidden></a>
+      <script>
+        if (/(^|\.)icodestar\.net$/.test(location.hostname)) {
+          var beianEl = document.getElementById('beian');
+          beianEl.textContent = '陕ICP备2025072864号';
+          beianEl.hidden = false;
+        }
+      </script>
     </div>
   </div>
 

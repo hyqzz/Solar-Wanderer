@@ -142,11 +142,6 @@ function generateBodyPage(body) {
   <meta name="theme-color" content="#05070f" />
   <link rel="canonical" href="${esc(pageUrl)}" />
 
-  <!-- Hreflang -->
-  <link rel="alternate" hreflang="zh-CN" href="${esc(pageUrl)}" />
-  <link rel="alternate" hreflang="en" href="${esc(pageUrl)}" />
-  <link rel="alternate" hreflang="x-default" href="${esc(pageUrl)}" />
-
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="article" />
   <meta property="og:url" content="${esc(pageUrl)}" />
@@ -169,6 +164,17 @@ function generateBodyPage(body) {
   <!-- Structured Data: schema.org -->
   <script type="application/ld+json">
   ${JSON.stringify(schema, null, 2)}
+  </script>
+  <script type="application/ld+json">
+  ${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Solar Wanderer', item: `${SITE_BASE}/` },
+      { '@type': 'ListItem', position: 2, name: '天体目录 Bodies', item: `${SITE_BASE}/bodies/` },
+      { '@type': 'ListItem', position: 3, name: `${body.nameZh} ${body.nameEn}`, item: pageUrl },
+    ],
+  }, null, 2)}
   </script>
 
   <style>
@@ -446,16 +452,35 @@ function generateIndexPage(bodies) {
 </html>`;
 }
 
-// ---- 生成 sitemap 片段 ----
-function generateSitemapEntries(bodies) {
-  return bodies.map((b) => {
-    const url = `${SITE_BASE}/bodies/${b.id}.html`;
+// ---- 生成完整 sitemap.xml（主页 + 英文页 + 天体目录 + 全部天体页 + 隐私政策） ----
+function generateSitemap(bodies) {
+  const today = new Date().toISOString().slice(0, 10);
+  const entry = (loc, { changefreq = 'monthly', priority = '0.8', hreflang = false } = {}) => {
+    const alt = hreflang ? `
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="${SITE_BASE}/" />
+    <xhtml:link rel="alternate" hreflang="en" href="${SITE_BASE}/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="${SITE_BASE}/" />` : '';
     return `  <url>
-    <loc>${url}</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
+    <loc>${loc}</loc>${alt}
+    <lastmod>${today}</lastmod>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
   </url>`;
-  }).join('\n');
+  };
+
+  const urls = [
+    entry(`${SITE_BASE}/`, { changefreq: 'weekly', priority: '1.0', hreflang: true }),
+    entry(`${SITE_BASE}/en/`, { changefreq: 'weekly', priority: '0.9', hreflang: true }),
+    entry(`${SITE_BASE}/bodies/`, { changefreq: 'monthly', priority: '0.9' }),
+    ...bodies.map((b) => entry(`${SITE_BASE}/bodies/${b.id}.html`)),
+    entry(`${SITE_BASE}/privacy-policy.html`, { changefreq: 'yearly', priority: '0.3' }),
+  ];
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+${urls.join('\n')}
+</urlset>
+`;
 }
 
 // ---- 主函数 ----
@@ -486,18 +511,15 @@ function main() {
   writeFileSync(resolve(OUT_DIR, 'index.html'), indexHtml, 'utf8');
   console.log(`  ✅ index.html — 天体目录索引`);
 
-  // 生成 sitemap 片段
-  const sitemapFragment = generateSitemapEntries(bodies);
-  writeFileSync(resolve(OUT_DIR, 'sitemap-entries.xml'), sitemapFragment, 'utf8');
-  console.log(`  ✅ sitemap-entries.xml — 可合并到 public/sitemap.xml`);
+  // 生成完整 sitemap.xml（写到 public/，与天体页保持同步）
+  const sitemapXml = generateSitemap(bodies);
+  writeFileSync(resolve(OUT_DIR, '..', 'sitemap.xml'), sitemapXml, 'utf8');
+  console.log(`  ✅ sitemap.xml — 完整站点地图（${bodies.length + 4} 个 URL）`);
 
-  console.log(`\n[generate-body-pages] 完成：生成 ${count} 个天体页面 + 1 个索引页 + sitemap 片段`);
+  console.log(`\n[generate-body-pages] 完成：生成 ${count} 个天体页面 + 1 个索引页 + sitemap.xml`);
   console.log(`[generate-body-pages] 输出目录：${OUT_DIR}`);
   console.log(`[generate-body-pages] 站点地址：${SITE_BASE}`);
-  console.log(`\n[generate-body-pages] 下一步：`);
-  console.log(`  1. 将 sitemap-entries.xml 内容合并到 public/sitemap.xml`);
-  console.log(`  2. 部署后访问 ${SITE_BASE}/bodies/ 查看目录`);
-  console.log(`  3. 在搜索引擎站长工具提交 sitemap`);
+  console.log(`\n[generate-body-pages] 下一步：部署后在 Google Search Console / Bing / 百度站长提交 sitemap`);
 }
 
 main();
