@@ -315,9 +315,90 @@ const EARTH_MOON_TOUR = {
 };
 
 /** 所有导览的注册表（按 id 索引） */
+/**
+ * "巨行星之旅"——木星与土星系统精选导览
+ * 大红斑 → 木卫二冰壳 → 木卫一火山 → 土星环 → 土卫六甲烷湖。
+ */
+const GIANTS_TOUR = {
+  id: 'giants',
+  title: { zh: '巨行星之旅', en: 'Journey of the Giants', es: 'Viaje de los gigantes', ja: '巨大惑星の旅', fr: 'Voyage des géantes', de: 'Reise der Riesen', ru: 'Путешествие гигантов' },
+  description: {
+    zh: '大红斑、冰下海洋、火山世界、光环与甲烷湖——外太阳系最壮观的五站。',
+    en: 'The Great Red Spot, subsurface oceans, a volcanic world, the rings, and methane lakes — five grandest stops of the outer Solar System.',
+    es: 'La Gran Mancha Roja, océanos subterráneos, un mundo volcánico, los anillos y lagos de metano — cinco paradas grandiosas del Sistema Solar exterior.',
+    ja: '大赤斑、氷下海洋、火山の世界、環、メタンの湖——外太陽系最も壮大な5駅。',
+    fr: 'La Grande Tache rouge, des océans souterrains, un monde volcanique, les anneaux et des lacs de méthane — cinq étapes grandioses du Système solaire externe.',
+    de: 'Der Große Rote Fleck, Ozeane unter dem Eis, eine Vulkanwelt, die Ringe und Methanseen — fünf großartige Stationen des äußeren Sonnensystems.',
+    ru: 'Большое красное пятно, подлёдные океаны, вулканический мир, кольца и метановые озёра — пять величайших остановок внешней Солнечной системы.',
+  },
+  checkpoints: [
+    {
+      bodyId: 'jupiter', dist: 3, action: 'flyTo', duration: 10,
+      narration: {
+        zh: '第一站：木星。它的大红斑是一场已持续数百年的巨型风暴，大到能吞下整个地球。注意它此刻的位置——这个模拟里连它的自转都是真实的。',
+        en: 'First stop: Jupiter. Its Great Red Spot is a giant storm that has raged for centuries — large enough to swallow the entire Earth. Note where it is right now: even its rotation is real in this simulation.',
+        es: 'Primera parada: Júpiter. Su Gran Mancha Roja es una tormenta gigante que lleva siglos rugiendo, capaz de tragarse la Tierra entera. Fíjate en su posición actual: incluso su rotación es real en esta simulación.',
+        ja: '最初の駅：木星。大赤斑は数百年吹き荒れる巨大嵐で、地球全体を飲み込める大きさだ。今どこにあるか注目してほしい——このシミュレーションでは自転さえも本物だ。',
+        fr: 'Première étape : Jupiter. Sa Grande Tache rouge est une tempête géante qui fait rage depuis des siècles — assez grande pour engloutir la Terre entière. Notez sa position actuelle : même sa rotation est réelle dans cette simulation.',
+        de: 'Erste Station: Jupiter. Sein Großer Roter Fleck ist ein riesiger Sturm, der seit Jahrhunderten wütet — groß genug, die ganze Erde zu verschlingen. Beachte seine Position: selbst seine Rotation ist in dieser Simulation echt.',
+        ru: 'Первая остановка: Юпитер. Его Большое красное пятно — гигантский шторм, бушующий столетиями, способный поглотить всю Землю. Обратите внимание на его текущее положение: в этой симуляции даже вращение реально.',
+      },
+    },
+    {
+      bodyId: 'europa', dist: 4, action: 'flyTo', duration: 10,
+      narration: {
+        zh: '木卫二。冰壳之下藏着液态海洋，水量超过地球所有海洋的总和——这里是太阳系内寻找地外生命最有希望的地方之一。',
+        en: 'Europa. Beneath its icy crust hides a liquid ocean with more water than all of Earth\'s oceans combined — one of the most promising places to look for extraterrestrial life.',
+        es: 'Europa. Bajo su corteza de hielo se oculta un océano líquido con más agua que todos los océanos de la Tierra juntos — uno de los lugares más prometedores para buscar vida extraterrestre.',
+        ja: 'エウロパ。氷の殻の下には地球の全海洋を合わせたより多い液体の海が隠れている——地球外生命探しに最も有望な場所の一つだ。',
+        fr: 'Europe. Sous sa croûte de glace se cache un océan liquide contenant plus d\'eau que tous les océans de la Terre réunis — l\'un des endroits les plus prometteurs pour chercher la vie extraterrestre.',
+        de: 'Europa. Unter seiner Eiskruste verbirgt sich ein flüssiger Ozean mit mehr Wasser als alle Erdmeere zusammen — einer der vielversprechendsten Orte für die Suche nach außerirdischem Leben.',
+        ru: 'Европа. Под её ледяной корой скрывается жидкий океан, в котором воды больше, чем во всех океанах Земли вместе взятых, — одно из самых многообещающих мест для поиска внеземной жизни.',
+      },
+    },
+    {
+      bodyId: 'io', dist: 4, action: 'flyTo', duration: 10,
+      narration: {
+        zh: '木卫一，太阳系火山活动最剧烈的天体。木星的引力像揉面团一样挤压它，硫磺火山不断喷发，表面几乎没有一块地方是平静的。',
+        en: 'Io, the most volcanically active body in the Solar System. Jupiter\'s gravity kneads it like dough; sulfur volcanoes erupt constantly, leaving barely a calm spot on its surface.',
+        es: 'Ío, el cuerpo volcánicamente más activo del Sistema Solar. La gravedad de Júpiter lo amasa como masa; sus volcanes de azufre entran en erupción sin cesar, sin dejar casi ningún lugar tranquilo en su superficie.',
+        ja: 'イオ、太陽系で最も火山活動の激しい天体。木星の引力が生地のように練り上げ、硫黄の火山が絶えず噴火し、表面に穏やかな場所はほとんどない。',
+        fr: 'Io, le corps le plus volcaniquement actif du Système solaire. La gravité de Jupiter le pétrit comme de la pâte ; ses volcans de soufre entrent en éruption sans cesse, ne laissant presque aucun endroit calme.',
+        de: 'Io, der vulkanisch aktivste Körper des Sonnensystems. Jupiters Schwerkraft knetet ihn wie Teig; Schwefelvulkane brechen ständig aus und lassen kaum einen ruhigen Fleck auf seiner Oberfläche.',
+        ru: 'Ио — самое вулканически активное тело Солнечной системы. Гравитация Юпитера месит его, как тесто; серные вулканы извергаются непрерывно, и на его поверхности почти нет спокойных мест.',
+      },
+    },
+    {
+      bodyId: 'saturn', dist: 3.5, action: 'flyTo', duration: 10,
+      narration: {
+        zh: '土星环。宽数十万公里，平均厚度却只有约 20 米——如果把土星缩到一间屋子大小，环比一张纸还薄。它们是无数冰块与岩石碎屑的轨道之舞。',
+        en: 'The rings of Saturn. Hundreds of thousands of kilometers wide, yet only about 20 meters thick on average — if Saturn were the size of a room, the rings would be thinner than a sheet of paper. They are an orbital dance of countless ice chunks and rock debris.',
+        es: 'Los anillos de Saturno. Cientos de miles de kilómetros de ancho, pero solo unos 20 metros de grosor en promedio: si Saturno fuera del tamaño de una habitación, los anillos serían más finos que una hoja de papel. Son una danza orbital de innumerables trozos de hielo y roca.',
+        ja: '土星の環。幅は数十万kmだが平均の厚さは約20m——土星を部屋の大きさに縮めれば、環は紙より薄い。無数の氷と岩屑による軌道の舞踏だ。',
+        fr: 'Les anneaux de Saturne. Des centaines de milliers de kilomètres de large pour seulement 20 mètres d\'épaisseur en moyenne — si Saturne tenait dans une pièce, les anneaux seraient plus fins qu\'une feuille de papier. Une danse orbitale d\'innombrables blocs de glace et de débris rocheux.',
+        de: 'Die Ringe des Saturn. Hunderttausende Kilometer breit, aber im Mittel nur etwa 20 Meter dick — wäre Saturn so groß wie ein Zimmer, wären die Ringe dünner als ein Blatt Papier. Ein Orbitaltanz aus unzähligen Eisbrocken und Gesteinstrümmern.',
+        ru: 'Кольца Сатурна. Сотни тысяч километров в ширину, но в среднем лишь около 20 метров толщиной — если бы Сатурн был размером с комнату, кольца были бы тоньше листа бумаги. Это орбитальный танец бесчисленных глыб льда и каменной крошки.',
+      },
+    },
+    {
+      bodyId: 'titan', dist: 4, action: 'flyTo', duration: 12,
+      narration: {
+        zh: '土卫六，终点。唯一拥有浓厚大气的卫星：橙色雾霾之下是液态甲烷的河流、湖泊与海洋。站在它的表面，气压比地球还高出 50%。外太阳系的奇观之旅到此结束——但你现在可以自由飞向任何地方。',
+        en: 'Titan, our final stop. The only moon with a dense atmosphere: beneath the orange haze lie rivers, lakes, and seas of liquid methane. Standing on its surface, the air pressure is 50% higher than on Earth. The grand tour ends here — but you are now free to fly anywhere.',
+        es: 'Titán, nuestra última parada. La única luna con una atmósfera densa: bajo la bruma naranja hay ríos, lagos y mares de metano líquido. En su superficie, la presión es un 50% mayor que en la Tierra. El gran viaje termina aquí — pero ahora puedes volar libremente a cualquier parte.',
+        ja: '終点はタイタン。濃い大気を持つ唯一の衛星だ：オレンジの靄の下には液体メタンの川、湖、海が広がる。その表面では気圧は地球より50%も高い。壮大な旅はここで終わる——だが、もうどこへでも自由に飛べる。',
+        fr: 'Titan, dernière étape. La seule lune dotée d\'une atmosphère dense : sous la brume orange coulent des rivières, des lacs et des mers de méthane liquide. À sa surface, la pression est 50 % plus forte que sur Terre. Le grand voyage s\'achève ici — mais vous êtes désormais libre de voler partout.',
+        de: 'Titan, unsere letzte Station. Der einzige Mond mit einer dichten Atmosphäre: Unter dem orangen Dunst liegen Flüsse, Seen und Meere aus flüssigem Methan. An seiner Oberfläche herrscht 50 % höherer Luftdruck als auf der Erde. Die große Reise endet hier — aber du kannst jetzt frei überallhin fliegen.',
+        ru: 'Титан — финальная остановка. Единственный спутник с плотной атмосферой: под оранжевой дымкой текут реки, стоят озёра и моря жидкого метана. На его поверхности давление на 50% выше земного. Большое путешествие завершается здесь — но теперь вы свободны лететь куда угодно.',
+      },
+    },
+  ],
+};
+
 export const TOURS = {
   [BACKYARD_TOUR.id]: BACKYARD_TOUR,
   [EARTH_MOON_TOUR.id]: EARTH_MOON_TOUR,
+  [GIANTS_TOUR.id]: GIANTS_TOUR,
 };
 
 // ═══════════════════════════════════════════════════════════════════════
