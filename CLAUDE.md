@@ -19,11 +19,16 @@ npm install          # 安装 three + vite + puppeteer
 npm run dev          # Vite 开发服务器 → http://localhost:5173
 npm run build        # 生产构建 → dist/（纯静态部署）
 npm run preview      # 预览构建产物（先 build）
-npm test             # 33 项离线单元/星历精度测试（Node 原生 test runner）
+npm test             # 47 项离线单元/星历精度测试（Node 原生 test runner）
 node --test tests/ephemeris.test.mjs   # 运行单个测试文件
 node --test tests/*.test.mjs           # 运行全部测试文件
 npm run verify       # 在线与 NASA JPL Horizons 实时对照（需联网）
-npm run fit-moons    # 重新拟合卫星轨道到当前历元
+npm run fit-moons    # 重新拟合卫星轨道到当前历元（双历元经验长期率）
+npm run fit-tnos     # 从 SBDB 刷新 28 颗海外天体当前历元根数
+npm run fetch-small-bodies # 刷新 5412 颗真实小行星/彗星（SBDB）
+npm run fetch-dem    # 重新生成真实 DEM 瓦片（LOLA/MOLA/ETOPO1 → public/dem/）
+npm run fetch-vsop87 # 重新拉取 VSOP87D 行星序列（astronomia 官方转录）
+npm run make-previews # 重新生成 512px 预览贴图（渐进加载 L1 层）
 npm run fetch-textures # 重新下载贴图资产
 ```
 
@@ -126,11 +131,10 @@ npm run fetch-textures # 重新下载贴图资产
 
 ## 已知限制（已接受）
 
-1. 卫星长期 J2 进动未建模，数月后相位误差缓慢增长——建议每季度跑 `npm run fit-moons`。
-2. 无日月食阴影投射（仅土星环影投射到行星本体已实现）。
-3. 地形为噪声+真实反照率融合，非真实 DEM。
-4. 无声音设计。
-5. 气巨大红斑等特征为静态贴图，不随系统 III 经度对准。
+1. 卫星轨道用双历元经验长期率（λ/ϖ/Ω 分解，tools/fit-moons.mjs），一阶长期漂移正确；伽利略卫星拉普拉斯共振章动未建模，一年后残余相位误差约 2–4°——建议每季度跑 `npm run fit-moons`。
+2. 日月食阴影锥为几何近似（无贝塞尔落区精确计算）。
+3. 地形：月球/火星/地球为真实 DEM（LOLA/MOLA/ETOPO1 四叉树瓦片，tools/fetch-dem.mjs 生成，public/dem/ 随站点部署）；其余天体仍为噪声+真实反照率融合。
+4. 气巨大红斑等特征为静态贴图，不随系统 III 经度对准。
 
 ## 代码风格（来自 CONTRIBUTING.md）
 

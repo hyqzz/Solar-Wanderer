@@ -18,6 +18,8 @@
     "fit-moons": "node tools/fit-moons.mjs",
     "fetch-small-bodies": "node tools/fetch-small-bodies.mjs",
     "fetch-vsop87": "node tools/fetch-vsop87.mjs",
+    "fit-tnos": "node tools/fit-tnos.mjs",
+    "fetch-dem": "node tools/fetch-dem.mjs",
     "make-previews": "node tools/make-preview-textures.mjs",
     "verify": "node tools/verify-ephemeris.mjs"
   },
