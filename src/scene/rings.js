@@ -2,8 +2,34 @@
 
 import * as THREE from 'three';
 
+/** 无贴图窄环（天王星）：按真实环半径/宽度/光学深度生成 1D 径向 alpha 纹理 */
+function makeNarrowRingTexture(innerKm, outerKm, narrow) {
+  const W = 1024;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = 1;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(W, 1);
+  for (let i = 0; i < W; i++) {
+    const r = innerKm + (i / (W - 1)) * (outerKm - innerKm);
+    let a = 0.03; // 弥漫尘埃基底
+    for (const [rc, w, tau] of narrow) {
+      const d = Math.abs(r - rc) / Math.max(w, 1);
+      a += tau * Math.exp(-d * d * 2.8);
+    }
+    const v = Math.max(0, Math.min(255, Math.round(a * 255)));
+    img.data[i * 4] = 200; img.data[i * 4 + 1] = 200; img.data[i * 4 + 2] = 205;
+    img.data[i * 4 + 3] = v;
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  return tex;
+}
+
 export function createRings(phys, ringTex) {
-  const { innerKm, outerKm, opacity = 1 } = phys.rings;
+  const { innerKm, outerKm, opacity = 1, narrow } = phys.rings;
+  // 无贴图但有窄环参数 → 程序化生成真实环结构纹理
+  if (!ringTex && narrow) ringTex = makeNarrowRingTexture(innerKm, outerKm, narrow);
   const SEG = 256;
 
   // 自定义环几何：uv.x = 径向归一化
@@ -89,6 +115,10 @@ export function createRings(phys, ringTex) {
           shadow = smoothstep(uPlanetR * 0.985, uPlanetR * 1.02, length(perp));
         }
         vec3 col = tex.rgb * uTint * (lit * shadow * uSunI * 2.2 + 0.002);
+        // 冰粒前向散射：视线穿过环指向太阳时显著增亮（卡西尼背光照特征）
+        vec3 viewRay = normalize(vPosW - cameraPosition);
+        float fwd = pow(max(dot(viewRay, uSunDir), 0.0), 8.0);
+        col *= 1.0 + fwd * 2.5;
         gl_FragColor = vec4(col, tex.a * uOpacity);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

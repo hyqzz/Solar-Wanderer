@@ -110,7 +110,14 @@ export const BODIES = {
       heightKm: 250, rayleighScaleKm: 28, mieScaleKm: 28,
       rayleigh: [2.0e-7, 3.2e-7, 3.6e-7], mie: 1.5e-7, mieG: 0.65, multiplier: 0.9,
     },
-    rings: { innerKm: 38000, outerKm: 51140, texture: null, opacity: 0.25, tint: [0.45, 0.45, 0.48] },
+    rings: { innerKm: 37000, outerKm: 51140, texture: null, opacity: 0.55, tint: [0.45, 0.45, 0.48],
+      // 真实窄环结构（中心半径 km、宽度 km、相对光学深度）：主环 6/5/4/α/β/η/γ/δ/ε
+      narrow: [
+        [41837, 2, 0.35], [42234, 3, 0.4], [42570, 2, 0.35],  // 6, 5, 4
+        [44718, 7, 0.7], [45661, 9, 0.65],                     // α, β
+        [47176, 2, 0.3], [47627, 4, 0.6], [48300, 4, 0.55],    // η, γ, δ
+        [51149, 45, 1.0],                                      // ε（主环，最宽最亮）
+      ] },
     textures: { map: 'uranus.jpg' },
     desc: '“躺着”自转的冰巨星，自转轴倾角 98°。甲烷吸收红光使其呈现青蓝色，是太阳系最冷的行星大气（-224°C）。',
   },
