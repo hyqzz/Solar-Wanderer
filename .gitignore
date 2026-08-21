@@ -56,3 +56,4 @@ docs/sdlc/screenshots/*
 !docs/sdlc/screenshots/example/**
 
 tools/.cache-dem/
+tools/.shot-*
