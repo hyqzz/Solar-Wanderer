@@ -21,10 +21,9 @@
 //   - 裂缝预防：height() 总是使用可用的最高分辨率 DEM；瓦片到达后地形重建 +
 //     现有 uFade 淡入动画（#18）过渡，无可见裂缝
 //
-// 数据源（可配置，URL 为占位符，连接真实服务时更新）：
-//   - 月球 LOLA DEM：USGS Astrogeology / LROC 瓦片服务（~118 m/px）
-//   - 火星 MOLA DEM：USGS Astrogeology 瓦片服务（~463 m/px）
-//   离线或服务不可用时，自动回退到现有程序化噪声地形。
+// 数据源：随站点静态部署的本地瓦片（tools/fetch-dem.mjs 从 NASA PDS/NOAA 原始
+// 数据生成；LOLA=月球 16ppd、MOLA=火星 32ppd、ETOPO1=地球冰面）。离线或文件
+// 缺失时自动回退到现有程序化噪声地形。
 
 import { IS_MOBILE } from '../engine/quality.js';
 
@@ -37,24 +36,30 @@ import { IS_MOBILE } from '../engine/quality.js';
 export const DEM_SOURCES = {
   moon: {
     name: 'LOLA',
-    // LROC/USGS LOLA DEM 瓦片服务（118 m/px 全球）
-    // 注：URL 为占位符，实际部署时替换为可用的 CORS-enabled 瓦片服务端点
-    url: 'https://wms.lroc.asu.edu/lola/tiles/{z}/{x}/{y}.png',
-    // LOLA 高程范围：-9 km（深坑底）到 +10 km（最高峰），共 19 km
-    heightScale: 19,
+    url: 'dem/moon/{z}/{x}/{y}.png',
+    // LOLA 高程范围：-9 km（深坑底）到 +11 km（含裕量），共 20 km
+    heightScale: 20,
     heightOffset: -9,
     tileSize: 256,
-    maxLevel: 8,
+    maxLevel: 4,
   },
   mars: {
     name: 'MOLA',
-    // USGS Astrogeology MOLA DEM 瓦片服务（463 m/px 全球）
-    url: 'https://astrogeology.usgs.gov/cache/mola/{z}/{x}/{y}.png',
-    // MOLA 高程范围：-8 km（赫拉斯盆地底）到 +21 km（奥林帕斯山顶），共 29 km
-    heightScale: 29,
-    heightOffset: -8,
+    url: 'dem/mars/{z}/{x}/{y}.png',
+    // MOLA 高程范围：-9 km 到 +22 km（含裕量：赫拉斯 −8.2 / 奥林帕斯 +21.2），共 31 km
+    heightScale: 31,
+    heightOffset: -9,
     tileSize: 256,
-    maxLevel: 8,
+    maxLevel: 4,
+  },
+  earth: {
+    name: 'ETOPO1',
+    url: 'dem/earth/{z}/{x}/{y}.png',
+    // ETOPO1 高程范围：-11 km（马里亚纳）到 +9 km（珠峰），共 20 km
+    heightScale: 20,
+    heightOffset: -11,
+    tileSize: 256,
+    maxLevel: 4,
   },
 };
 

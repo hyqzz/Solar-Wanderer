@@ -92,13 +92,17 @@ export class HeightField {
    * 或纯噪声，过渡时地形重建 + uFade 淡入（#18）隐藏任何跳变。 */
   height(dir) {
     const sp = this.sp;
-    // 海洋处返回水面（DEM 不适用于地球海洋）
-    if (sp.ocean && this.isOcean(dir)) return this.phys.radiusKm + 0.001;
-    // DEM 优先：已配置源且缓存命中时，使用真实高程 + 高频噪声细节
+    // DEM 优先：已配置源且缓存命中时，使用真实高程 + 高频噪声细节。
+    // 地球：DEM 高程为负 = 海底 → 返回水面（真实海陆判定，替代"偏蓝"启发式）
     if (this.demSource) {
       const demH = this.demSource.getHeightSync(dir);
-      if (demH !== null) return this._heightWithDEM(dir, demH);
+      if (demH !== null) {
+        if (sp.ocean && demH < 0) return this.phys.radiusKm + 0.001;
+        return this._heightWithDEM(dir, demH);
+      }
     }
+    // 海洋处返回水面（DEM 未命中时的旧启发式回退）
+    if (sp.ocean && this.isOcean(dir)) return this.phys.radiusKm + 0.001;
     // 回退：程序化噪声地形（离线/未配置/缓存未命中）
     return this._heightNoise(dir);
   }

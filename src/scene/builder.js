@@ -138,11 +138,24 @@ const ORBIT_COLORS = {
 // 气巨大气壳跨度数千 km，累积辐亮度被 ACES 压成白色 → 两极整块刷白盖掉云带贴图。
 const AURORA_MODE = { earth: 1, triton: 4 };
 
-// Issue #27：火星太阳黄经 Ls 计算。
-// Ls=0 为火星北半球春分；2024-05-08（JD 2460418）为最近一次 Ls=0 时刻。
-// 火星年 686.98 地球日；Ls 随轨道位置线性增长（近似，忽略轨道离心率）。
-const MARS_YEAR_DAYS = 686.98;
-const MARS_LS_EPOCH = 2460418.0;
+// Issue #27：火星太阳黄经 Ls —— 由真实日心黄经计算（不再按日期线性近似）。
+// 锚定权威历元：火星近日点 JD 2461125.8 处 Ls=251°（LMD 火星气候数据库），
+// Ls = 火星日心黄经 − 近日点黄经 + 251。轨道离心率导致的季节长短不均
+// （春/夏/秋/冬 = 199/184/147/158 天）与 LMD 参考值 194/178/143/156 sol 一致。
+// 注：旧实现的锚点（2024-05-08）本身就是错的，真实 Ls=0 是 2024-11-12。
+const MARS_PERIHELION_JD = 2461125.8;
+const MARS_LON_PERIHELION = (() => {
+  const p = planetPosition('mars', MARS_PERIHELION_JD);
+  return Math.atan2(p.y, p.x) * 180 / Math.PI;
+})();
+
+/** 火星太阳黄经（度，0–360），由真实日心黄经计算 */
+function marsLs(jdTT) {
+  const p = planetPosition('mars', jdTT);
+  const lon = Math.atan2(p.y, p.x) * 180 / Math.PI;
+  return ((lon - MARS_LON_PERIHELION + 251) % 360 + 360) % 360;
+}
+
 const GAS_BAND_COLORS = {
   jupiter: [[200, 170, 130], [240, 225, 200], [170, 130, 95], [225, 200, 170], [150, 110, 80]],
   saturn: [[225, 205, 165], [240, 230, 200], [205, 180, 140], [230, 215, 185]],
@@ -361,8 +374,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     const eclPos = new Map();
     // Issue #27/#29/#36：全局季节量（每帧一次，所有天体共享）
     // 火星太阳黄经 Ls（度，0-360）
-    let ls = ((jdTT - MARS_LS_EPOCH) / MARS_YEAR_DAYS * 360) % 360;
-    if (ls < 0) ls += 360;
+    let ls = marsLs(jdTT);
     // 太阳活动：11 年周期近似（调制极光强度）
     const solarActivity = 0.5 + 0.3 * Math.sin((jdTT - 2451545.0) / (365.25 * 11) * Math.PI * 2);
     // 火星尘暴强度（Ls 180-360 风暴季）

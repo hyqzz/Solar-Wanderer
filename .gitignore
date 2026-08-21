@@ -55,3 +55,4 @@ docs/sdlc/screenshots/*
 !docs/sdlc/screenshots/example/
 !docs/sdlc/screenshots/example/**
 
+tools/.cache-dem/
