@@ -62,9 +62,14 @@ scene.add(camera);
 const ambient = new THREE.AmbientLight(0x404858, 0.02);
 scene.add(ambient);
 
-const composer = new EffectComposer(renderer);
+// HDR 管线：HalfFloat 渲染目标——高光（太阳 ×14 HDR、日冕、冰巨亮带）在
+// ACES 色调映射前不再被 8-bit 缓冲截断为 1.0，亮部渐变连续不断层
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(
+  window.innerWidth, window.innerHeight,
+  { type: THREE.HalfFloatType, colorSpace: THREE.LinearSRGBColorSpace }
+));
 composer.addPass(new RenderPass(scene, camera));
-// 注：已移除 UnrealBloomPass。真实太空中不存在后期泛光光晕，本项目以 1:1 物理真实为最高目标。
+// 注：不启用 UnrealBloomPass 式全屏泛光（非物理后期）；日冕等真实结构直接建模
 composer.addPass(new OutputPass());
 
 // 运行时帧率自适应：持续低帧降档、持续高帧恢复（双向）
