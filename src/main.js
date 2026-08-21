@@ -204,7 +204,7 @@ async function init() {
   setupTerrainMgr();
 
   // 初始：GE 式俯瞰地球（无需指针锁定）
-  builder.update(simClock.jdTT);
+  builder.update(simClock.jdTT, ship.posKm);
   orbitCam.init(orbitEnv, 'earth', 4);
   syncShipToOrbit();
   select('earth');
@@ -327,7 +327,7 @@ async function init() {
     const jdAfter = simClock.jdTT;
     // 若时间确实跳跃，立即驱动星历/场景更新一帧，避免画面滞后
     if (Math.abs(jdAfter - jdBefore) > 1e-12) {
-      builder.update(jdAfter);
+      builder.update(jdAfter, ship.posKm);
       comets.update(jdAfter);
       tnoScene.update(jdAfter, ship.posKm);
       for (const v of voyagerEntries) {
@@ -607,7 +607,7 @@ function loop() {
 
   // 星历驱动（try-catch 保护：builder.update 改动较多，任何异常不应卡死渲染循环）
   try {
-    builder.update(jdTT);
+    builder.update(jdTT, ship.posKm);
   } catch (e) {
     if (!loop._builderErr) {
       loop._builderErr = true;

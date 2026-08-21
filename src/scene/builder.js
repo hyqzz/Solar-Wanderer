@@ -340,7 +340,25 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   const _sunDir = new THREE.Vector3();
   const _pole = new THREE.Vector3(); // Issue #36：自转轴世界方向（计算日下点纬度）
 
-  function update(jdTT) {
+  // 光速（km/天）：光行时视位置修正用
+  const C_KM_PER_DAY = 299792.458 * 86400;
+
+  /** 光行时视位置：按 t − d/c 回退，2 次迭代收敛。camEcl 缺省时退回几何位置 */
+  function apparentAt(fn, camEcl, jdTT) {
+    let p = fn(jdTT);
+    if (!camEcl) return p;
+    for (let k = 0; k < 2; k++) {
+      const d = Math.hypot(p.x - camEcl.x, p.y - camEcl.y, p.z - camEcl.z);
+      p = fn(jdTT - d / C_KM_PER_DAY);
+    }
+    return p;
+  }
+
+  function update(jdTT, camPosKm) {
+    // 相机绝对坐标（three 世界系 km）→ 黄道系，用于光行时回退
+    const camEcl = camPosKm ? { x: camPosKm[0], y: -camPosKm[2], z: camPosKm[1] } : null;
+    // 本帧各天体黄道视位置（供卫星叠加母星视位置）
+    const eclPos = new Map();
     // Issue #27/#29/#36：全局季节量（每帧一次，所有天体共享）
     // 火星太阳黄经 Ls（度，0-360）
     let ls = ((jdTT - MARS_LS_EPOCH) / MARS_YEAR_DAYS * 360) % 360;
@@ -359,19 +377,24 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
         eclMatrixToWorldQuat(m, e.mesh.quaternion);
         continue;
       }
-      // 位置
+      // 位置（含光行时视位置修正：相机看到的是 t − d/c 时刻的位置）
       let ecl;
       if (!e.isMoon) {
-        ecl = planetPosition(id, jdTT);
+        ecl = apparentAt((t) => planetPosition(id, t), camEcl, jdTT);
       } else if (id === 'moon') {
-        const ep = planetPosition('earth', jdTT);
-        const mg = moonGeocentric(jdTT);
-        ecl = { x: ep.x + mg.x, y: ep.y + mg.y, z: ep.z + mg.z };
+        ecl = apparentAt((t) => {
+          const ep = eclPos.get('earth') ?? planetPosition('earth', t);
+          const mg = moonGeocentric(t);
+          return { x: ep.x + mg.x, y: ep.y + mg.y, z: ep.z + mg.z };
+        }, camEcl, jdTT);
       } else {
-        const pp = planetPosition(e.parentId, jdTT);
-        const ml = moonLocalPosition(id, jdTT);
-        ecl = { x: pp.x + ml.x, y: pp.y + ml.y, z: pp.z + ml.z };
+        ecl = apparentAt((t) => {
+          const pp = eclPos.get(e.parentId) ?? planetPosition(e.parentId, t);
+          const ml = moonLocalPosition(id, t);
+          return { x: pp.x + ml.x, y: pp.y + ml.y, z: pp.z + ml.z };
+        }, camEcl, jdTT);
       }
+      eclPos.set(id, ecl);
       const w = eclToWorldArr(ecl);
       e.posKm[0] = w[0]; e.posKm[1] = w[1]; e.posKm[2] = w[2];
 
