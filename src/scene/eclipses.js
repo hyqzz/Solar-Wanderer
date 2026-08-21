@@ -48,8 +48,8 @@ export class EclipseSystem {
       const distCam = _v1.set(camPosKm[0] - earth.posKm[0], camPosKm[1] - earth.posKm[1], camPosKm[2] - earth.posKm[2]).length();
       // 只在地球附近 50 万 km 内渲染日食半影
       if (distCam < 5e5) {
-        this._updateCone(activeCount++, 'solar', 'sun', 'moon', 'earth',
-          sunPos, moon.posKm, moon.phys.radiusKm, earth.posKm, earth.phys.radiusKm, bodies);
+        if (this._updateCone(activeCount, 'solar', 'sun', 'moon', 'earth',
+          sunPos, moon.posKm, moon.phys.radiusKm, earth.posKm, earth.phys.radiusKm, bodies)) activeCount++;
       }
     }
 
@@ -57,8 +57,8 @@ export class EclipseSystem {
     if (moon && earth) {
       const distCam = _v1.set(camPosKm[0] - moon.posKm[0], camPosKm[1] - moon.posKm[1], camPosKm[2] - moon.posKm[2]).length();
       if (distCam < 5e5) {
-        this._updateCone(activeCount++, 'lunar', 'sun', 'earth', 'moon',
-          sunPos, earth.posKm, earth.phys.radiusKm, moon.posKm, moon.phys.radiusKm, bodies);
+        if (this._updateCone(activeCount, 'lunar', 'sun', 'earth', 'moon',
+          sunPos, earth.posKm, earth.phys.radiusKm, moon.posKm, moon.phys.radiusKm, bodies)) activeCount++;
       }
     }
 
@@ -70,8 +70,8 @@ export class EclipseSystem {
         for (const moonId of ['io', 'europa', 'ganymede', 'callisto']) {
           const m = bodies.get(moonId);
           if (!m) continue;
-          this._updateCone(activeCount++, 'jovian', 'sun', 'jupiter', moonId,
-            sunPos, jupiter.posKm, jupiter.phys.radiusKm, m.posKm, m.phys.radiusKm, bodies);
+          if (this._updateCone(activeCount, 'jovian', 'sun', 'jupiter', moonId,
+            sunPos, jupiter.posKm, jupiter.phys.radiusKm, m.posKm, m.phys.radiusKm, bodies)) activeCount++;
           if (activeCount >= this.maxCones) break;
         }
       }
@@ -83,14 +83,15 @@ export class EclipseSystem {
     if (saturn && titan) {
       const distCamS = _v1.set(camPosKm[0] - saturn.posKm[0], camPosKm[1] - saturn.posKm[1], camPosKm[2] - saturn.posKm[2]).length();
       if (distCamS < 3e6) {
-        this._updateCone(activeCount++, 'jovian', 'sun', 'saturn', 'titan',
-          sunPos, saturn.posKm, saturn.phys.radiusKm, titan.posKm, titan.phys.radiusKm, bodies);
+        if (this._updateCone(activeCount, 'jovian', 'sun', 'saturn', 'titan',
+          sunPos, saturn.posKm, saturn.phys.radiusKm, titan.posKm, titan.phys.radiusKm, bodies)) activeCount++;
       }
     }
 
     // 隐藏未使用的锥
     for (let i = activeCount; i < this.cones.length; i++) {
-      this.cones[i].mesh.visible = false;
+      const c = this.cones[i];
+      if (c) c.mesh.visible = false; // 空洞容错（早退不占用 idx 后应无洞，防御性）
     }
   }
 
@@ -116,15 +117,17 @@ export class EclipseSystem {
     _v2.set(receiverPos[0] - occluderPos[0], receiverPos[1] - occluderPos[1], receiverPos[2] - occluderPos[2]);
     const distOccRecv = _v2.length();
     const projDist = _v2.dot(_v1); // 投影到阴影轴
-    if (projDist <= 0) return; // 接收体在遮挡体向阳侧，无阴影
-
     // 半影半径在接收体处
     const penumbraR = occluderR + (sunR + occluderR) * projDist / distSunOcc;
     // 本影半径在接收体处
     const umbraR = Math.max(0, occluderR - (sunR - occluderR) * projDist / distSunOcc);
 
-    // 如果半影半径太小或接收体太远，跳过
-    if (penumbraR < 1) return;
+    // 无阴影场景：早退但必须隐藏既有锥（防残影），且不占用 idx（防数组空洞）
+    if (projDist <= 0 || penumbraR < 1) {
+      const old = this.cones[idx];
+      if (old) old.mesh.visible = false;
+      return false;
+    }
 
     // 获取或创建锥 mesh
     let cone = this.cones[idx];
@@ -206,6 +209,7 @@ export class EclipseSystem {
     cone.occluderId = occluderId;
     cone.receiverId = receiverId;
     cone.type = type;
+    return true;
   }
 
   /**

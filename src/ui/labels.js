@@ -50,6 +50,7 @@ export class Labels {
     if (!this.visible) return;
     const w = window.innerWidth, h = window.innerHeight;
     let bestAim = null, bestAng = 0.09; // ~5°
+    const frame = []; // 本帧可见标签（重叠避让用）
     // 相机前向（世界）：用于稳定的"是否在相机前方"判定，替代易抖动的 ndc.z>1
     this.camera.getWorldDirection(_fwd);
     for (const item of this.items.values()) {
@@ -90,10 +91,28 @@ export class Labels {
       el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
       el.querySelector('.ld').textContent = target.distText ?? formatDist(dist);
       el.classList.toggle('selected', target.id === selectedId);
+      // 收入本帧可见集，供重叠避让（优先级：选中 > 视半径大 > 近）
+      const name = target.name ?? target.nameZh ?? '';
+      frame.push({
+        id: target.id, el, x, y,
+        bw: Math.min(40 + name.length * 8, 150), bh: 30,
+        score: (target.id === selectedId ? 1e9 : 0) + (target.radiusKm / Math.max(dist, 1e-6)),
+      });
       if (target.kind !== 'fixstar') {
         const angOff = Math.hypot(ndc.x * (w / h), ndc.y) * 0.5 * (this.camera.fov * Math.PI / 180);
         if (angOff < bestAng) { bestAng = angOff; bestAim = target.id; }
       }
+    }
+
+    // 标签防重叠：按优先级贪心保留，重叠的低优先级本帧隐藏
+    // （优先级由视半径/选中态决定，帧间稳定，不会闪烁）
+    frame.sort((a, b) => b.score - a.score);
+    const accepted = [];
+    for (const it of frame) {
+      const overlap = accepted.some((a) =>
+        Math.abs(a.x - it.x) < (a.bw + it.bw) / 2 && Math.abs(a.y - it.y) < (a.bh + it.bh) / 2);
+      if (overlap) it.el.style.display = 'none';
+      else accepted.push(it);
     }
     // 瞄准高亮
     if (this.aimedId && this.aimedId !== bestAim) {
