@@ -5,6 +5,7 @@
 
 import { elementsToEcliptic } from './kepler.js';
 import { centuriesTT } from './time.js';
+import { TNO_ORBITS, TNO_EPOCH_JD } from './tnoOrbits.generated.js';
 
 // el: [a, e, i, L, ϖ, Ω]  (all degrees; L = M + ϖ at J2000.0)
 // rate: [da, de, di, dL, dϖ, dΩ] per Julian century (only dL significant for TNOs)
@@ -214,8 +215,21 @@ const TABLE = {
 export const TNO_IDS = Object.keys(TABLE);
 export const TNO_DATA = TABLE;
 
-/** 计算 TNO 日心黄道 J2000 位置（km） */
+/** 计算 TNO 日心黄道 J2000 位置（km）。
+ * 优先用 tnoOrbits.generated.js（JPL SBDB 当前历元密切根数 + 经验长期率）；
+ * 缺失时退回内置 J2000 近似表。 */
 export function tnoPosition(id, jdTT) {
+  const o = TNO_ORBITS[id];
+  if (o) {
+    const dt = jdTT - TNO_EPOCH_JD;
+    const periDeg = o.periDeg + o.periDotDegPerDay * dt;
+    const nodeDeg = o.nodeDeg + o.nodeDotDegPerDay * dt;
+    const M = o.M0Deg + o.nDegPerDay * dt;
+    return elementsToEcliptic({
+      aAU: o.aAU, e: o.e, iDeg: o.iDeg,
+      LDeg: periDeg + M, periDeg, nodeDeg,
+    });
+  }
   const T = centuriesTT(jdTT);
   const { el, rate } = TABLE[id];
   return elementsToEcliptic({
@@ -230,7 +244,8 @@ export function tnoPosition(id, jdTT) {
 
 /** 轨道采样点（黄道坐标 km，闭合轨道一整圈） */
 export function tnoOrbitPoints(id, n = 192) {
-  const { el } = TABLE[id];
+  const o = TNO_ORBITS[id];
+  const el = o ? [o.aAU, o.e, o.iDeg, 0, o.periDeg, o.nodeDeg] : TABLE[id].el;
   const pts = new Float64Array(n * 3);
   for (let i = 0; i < n; i++) {
     const p = elementsToEcliptic({
