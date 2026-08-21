@@ -1,9 +1,12 @@
-// 著名彗星：真实轨道根数（J2000 黄道），位置随仿真时间解析求解；
-// 彗尾指向反日方向，长度/亮度随日距按活动度变化（近日点附近最盛）。
+// 著名彗星：SBDB 当前历元真实根数（cometOrbits.generated.js，由 tools/fetch-small-bodies.mjs
+// 从 JPL SBDB 拉取）优先；内置表作为离线兜底。彗尾指向反日方向，长度/亮度随日距变化。
 
 import * as THREE from 'three';
 import { solveKepler, KM_PER_AU, DEG } from '../astro/kepler.js';
 import { eclToWorld } from '../config.js';
+import { COMET_ORBITS } from '../astro/cometOrbits.generated.js';
+
+const GM_SUN = 1.32712440018e11; // km³/s²
 
 // q:近日距AU e i Ω ω Tp(JD) P(年)
 export const COMETS = [
@@ -21,8 +24,25 @@ export const COMETS = [
     desc: '轨道周期最短的彗星（3.3 年），金牛座流星雨的母体。' },
 ];
 
-/** 彗星日心位置（km，黄道 J2000） */
+/** 彗星日心位置（km，黄道 J2000）：优先 SBDB 当前历元根数，缺失回退内置表 */
 export function cometPosition(c, jdTT) {
+  const o = COMET_ORBITS[c.id];
+  if (o) {
+    const aKm = o.aAU * KM_PER_AU;
+    const n = Math.sqrt(GM_SUN / (aKm * aKm * aKm)) * 86400 / DEG; // °/天
+    const M = o.M0Deg + n * (jdTT - o.epochJd);
+    const E = solveKepler(M * DEG, o.e);
+    const xp = aKm * (Math.cos(E) - o.e);
+    const yp = aKm * Math.sqrt(1 - o.e * o.e) * Math.sin(E);
+    const w = o.periArgDeg * DEG, O = o.nodeDeg * DEG, inc = o.iDeg * DEG;
+    const cw = Math.cos(w), sw = Math.sin(w), cO = Math.cos(O), sO = Math.sin(O);
+    const ci = Math.cos(inc), si = Math.sin(inc);
+    return {
+      x: (cw * cO - sw * sO * ci) * xp + (-sw * cO - cw * sO * ci) * yp,
+      y: (cw * sO + sw * cO * ci) * xp + (-sw * sO + cw * cO * ci) * yp,
+      z: (sw * si) * xp + (cw * si) * yp,
+    };
+  }
   const a = c.q / (1 - c.e);
   const n = 360 / (c.pYears * 365.25); // °/天
   const M = n * (jdTT - c.tp);

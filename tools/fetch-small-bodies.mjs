@@ -58,6 +58,25 @@ const data = {
   bodies: [...pack(mba, 0), ...pack(neo, 1), ...pack(comets, 2)], // kind: 0=MBA 1=NEO 2=彗星
 };
 
+// 四颗著名彗星单独导出为静态模块（comets.js 启动期同步使用，含名称匹配）
+const FAMOUS = { halley: '1P/Halley', halebopp: 'C/1995 O1', cg67p: '67P/C', encke: '2P/Encke' };
+const cometOut = {};
+for (const [id, pat] of Object.entries(FAMOUS)) {
+  const row = data.bodies.find((b) => b[10] === 2 && b[9].includes(pat));
+  if (!row) { console.log(`警告：著名彗星未找到 ${pat}`); continue; }
+  cometOut[id] = {
+    aAU: row[1], e: row[2], iDeg: row[3], nodeDeg: row[4], periArgDeg: row[5],
+    M0Deg: row[6], epochJd: row[7],
+  };
+}
+writeFileSync(
+  new URL('../src/astro/cometOrbits.generated.js', import.meta.url),
+  `// 本文件由 tools/fetch-small-bodies.mjs 自动生成 — 请勿手改。
+// 四颗著名彗星的 SBDB 当前历元密切根数（黄道 J2000）。生成于 ${data.generated}。
+export const COMET_ORBITS = ${JSON.stringify(cometOut, null, 2)};
+`);
+console.log('著名彗星:', Object.keys(cometOut).join(', '));
+
 mkdirSync(new URL('../public/data/', import.meta.url), { recursive: true });
 const file = new URL('../public/data/smallbodies.json', import.meta.url);
 writeFileSync(file, JSON.stringify(data));
