@@ -207,6 +207,12 @@ export function createAtmosphere(phys, auroraMode = 0) {
         vec3 viewT = exp(-(uBetaR * odR + uBetaM * 1.1 * odM));
         float alpha = 1.0 - dot(viewT, vec3(0.3333));
 
+        // 多重散射近似（B3）：光学厚处的再散射能量以各向同性相位回归。
+        // 能量占比 ≈ 1 − viewT（被多次散射"截留"的光），Frostbite 式一阶修正；
+        // 效果：白昼面天空更亮更柔、临边过渡自然、晨昏圈不再突变死黑。
+        vec3 msFrac = vec3(1.0) - viewT;
+        L += uSunI * (uBetaR * inscR + uBetaM * inscM) * (1.0 / (4.0 * PI)) * msFrac * msFrac * 0.35;
+
         // 轻微抖动消除条带（×alpha：仅作用于有大气信号处。R8 #1 修复——
         // 旧实现无条件加在整个壳投影盘上，外太阳系高曝光下显形为以 Ra 为界的圆圈线）
         float dith = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) / 255.0;
