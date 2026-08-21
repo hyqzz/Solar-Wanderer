@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { KM_PER_AU } from '../config.js';
+import { VOYAGER_STATES } from './voyagerData.generated.js';
 
 const DEG = Math.PI / 180;
 // 星际风上游方向（鼻向），黄道坐标
@@ -109,7 +110,25 @@ export const VOYAGERS = [
     desc: '唯一探访过天王星和海王星的探测器，2018 年进入星际空间。' },
 ];
 
+const GM_SUN = 1.32712440018e11; // km³/s²
+const DAY_SEC = 86400;
+
+/** 旅行者号日心位置（km，黄道 J2000）。
+ * 优先用 Horizons 实测状态向量弹道外推（匀速 + 太阳引力二阶修正，年内误差 ≪0.01 AU）；
+ * 数据缺失时回退方向+速率的粗略线性模型。 */
 export function voyagerPosition(vg, jdTT) {
+  const st = VOYAGER_STATES[vg.id];
+  if (st) {
+    const dtSec = (jdTT - st.epochJd) * DAY_SEC;
+    const r0 = Math.hypot(...st.posKm);
+    // 太阳引力减速（二阶）：a0 = −GM·r̂/r²
+    const a0 = -GM_SUN / (r0 * r0);
+    return {
+      x: st.posKm[0] + st.velKmS[0] * dtSec + 0.5 * a0 * (st.posKm[0] / r0) * dtSec * dtSec,
+      y: st.posKm[1] + st.velKmS[1] * dtSec + 0.5 * a0 * (st.posKm[1] / r0) * dtSec * dtSec,
+      z: st.posKm[2] + st.velKmS[2] * dtSec + 0.5 * a0 * (st.posKm[2] / r0) * dtSec * dtSec,
+    };
+  }
   const year = 2000 + (jdTT - 2451545.0) / 365.25;
   const r = (vg.r0AU + vg.rateAUyr * (year - vg.epochYear)) * KM_PER_AU;
   const lon = vg.lonDeg * DEG, lat = vg.latDeg * DEG;
