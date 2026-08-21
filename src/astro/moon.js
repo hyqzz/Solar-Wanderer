@@ -15,8 +15,9 @@ const cosD = (d) => Math.cos(d * DEG);
 
 /**
  * 月球地心黄道 J2000 坐标（km）。截断 ELP2000 主项，精度约 0.2–0.3°。
+ * 仅供低端设备快速路径备用；主入口 moonGeocentric 已切换为完整截断版。
  */
-export function moonGeocentric(jdTT) {
+export function moonGeocentricFast(jdTT) {
   const T = centuriesTT(jdTT);
 
   // 黄经（度，瞬时平黄道）
@@ -217,4 +218,13 @@ export function moonGeocentricELP2000(jdTT) {
   const cl = cosD(lambda), sl = sinD(lambda);
   const cb = cosD(beta), sb = sinD(beta);
   return { x: r * cb * cl, y: r * cb * sl, z: r * sb };
+}
+
+/**
+ * 月球地心黄道 J2000 坐标（km）——主入口。
+ * 委托 ELP2000 完整截断版（~135 项，精度 < 0.1° vs JPL Horizons）；
+ * 每帧百余次三角调用在现代设备上开销可忽略，粗截断版保留为 moonGeocentricFast。
+ */
+export function moonGeocentric(jdTT) {
+  return moonGeocentricELP2000(jdTT);
 }
