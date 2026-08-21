@@ -405,6 +405,7 @@ export class OrbitCamera {
   }
 
   update(dt, input, env) {
+    this._dtLast = dt;
     if (this.flight) {
       this.updateFlight(dt, env);
       return;
@@ -459,8 +460,18 @@ export class OrbitCamera {
     let zoomK = 0;
     if (input.down('PageUp') || input.down('Equal') || input.down('NumpadAdd')) zoomK -= 1;
     if (input.down('PageDown') || input.down('Minus') || input.down('NumpadSubtract')) zoomK += 1;
-    // R 复位视角（GE: 北朝上、回俯视、平移归零）
-    if (input.tapped('KeyR')) { this.heading = 0; this.tilt = 0; this.panOffset.set(0, 0, 0); }
+    // R 复位视角（GE: 北朝上、回俯视、平移归零）——指数平滑归位（~0.4s），不瞬跳
+    if (input.tapped('KeyR')) this._resetAnim = true;
+    if (this._resetAnim) {
+      const k = Math.exp(-dt * 7);
+      this.heading *= k;
+      this.tilt *= k;
+      this.panOffset.multiplyScalar(k);
+      if (Math.abs(this.heading) < 1e-3 && Math.abs(this.tilt) < 1e-3 && this.panOffset.lengthSq() < 1e-8) {
+        this.heading = 0; this.tilt = 0; this.panOffset.set(0, 0, 0);
+        this._resetAnim = false;
+      }
+    }
 
     // Ctrl+左键拖拽 → 旋转航向/倾斜（围绕焦点的 3D 环视，R7 #7）
     if (input.look?.active && (input.look.dx !== 0 || input.look.dy !== 0)) {
@@ -705,8 +716,7 @@ export class OrbitCamera {
     this.compute(env);
   }
 
-  compute(env) {
-    const f = env.get(this.focusId);
+  compute(env) {    const f = env.get(this.focusId);
     const fq = this.frameQuat(f); // 体固（默认）或惯性锚定系（R9-1e）
     // 锚定系球坐标 → 世界（环绕中心 = 天体中心 + 平移偏置）
     const cl = Math.cos(this.lat);
@@ -720,12 +730,14 @@ export class OrbitCamera {
     this.posKm[0] = f.posKm[0] + ox + _v1.x * this.dist;
     this.posKm[1] = f.posKm[1] + oy + _v1.y * this.dist;
     this.posKm[2] = f.posKm[2] + oz + _v1.z * this.dist;
-    // 平移后防止相机进入天体内部：径向推出
+    // 平移后防止相机进入天体内部：平滑径向推出（指数趋近，不穿但不再"弹一下"）
     const dcx = this.posKm[0] - f.posKm[0], dcy = this.posKm[1] - f.posKm[1], dcz = this.posKm[2] - f.posKm[2];
     const dc = Math.hypot(dcx, dcy, dcz);
     const minD = this.minDist(f);
     if (dc < minD && dc > 0) {
-      const push = minD / dc;
+      const k = Math.min(1, (this._dtLast || 0.016) * 10); // 深度穿入快速推出，浅擦平滑
+      const nd = dc + (minD - dc) * k;
+      const push = nd / dc;
       this.posKm[0] = f.posKm[0] + dcx * push;
       this.posKm[1] = f.posKm[1] + dcy * push;
       this.posKm[2] = f.posKm[2] + dcz * push;
