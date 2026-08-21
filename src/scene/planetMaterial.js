@@ -181,6 +181,20 @@ export function createPlanetMaterial({
             float cap = max(nCap, sCap);
             albedo = mix(albedo, vec3(0.95, 0.97, 1.0), cap * 0.5);
           }
+          if (uBodyId == 4) { // 火星：季节极冠（CO₂ 霜冬季延伸 + 夏季残余水冰冠）
+            float latS = vObjPos.y / uRadius; // sin(纬度)
+            // 北半球冬季极盛于 Ls=270°；南半球冬季极盛于 Ls=90°
+            float winterN = 0.5 + 0.5 * cos((uLs - 270.0) * 0.0174532925);
+            float winterS = 0.5 + 0.5 * cos((uLs - 90.0) * 0.0174532925);
+            // 残余冰冠边缘 sin(82°)≈0.990；季节霜缘最大 sin(55°)≈0.819
+            float edgeN = mix(0.990, 0.819, winterN * winterN);
+            float edgeS = mix(0.990, 0.819, winterS * winterS);
+            float capN = smoothstep(edgeN - 0.015, edgeN + 0.02, latS);
+            float capS = smoothstep(edgeS - 0.015, edgeS + 0.02, -latS);
+            float cap = max(capN, capS);
+            // CO₂ 霜偏蓝白、薄；残余水冰冠更亮
+            albedo = mix(albedo, vec3(0.92, 0.94, 0.99), cap * 0.55);
+          }
         }
         float ndl = dot(n, uSunDir);
         float day = smoothstep(-0.06, 0.12, ndl);
