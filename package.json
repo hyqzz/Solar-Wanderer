@@ -16,6 +16,9 @@
     "test": "node --test \"tests/**/*.test.mjs\"",
     "fetch-textures": "node tools/fetch-textures.mjs",
     "fit-moons": "node tools/fit-moons.mjs",
+    "fetch-small-bodies": "node tools/fetch-small-bodies.mjs",
+    "fetch-vsop87": "node tools/fetch-vsop87.mjs",
+    "make-previews": "node tools/make-preview-textures.mjs",
     "verify": "node tools/verify-ephemeris.mjs"
   },
   "dependencies": {

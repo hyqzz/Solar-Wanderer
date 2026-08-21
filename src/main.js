@@ -18,6 +18,7 @@ import { OrbitCamera } from './engine/orbitCamera.js';
 import { buildSolarSystem } from './scene/builder.js';
 import { createStarfield, BRIGHT_STARS, SKY_R } from './scene/starfield.js';
 import { createBelts, createOortCloud } from './scene/belts.js';
+import { createSmallBodies } from './scene/smallBodies.js';
 import { createTNOScene } from './scene/tnoScene.js';
 import { createComets } from './scene/comets.js';
 import { createHeliosphere, VOYAGERS, voyagerPosition } from './scene/heliosphere.js';
@@ -82,7 +83,7 @@ const orbitCam = new OrbitCamera(camera);
 const simClock = new SimClock();
 const clock = new THREE.Clock();
 
-let builder, comets, labels, searchUI, touchControls, sky, belts, oortCloud, tnoScene;
+let builder, comets, labels, searchUI, touchControls, sky, belts, oortCloud, tnoScene, smallBodies;
 let appMode = 'orbit'; // orbit | fly | walk
 const registry = new Map();
 let selectedId = null;
@@ -114,6 +115,11 @@ async function init() {
   belts = createBelts();
   scene.add(belts);
   world.register(new Float64Array(3), belts);
+
+  // 真实小天体层（JPL SBDB 真实轨道根数，后台按需加载，见 scene/smallBodies.js）
+  smallBodies = createSmallBodies();
+  scene.add(smallBodies.group);
+  world.register(new Float64Array(3), smallBodies.group);
 
   // R11：奥尔特云统计粒子层（2000–100000 AU）
   oortCloud = createOortCloud(); // { group, update(dSunAU) }
@@ -314,7 +320,7 @@ async function init() {
     }
   });
 
-  window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr };
+  window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr, smallBodies };
   renderer.setAnimationLoop(loop);
 
   // ── 生命周期：后台/标签切换/睡眠恢复后强制同步仿真时钟 ──
@@ -617,6 +623,7 @@ function loop() {
   }
   try { comets.update(jdTT); } catch (e) { loopErr('comets', e); }
   try { tnoScene.update(jdTT, ship.posKm); } catch (e) { loopErr('tnoScene', e); }
+  try { smallBodies.update(jdTT); } catch (e) { loopErr('smallBodies', e); }
   try {
     for (const v of voyagerEntries) {
       const p = voyagerPosition(v.vg, jdTT);
