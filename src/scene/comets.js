@@ -72,29 +72,49 @@ function makeGlowTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-/** 创建彗星可视对象集合；返回 { entries: [{c, group, head, tail, posKm}], update(jdTT, sunPosKm) } */
+/** 尘埃尾粒子数（syndyne 弧线采样） */
+const DUST_N = 220;
+
+/** 创建彗星可视对象集合；返回 { entries: [{c, group, head, ionTail, dustTail, posKm}], update(jdTT) } */
 export function createComets(world) {
   const glow = makeGlowTexture();
   const entries = COMETS.map((c) => {
     const group = new THREE.Group();
+    // 彗发：蓝绿色（CN/C₂ 388nm 发射）球状辉光
     const head = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: glow, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+      map: glow, color: 0xcfe8d8, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false,
     }));
     group.add(head);
-    // 彗尾：锥体（沿 +Y），运行时定向到反日方向
-    const tailGeo = new THREE.ConeGeometry(1, 1, 12, 1, true);
-    tailGeo.translate(0, 0.5, 0);
-    const tail = new THREE.Mesh(tailGeo, new THREE.MeshBasicMaterial({
-      color: 0x9fc8ff, transparent: true, opacity: 0.18,
+
+    // I 型离子尾：窄、直、蓝（CO⁺ ~420nm），严格沿太阳风（反日）方向
+    const ionGeo = new THREE.ConeGeometry(1, 1, 12, 1, true);
+    ionGeo.translate(0, 0.5, 0);
+    const ionTail = new THREE.Mesh(ionGeo, new THREE.MeshBasicMaterial({
+      color: 0x7fb4ff, transparent: true, opacity: 0.22,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
     }));
-    group.add(tail);
+    group.add(ionTail);
+
+    // II 型尘埃尾：宽、黄白、沿 syndyne 弧线向轨道后方弯曲
+    // （辐射压把尘埃推离太阳，同时尘埃因轨道速度略低而滞后于彗星）
+    const dustGeo = new THREE.BufferGeometry();
+    const dustPos = new Float32Array(DUST_N * 3);
+    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+    const dustTail = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+      color: 0xf0e6c8, size: 2.6, sizeAttenuation: false, transparent: true, opacity: 0.35,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    }));
+    dustTail.frustumCulled = false;
+    group.add(dustTail);
+
     const posKm = new Float64Array(3);
     world.register(posKm, group);
-    return { c, group, head, tail, posKm };
+    return { c, group, head, ionTail, dustTail, dustPos, dustGeo, posKm };
   });
 
   const _dir = new THREE.Vector3();
+  const _lag = new THREE.Vector3();
   const _up = new THREE.Vector3(0, 1, 0);
   const _q = new THREE.Quaternion();
 
@@ -106,17 +126,43 @@ export function createComets(world) {
         const w = eclToWorld(p);
         e.posKm[0] = w.x; e.posKm[1] = w.y; e.posKm[2] = w.z;
         const rAU = Math.hypot(p.x, p.y, p.z) / KM_PER_AU;
-        // 活动度：4 AU 内显著（气体升华）
+        // 活动度：4 AU 内显著（气体升华），亮度 ∝ 1/r²（反照）× 活动度
         const act = Math.max(0, Math.min(1, (4 - rAU) / 3.5));
-        const tailLen = act * act * 0.4 * KM_PER_AU;
         e.head.scale.setScalar(3e5 + act * 2.5e6);
-        e.tail.visible = act > 0.02;
-        if (e.tail.visible) {
-          e.tail.scale.set(tailLen * 0.1, tailLen, tailLen * 0.1);
-          _dir.set(w.x, w.y, w.z).normalize(); // 反日方向（日心系即位置方向）
+        e.head.material.opacity = Math.min(1, 0.35 + act * 0.65);
+
+        // ── 离子尾：反日直尾 ──
+        const ionLen = act * act * 0.5 * KM_PER_AU;
+        e.ionTail.visible = act > 0.02;
+        if (e.ionTail.visible) {
+          e.ionTail.scale.set(ionLen * 0.04, ionLen, ionLen * 0.04); // 比旧版更窄更直
+          _dir.set(w.x, w.y, w.z).normalize();
           _q.setFromUnitVectors(_up, _dir);
-          e.tail.quaternion.copy(_q);
-          e.tail.material.opacity = 0.05 + act * 0.2;
+          e.ionTail.quaternion.copy(_q);
+          e.ionTail.material.opacity = (0.06 + act * 0.22) / (1 + rAU * 0.5);
+        }
+
+        // ── 尘埃尾：syndyne 弧线（反日 + 轨道滞后弯曲）──
+        e.dustTail.visible = act > 0.03;
+        if (e.dustTail.visible) {
+          // 彗星轨道速度方向（数值微分，世界系）——尘埃沿轨道后方滞后
+          const pAhead = eclToWorld(cometPosition(e.c, jdTT + 0.5));
+          _lag.set(pAhead.x - w.x, pAhead.y - w.y, pAhead.z - w.z).normalize().negate();
+          _dir.set(w.x, w.y, w.z).normalize(); // 反日
+          const dustLen = act * 0.28 * KM_PER_AU;
+          const curveK = 0.9; // 弯曲强度（辐射压比值β的经验上限）
+          for (let i = 0; i < DUST_N; i++) {
+            const s = i / (DUST_N - 1);
+            // syndyne：位置 = 头 + s·L·(反日 + s·curveK·滞后方向)，二次弯曲
+            const px = _dir.x + s * curveK * _lag.x;
+            const py = _dir.y + s * curveK * _lag.y;
+            const pz = _dir.z + s * curveK * _lag.z;
+            e.dustPos[i * 3] = px * dustLen * s;
+            e.dustPos[i * 3 + 1] = py * dustLen * s;
+            e.dustPos[i * 3 + 2] = pz * dustLen * s;
+          }
+          e.dustGeo.attributes.position.needsUpdate = true;
+          e.dustTail.material.opacity = (0.10 + act * 0.30) / (1 + rAU * 0.6);
         }
       }
     },
