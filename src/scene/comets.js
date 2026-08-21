@@ -117,12 +117,24 @@ export function createComets(world) {
   const _lag = new THREE.Vector3();
   const _up = new THREE.Vector3(0, 1, 0);
   const _q = new THREE.Quaternion();
+  const C_KM_PER_DAY = 299792.458 * 86400;
 
   return {
     entries,
-    update(jdTT) {
+    update(jdTT, shipPosKm) {
       for (const e of entries) {
-        const p = cometPosition(e.c, jdTT);
+        // 光行时视位置（与行星一致：相机看到 t − d/c 时刻）
+        let jdUse = jdTT;
+        if (shipPosKm) {
+          let p0 = cometPosition(e.c, jdTT);
+          for (let k = 0; k < 2; k++) {
+            const w0 = eclToWorld(p0);
+            const d = Math.hypot(w0.x - shipPosKm[0], w0.y - shipPosKm[1], w0.z - shipPosKm[2]);
+            jdUse = jdTT - d / C_KM_PER_DAY;
+            p0 = cometPosition(e.c, jdUse);
+          }
+        }
+        const p = cometPosition(e.c, jdUse);
         const w = eclToWorld(p);
         e.posKm[0] = w.x; e.posKm[1] = w.y; e.posKm[2] = w.z;
         const rAU = Math.hypot(p.x, p.y, p.z) / KM_PER_AU;

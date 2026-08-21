@@ -342,7 +342,7 @@ async function init() {
     // 若时间确实跳跃，立即驱动星历/场景更新一帧，避免画面滞后
     if (Math.abs(jdAfter - jdBefore) > 1e-12) {
       builder.update(jdAfter, ship.posKm);
-      comets.update(jdAfter);
+      comets.update(jdAfter, ship.posKm);
       tnoScene.update(jdAfter, ship.posKm);
       for (const v of voyagerEntries) {
         const p = voyagerPosition(v.vg, jdAfter);
@@ -630,7 +630,7 @@ function loop() {
       hud.tip('星历更新错误: ' + e.message);
     }
   }
-  try { comets.update(jdTT); } catch (e) { loopErr('comets', e); }
+  try { comets.update(jdTT, ship.posKm); } catch (e) { loopErr('comets', e); }
   try { tnoScene.update(jdTT, ship.posKm); } catch (e) { loopErr('tnoScene', e); }
   try { smallBodies.update(jdTT); } catch (e) { loopErr('smallBodies', e); }
   try {

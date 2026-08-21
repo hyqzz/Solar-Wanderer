@@ -102,10 +102,23 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
 
   const _sunDir = new THREE.Vector3();
 
+  // 光速（km/天）：光行时视位置修正（与 builder 一致）
+  const C_KM_PER_DAY = 299792.458 * 86400;
+
   function update(jdTT, shipPosKm) {
     for (const [id, e] of entries) {
-      // 位置
-      const ecl = tnoPosition(id, jdTT);
+      // 位置（含光行时回退：相机看到 t − d/c 时刻的位置；shipPosKm 为世界系 km）
+      let jdUse = jdTT;
+      if (shipPosKm) {
+        let ecl0 = tnoPosition(id, jdTT);
+        for (let k = 0; k < 2; k++) {
+          const w0 = eclToWorldArr(ecl0);
+          const d = Math.hypot(w0[0] - shipPosKm[0], w0[1] - shipPosKm[1], w0[2] - shipPosKm[2]);
+          jdUse = jdTT - d / C_KM_PER_DAY;
+          ecl0 = tnoPosition(id, jdUse);
+        }
+      }
+      const ecl = tnoPosition(id, jdUse);
       const w = eclToWorldArr(ecl);
       e.posKm[0] = w[0]; e.posKm[1] = w[1]; e.posKm[2] = w[2];
 
