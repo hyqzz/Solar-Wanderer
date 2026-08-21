@@ -133,10 +133,9 @@ const ORBIT_COLORS = {
 };
 
 // Issue #29：极光模式映射（0=无 1=地球 2=木星 3=土星 4=海卫一）
-// 地球：极地卵形圈 OI 557.7nm 绿光；海卫一：弱氮极光。
-// 木星/土星已移除：发射累积 auroraL += aColor*auroraInt*ds 中 ds 为 km，
-// 气巨大气壳跨度数千 km，累积辐亮度被 ACES 压成白色 → 两极整块刷白盖掉云带贴图。
-const AURORA_MODE = { earth: 1, triton: 4 };
+// 地球：极地卵形圈 OI 557.7nm 绿光；木星 H3+ 蓝紫；土星 H3+ 粉紫；海卫一：弱氮极光。
+// 木星/土星已恢复：极光发射改为按壳层厚度归一化（atmosphere.js），不再被 ACES 压白。
+const AURORA_MODE = { earth: 1, jupiter: 2, saturn: 3, triton: 4 };
 
 // Issue #27：火星太阳黄经 Ls —— 由真实日心黄经计算（不再按日期线性近似）。
 // 锚定权威历元：火星近日点 JD 2461125.8 处 Ls=251°（LMD 火星气候数据库），

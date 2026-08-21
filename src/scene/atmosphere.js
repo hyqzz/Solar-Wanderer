@@ -164,9 +164,9 @@ export function createAtmosphere(phys, auroraMode = 0) {
           if (uAuroraMode > 0 && uAuroraStrength > 0.001) {
             vec3 srel = stretch(p - uCenter);
             float sh = length(srel) - uRg;
-            // 极光高度带：地球 60-180km，木星/土星 30-300km（更厚的极光层）
-            float altMin = uAuroraMode == 2 ? 30.0 : 60.0;
-            float altMax = uAuroraMode == 2 ? 300.0 : 180.0;
+            // 极光高度带：地球 60-180km，木星/土星 30-500km（更厚的极光层）
+            float altMin = (uAuroraMode == 2 || uAuroraMode == 3) ? 30.0 : 60.0;
+            float altMax = (uAuroraMode == 2 || uAuroraMode == 3) ? 500.0 : 180.0;
             float altF = smoothstep(altMin, altMin + 20.0, sh)
                        * (1.0 - smoothstep(altMax - 40.0, altMax, sh));
             // 磁纬度（近似为地理纬度：用自转轴方向 dot）
@@ -189,7 +189,9 @@ export function createAtmosphere(phys, auroraMode = 0) {
             else if (uAuroraMode == 2) aColor = vec3(0.55, 0.35, 1.0);
             else if (uAuroraMode == 3) aColor = vec3(0.80, 0.45, 0.90);
             else aColor = vec3(0.90, 0.40, 0.30);
-            auroraL += aColor * auroraInt * ds;
+            // 按壳层厚度归一化（气巨壳层数千 km，直接 ×ds 会被 ACES 压白——
+            // 此前木星/土星极光因此整体被移除）。归一化后强度与壳层厚度无关。
+            auroraL += aColor * auroraInt * ds * (220.0 / max(t1 - t0, 1.0));
           }
         }
 
