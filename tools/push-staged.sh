@@ -10,8 +10,8 @@ BASE=0ccee35895ba98c48bd0ebc7809d7d760e0fa6ce  # 远端当前 HEAD（DEM 之前�
 N=0
 push_path() {
   N=$((N + 1))
-  git checkout -q -b "stage-$N" "$BASE"
-  git checkout -q main -- "$1"
+  git checkout -q -f -b "stage-$N" "$BASE"
+  git checkout -q -f main -- "$1"
   git add -A -- "$1"
   git commit -q -m "chore(dem): stage $1"
   ok=0
@@ -19,7 +19,7 @@ push_path() {
     if git push -q "$URL" "stage-$N:refs/heads/stage-dem-$N" 2>/dev/null; then ok=1; break; fi
     echo "RETRY($attempt) [$N] $1"; sleep 8
   done
-  git checkout -q main
+  git checkout -q -f main
   git branch -q -D "stage-$N"
   [ $ok -eq 1 ] && echo "OK  [$N] $1" || echo "FAIL [$N] $1"
 }
@@ -30,8 +30,8 @@ for body in moon mars earth; do
   for q in 0 1 2 3; do
     lo=$((q * 4))
     N=$((N + 1))
-    git checkout -q -b "stage-$N" "$BASE"
-    for x in $(seq $lo $((lo + 3))); do git checkout -q main -- "public/dem/$body/4/$x"; done
+    git checkout -q -f -b "stage-$N" "$BASE"
+    for x in $(seq $lo $((lo + 3))); do git checkout -q -f main -- "public/dem/$body/4/$x"; done
     git add -A
     git commit -q -m "chore(dem): stage $body L4 q$q"
     ok=0
@@ -39,7 +39,7 @@ for body in moon mars earth; do
       if git push -q "$URL" "stage-$N:refs/heads/stage-dem-$N" 2>/dev/null; then ok=1; break; fi
       echo "RETRY($attempt) [$N] $body L4 q$q"; sleep 8
     done
-    git checkout -q main
+    git checkout -q -f main
     git branch -q -D "stage-$N"
     [ $ok -eq 1 ] && echo "OK  [$N] $body L4 q$q" || echo "FAIL [$N] $body L4 q$q"
   done
