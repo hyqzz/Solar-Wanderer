@@ -163,6 +163,14 @@ const GAS_BAND_COLORS = {
   neptune: [[60, 90, 200], [80, 120, 220], [50, 80, 180], [90, 140, 230]],
 };
 
+/** 几何反照率（近似实测值），用于远距光点亮度的物理调制 */
+const GLINT_ALBEDO = {
+  mercury: 0.14, venus: 0.75, earth: 0.31, mars: 0.25, jupiter: 0.50,
+  saturn: 0.47, uranus: 0.51, neptune: 0.41, pluto: 0.60,
+  moon: 0.12, io: 0.63, europa: 0.67, ganymede: 0.43, callisto: 0.17,
+  titan: 0.22, triton: 0.76, charon: 0.35,
+};
+
 /** 贴图或程序化兜底（惰性：占位纹理先行，真实贴图后台生成后换图） */
 function texOf(cache, file, bodyId, phys) {
   if (file && cache.has(file)) return cache.get(file);
@@ -484,6 +492,14 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       const dist = Math.hypot(
         e.posKm[0] - shipPosKm[0], e.posKm[1] - shipPosKm[1], e.posKm[2] - shipPosKm[2]
       );
+      // 远距光点亮度物理化：相位角 φ（天体处 太阳-天体-相机 夹角）+ 几何反照率
+      // 朗伯球相位函数：(sinφ + (π−φ)cosφ)/π，满相 φ=0 最亮，背相 φ→π 熄灭
+      const bsX = -e.posKm[0], bsY = -e.posKm[1], bsZ = -e.posKm[2]; // 天体→太阳
+      const bcX = shipPosKm[0] - e.posKm[0], bcY = shipPosKm[1] - e.posKm[1], bcZ = shipPosKm[2] - e.posKm[2]; // 天体→相机
+      const bsL = Math.hypot(bsX, bsY, bsZ) || 1, bcL = Math.hypot(bcX, bcY, bcZ) || 1;
+      const cosPhi = Math.max(-1, Math.min(1, (bsX * bcX + bsY * bcY + bsZ * bcZ) / (bsL * bcL)));
+      const phi = Math.acos(cosPhi);
+      const phaseF = (Math.sin(phi) + (Math.PI - phi) * cosPhi) / Math.PI;
       if (e.atmoMesh) e.atmoMesh.material.userData.uniforms.uCenter.value.copy(e.group.position);
       if (e.ringMesh) e.ringMesh.material.userData.uniforms.uCenter.value.copy(e.group.position);
       if (e.phys.rings && e.mat) e.mat.userData.uniforms.uCenter.value.copy(e.group.position);
@@ -491,10 +507,12 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       if (e.mat) e.mat.userData.uniforms.uTime.value = simTimeSec;
       if (e.cloudMat) e.cloudMat.userData.uniforms.uTime.value = simTimeSec;
       if (e.atmoMesh) e.atmoMesh.material.userData.uniforms.uTime.value = simTimeSec;
-      // 远距光点：保持 ~3px 视觉尺寸；近距淡出
+      // 远距光点：保持 ~3px 视觉尺寸；近距淡出；亮度随相位与反照率调制
       const glintSize = dist * 0.004;
       e.glint.scale.setScalar(glintSize);
-      e.glint.material.opacity = THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 300) - 1) * 0.8, 0, 0.9);
+      const distFade = THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 300) - 1) * 0.8, 0, 0.9);
+      const albedoScale = Math.sqrt((GLINT_ALBEDO[id] ?? 0.15) / 0.3);
+      e.glint.material.opacity = distFade * (0.2 + 0.8 * phaseF) * albedoScale;
       // 卫星 LOD：距母星太远时隐藏卫星网格（光点保留）
       if (e.isMoon) {
         const parent = bodies.get(e.parentId);
