@@ -384,7 +384,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
         const local = id === 'moon' ? moonGeocentric(jdTT) : moonLocalPosition(id, jdTT);
         const L = Math.hypot(local.x, local.y, local.z) || 1;
         const toParent = { x: -local.x / L, y: -local.y / L, z: -local.z / L };
-        const nHat = moonOrbitNormal(id);
+        const nHat = moonOrbitNormal(id, jdTT);
         eclMatrixToWorldQuat(tidalLockMatrix(nHat, toParent), e.mesh.quaternion);
       }
 

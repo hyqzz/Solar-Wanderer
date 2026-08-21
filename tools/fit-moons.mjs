@@ -1,6 +1,12 @@
-// 卫星轨道拟合：从 JPL Horizons 拉取各大卫星此刻的状态向量（位置+速度），
-// 解算密切轨道根数（a,e,i,Ω,ω,M0），固化为 src/astro/moonsData.generated.js。
-// 当前历元位置与 NASA 实测一致；长期演化忽略 J2 进动（已在文档声明）。
+// 卫星轨道拟合：从 JPL Horizons 拉取各大卫星两个历元（相隔 20 天）的状态向量，
+// 解算密切轨道根数并做经验长期率分解，固化为 src/astro/moonsData.generated.js。
+//
+// 分解原理（λ/ϖ/Ω 三分解）：
+//   平黄经 λ = ϖ + M 对任何离心率都有定义，λ̇ 由两历元实际位置直接测量（含全部
+//   摄动）；ϖ̇ 与 Ω̇ 由两组密切根数差分得到。运行时按
+//     ϖ(t) = ϖ₀ + ϖ̇·Δt,  Ω(t) = Ω₀ + Ω̇·Δt,  M(t) = M₀ + (λ̇ − ϖ̇)·Δt
+//   传播，则在两个历元都与 Horizons 严格一致，长期漂移为一阶正确。
+//   近圆轨道（e < 0.01）ϖ 数值不稳定 → ϖ̇ 置 0，全部漂移并入 λ̇。
 
 import { writeFileSync } from 'node:fs';
 import { horizonsVectors } from './horizonsClient.mjs';
@@ -77,6 +83,9 @@ function predict(el, dJd) {
   ];
 }
 
+/** 角度差归一化到 (-180, 180] 度 */
+const wrapDiffDeg = (d) => ((d % 360) + 540) % 360 - 180;
+
 const now = new Date();
 const FIT_SPAN_DAYS = 20;
 const later = new Date(now.getTime() + FIT_SPAN_DAYS * 86400000);
@@ -90,9 +99,12 @@ for (const [id, [cmd, center]] of Object.entries(MOON_IDS)) {
   epochJd = jdTDB;
   const el = stateToElements(pos, vel, parentGm);
 
-  // 双历元修正平均角速率：测量 +20 天实际位置与预测位置绕轨道法向的有符号角差
-  const ref2 = await horizonsVectors(cmd, center, later, false);
+  // 第二历元：需要速度才能解算完整根数（节点/近点差分）
+  const ref2 = await horizonsVectors(cmd, center, later, true);
   const dJd = ref2.jdTDB - jdTDB;
+  const el2 = stateToElements(ref2.pos, ref2.vel, parentGm);
+
+  // 经验长期率：λ̇ 用实际位置的有符号相位差测量（比根数差分更稳健）
   const pred = predict(el, dJd);
   const h = cross(pos, vel);
   const hMag = norm(h);
@@ -100,21 +112,32 @@ for (const [id, [cmd, center]] of Object.entries(MOON_IDS)) {
   const cr = cross(pred, ref2.pos);
   const sinA = dot(cr, nHat) / (norm(pred) * norm(ref2.pos));
   const cosA = dot(pred, ref2.pos) / (norm(pred) * norm(ref2.pos));
-  const dLonDeg = Math.atan2(sinA, Math.max(-1, Math.min(1, cosA))) * RAD2DEG;
-  el.nDegPerDay += dLonDeg / dJd;
+  const lambdaDot = el.nDegPerDay + Math.atan2(sinA, Math.max(-1, Math.min(1, cosA))) * RAD2DEG / dJd;
+
+  const nodeDot = wrapDiffDeg(el2.nodeDeg - el.nodeDeg) / dJd;
+  // 近圆轨道 ϖ 由噪声主导 → ϖ̇ 置 0，漂移全部留在 λ̇（位置仍精确）
+  const periDot = el.e >= 0.01 ? wrapDiffDeg(el2.periDeg - el.periDeg) / dJd : 0;
+
+  // 运行时传播：M(t) = M0 + ṅ·Δt，其中 ṅ = λ̇ − ϖ̇，保证 λ(t) 与测量严格一致
+  el.nDegPerDay = lambdaDot - periDot;
+  el.nodeDotDegPerDay = nodeDot;
+  el.periDotDegPerDay = periDot;
 
   out[id] = el;
-  const periodDays = 360 / el.nDegPerDay;
+  const periodDays = 360 / lambdaDot;
   console.log(
     `${id.padEnd(10)} a=${(el.aKm / 1000).toFixed(1).padStart(8)}千km  e=${el.e.toFixed(4)}  ` +
-    `i=${el.iDeg.toFixed(2).padStart(7)}°  P=${periodDays.toFixed(4).padStart(9)}天  速率修正=${(dLonDeg / dJd).toFixed(4)}°/天`
+    `i=${el.iDeg.toFixed(2).padStart(7)}°  P=${periodDays.toFixed(4).padStart(9)}天  ` +
+    `Ω̇=${nodeDot.toFixed(4).padStart(8)}°/天  ϖ̇=${periDot.toFixed(4).padStart(8)}°/天`
   );
 }
 
 const banner = `// 本文件由 tools/fit-moons.mjs 自动生成 — 请勿手改。
-// 数据来源：JPL Horizons 状态向量（黄道 J2000，相对母行星中心），拟合为密切轨道根数。
+// 数据来源：JPL Horizons 状态向量（黄道 J2000，相对母行星中心），双历元（相隔 20 天）拟合。
 // 生成时刻（历元）：${now.toISOString()}  JD(TDB)=${epochJd}
-// 局限：未建模 J2 节点/近点进动；历元附近精度最高，数年尺度相位误差缓慢增长。
+// 模型：密切根数 + 经验长期率（nodeDotDegPerDay=Ω̇，periDotDegPerDay=ϖ̇，
+// nDegPerDay=λ̇−ϖ̇），长期漂移一阶正确；二阶以上摄动与共振仍随时间缓慢积累。
+// 建议每季度重新运行 npm run fit-moons。
 `;
 
 writeFileSync(
