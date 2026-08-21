@@ -49,6 +49,12 @@ export class SimClock {
     this._wallMs = Date.now();
   }
 
+  /** 跳转到指定 TT 儒略日（书签/导览/课堂同步还原用） */
+  set(jdTT) {
+    this.jdTT = jdTT;
+    this._wallMs = Date.now();
+  }
+
   /**
    * 正常帧用 dtReal；若 wallElapsed 比 dtReal 多出 1 秒以上（tab 后台、系统睡眠/休眠恢复），
    * 则用完整挂钟经过时间追赶，确保左上角仿真时刻始终与真实流逝时间严格同步。

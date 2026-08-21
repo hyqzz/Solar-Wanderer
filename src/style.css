@@ -246,12 +246,13 @@ html, body {
   color: #6fa8d8; margin-top: 8px;
   animation: subShimmer 5s ease-in-out infinite;
 }
-/* 首页标题随浏览器语言切换（中文环境显中文，其余显英文；/en 固定英文不变） */
-.title-block .title-zh,
-.title-block .title-en { display: none; }
+/* 首页标题随浏览器语言切换：中文显中文，其余语言（含 es/ja/fr/de/ru）一律显英文兜底 */
+.title-block .title-zh { display: none; }
+.title-block .title-en { display: block; }
 html[lang^="zh"] .title-block .title-zh,
 html[lang="zh-CN"] .title-block .title-zh { display: block; }
-html[lang^="en"] .title-block .title-en { display: block; }
+html[lang^="zh"] .title-block .title-en,
+html[lang="zh-CN"] .title-block .title-en { display: none; }
 
 @keyframes subShimmer {
   0%, 100% { opacity: 0.7; letter-spacing: 20px; }

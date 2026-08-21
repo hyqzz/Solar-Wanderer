@@ -269,12 +269,13 @@ async function init() {
     if (narrator.supported) narrator.speak(text, LANG);
   };
 
-  // 教师工具包（#42）
+  // 教师工具包（#42）：传 TourSystem 实例本身（isActive/_activeTourId 定义在实例上）
   teacherToolkit = new TeacherToolkit({
-    tours: tourSystem.tours,
+    tours: tourSystem,
     select: (id) => select(id),
     flyTo: (id) => flyTo(id),
     hud: hud,
+    nameOf: (id) => bodyName(registry.get(id) ?? { nameZh: id, nameEn: id }),
   });
 
   // 日食阴影系统（#25）
@@ -292,11 +293,15 @@ async function init() {
   try { createApolloLandmarks(scene, terrainMgr); } catch (e) { console.error('[Apollo landmarks]', e); }
   try { createRoverSites(scene, terrainMgr); } catch (e) { console.error('[Rover sites]', e); }
 
-  // 键盘快捷键：C 指南针、M 音效、B 书签、R 比例参照
+  // 键盘快捷键：C 指南针、M 音效、Ctrl+B 保存书签、Ctrl+Shift+B 回到最近书签、R 比例参照
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyC' && !e.repeat) { e.preventDefault(); compass?.toggle(); }
     if (e.code === 'KeyM' && !e.repeat) { e.preventDefault(); audioEngine?.toggle(); }
-    if (e.code === 'KeyB' && e.ctrlKey) { e.preventDefault(); /* 书签保存 */ }
+    if (e.code === 'KeyB' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (e.shiftKey) restoreLatestBookmark();
+      else saveBookmark();
+    }
   });
 
   window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr };
@@ -480,6 +485,13 @@ const _pickP = new THREE.Vector3();
 const _pickHit = new THREE.Vector3();
 const _pickQ = new THREE.Quaternion();
 let focusTipUntil = 0;
+let actionTipUntil = 0; // 动作提示（书签/链接复制等）的展示截止时刻
+
+/** 动作提示：显示 2.5 秒，期间 updateTip 不覆盖 */
+function showActionTip(text, ms = 2500) {
+  actionTipUntil = performance.now() + ms;
+  hud.tip(text);
+}
 function pickBody(cx, cy) {
   _pickDir.set(
     (cx / window.innerWidth) * 2 - 1, -((cy / window.innerHeight) * 2 - 1), 0.5
@@ -773,7 +785,7 @@ function loop() {
       const atm = nearestBody?.phys?.atmosphere;
       const inAtmo = !!(atm && nearest.distSurface < atm.heightKm);
       audioEngine.setMode(appMode, {
-        nearest: nearest ? { id: nearest.id, radiusKm: nearest.radiusKm } : null,
+        nearest: nearest ? { id: nearest.id, radiusKm: nearest.radiusKm, distSurface: nearest.distSurface } : null,
         inAtmosphere: inAtmo,
         underwater: !!ship.walk?.submerged,
         surface: ship.audioState?.surfaceType || 'rock',
@@ -949,6 +961,8 @@ function handleUIKeys() {
 }
 
 function updateTip(nearest) {
+  // 动作类提示（书签/复制链接等）有 2.5s 展示窗口，期间不被状态提示覆盖
+  if (performance.now() < actionTipUntil) return;
   const atm = nearest ? builder.bodies.get(nearest.id)?.phys.atmosphere : null;
   if (performance.now() < focusTipUntil && appMode === 'orbit') {
     const tipId = orbitCam.pendingFocusId ?? selectedId ?? orbitCam.focusId;
@@ -1162,6 +1176,36 @@ function applyLocationHash() {
   select(focusId);
 }
 
+/** 保存当前视点为命名书签（Ctrl+B）；orbit 模式记录精确视角，fly/walk 记录焦点与时间 */
+function saveBookmark() {
+  if (!bookmarks) return;
+  const focusId = appMode === 'orbit' ? orbitCam.focusId : (selectedId ?? orbitCam.focusId);
+  const entry = registry.get(focusId);
+  const name = bodyName(entry ?? { nameZh: focusId, nameEn: focusId });
+  bookmarks.save(name, {
+    focusId,
+    lat: orbitCam.lat, lon: orbitCam.lon, dist: orbitCam.dist,
+    jdTT: simClock.jdTT, mode: appMode,
+  });
+  showActionTip(t('tip.bookmarkSaved', { name }));
+}
+
+/** 回到最近一条书签（Ctrl+Shift+B）：orbit 状态精确还原；其他模式跳回焦点 */
+function restoreLatestBookmark() {
+  const items = bookmarks?.list?.() ?? [];
+  const latest = items[items.length - 1];
+  if (!latest) { showActionTip(t('tip.bookmarkNone')); return; }
+  const s = latest.state ?? {};
+  if (s.jdTT) simClock.set(s.jdTT);
+  if (s.focusId && registry.has(s.focusId)) {
+    if (appMode !== 'orbit') switchToOrbit();
+    if (s.lat != null) orbitCam.lat = s.lat;
+    if (s.lon != null) orbitCam.lon = s.lon;
+    if (s.dist != null) { orbitCam.dist = s.dist; orbitCam.distTarget = s.dist; }
+    select(s.focusId);
+  }
+}
+
 function copyShareUrl() {
   if (appMode !== 'orbit') return; // 仅在探索模式下共享（fly/walk 位置无法直接还原）
   const DEG = Math.PI / 180;
@@ -1173,10 +1217,10 @@ function copyShareUrl() {
   const url = location.href.replace(/#.*$/, '') + hash;
   if (navigator.clipboard?.writeText) {
     navigator.clipboard.writeText(url)
-      .then(() => hud.tip(t('tip.urlCopied')))
-      .catch(() => { history.replaceState(null, '', hash); hud.tip(t('tip.urlUpdated')); });
+      .then(() => showActionTip(t('tip.urlCopied')))
+      .catch(() => { history.replaceState(null, '', hash); showActionTip(t('tip.urlUpdated')); });
   } else {
     history.replaceState(null, '', hash);
-    hud.tip(t('tip.urlUpdated'));
+    showActionTip(t('tip.urlUpdated'));
   }
 }

@@ -210,60 +210,60 @@
 
   <div id="help" style="display:none">
     <div class="help-inner">
-      <h2 data-i18n="help.toggle">操作说明（H 关闭）</h2>
+      <h2 data-i18n="help.toggle">Controls (H to close)</h2>
       <div class="help-cols">
         <div>
-          <h3>🌐 探索模式（默认 · Google Earth 式）</h3>
+          <h3>🌐 Explore mode (default · Google Earth style)</h3>
           <table>
-            <tr><td>左键拖拽</td><td>环绕焦点旋转（带惯性，近地自动减速）</td></tr>
-            <tr><td>Ctrl+左键拖拽</td><td>旋转航向 / 倾斜（3D 环视）</td></tr>
-            <tr><td>右键/中键拖拽</td><td>平移整个空间（无旋转，R 复位）</td></tr>
-            <tr><td>W S A D / 方向键</td><td>平移视角（北/南/西/东，随高度调速）</td></tr>
-            <tr><td>Shift+A / Shift+D</td><td>旋转航向（逆时针 / 顺时针）</td></tr>
-            <tr><td>Shift+W / Shift+S</td><td>倾斜看向地平 / 回到俯视</td></tr>
-            <tr><td>单击天体</td><td><b>锁定焦点</b>（之后滚轮即以它为目标接近/远离，可直达登陆）</td></tr>
-            <tr><td>滚轮 / PageUp PageDown / + −</td><td>以屏幕中心拉近 / 拉远（高度等比：贴地米级步长，可悬停<b>任意高度</b>；轻拨精细 · 连滚/按住渐加速）</td></tr>
-            <tr><td>滚轮拉近到底</td><td><b>无缝降落地表</b>（自动转入行走）；海洋默认降落水面</td></tr>
-            <tr><td>V</td><td>惯性观察模式（相机不随自转 · 配合时间加速看卫星绕转）</td></tr>
-            <tr><td>R</td><td>复位视角（北朝上、俯视）</td></tr>
-            <tr><td>🪐 天体目录</td><td>点选天体 → 飞行动画前往（左侧，默认展开）</td></tr>
-            <tr><td>双击标签 / T / 1–9,0</td><td>GE 式动态前往（目标居中）</td></tr>
-            <tr><td>拖拽（飞行中）</td><td>中断飞行动画</td></tr>
-            <tr><td>G</td><td>贴近地表时登陆行走</td></tr>
-            <tr><td>F</td><td>切换自由飞行模式</td></tr>
+            <tr><td>Left-drag</td><td>Orbit around focus (with inertia, slows near ground)</td></tr>
+            <tr><td>Ctrl+Left-drag</td><td>Rotate heading / tilt (3D look-around)</td></tr>
+            <tr><td>Right/Middle-drag</td><td>Pan the whole space (no rotation, R resets)</td></tr>
+            <tr><td>W S A D / Arrows</td><td>Pan view (N/S/W/E, speed scales with altitude)</td></tr>
+            <tr><td>Shift+A / Shift+D</td><td>Rotate heading (CCW / CW)</td></tr>
+            <tr><td>Shift+W / Shift+S</td><td>Tilt toward horizon / back to top-down</td></tr>
+            <tr><td>Click a body</td><td><b>Lock focus</b> (wheel then approaches/retreats toward it, down to landing)</td></tr>
+            <tr><td>Wheel / PageUp PageDown / + −</td><td>Zoom toward screen center (altitude-proportional: meter steps at ground, hover at <b>any altitude</b>; gentle = fine, repeated/held = accelerates)</td></tr>
+            <tr><td>Wheel all the way in</td><td><b>Seamless surface landing</b> (auto-switches to walk); oceans land on water</td></tr>
+            <tr><td>V</td><td>Inertial view mode (camera does not co-rotate · pair with time warp to watch moons orbit)</td></tr>
+            <tr><td>R</td><td>Reset view (north up, top-down)</td></tr>
+            <tr><td>🪐 Body directory</td><td>Click a body → fly-to animation (left side, expanded by default)</td></tr>
+            <tr><td>Double-click label / T / 1–9,0</td><td>GE-style fly-to (target centered)</td></tr>
+            <tr><td>Drag (mid-flight)</td><td>Interrupt fly-to animation</td></tr>
+            <tr><td>G</td><td>Land and walk when near surface</td></tr>
+            <tr><td>F</td><td>Toggle free-flight mode</td></tr>
           </table>
-          <h3>🚶 地表行走</h3>
+          <h3>🚶 Surface walking</h3>
           <table>
-            <tr><td>鼠标 / W S A D</td><td>视角（360° 自由环视）/ 行走（真实表面重力）</td></tr>
-            <tr><td>滚轮后退 / PageUp</td><td><b>无缝起飞</b>返回探索模式（视向不变）</td></tr>
-            <tr><td>水面滚轮前进 / PageDown</td><td><b>下潜</b>——滚轮低灵敏度升降，停止即悬停（任意深度驻留），浮出水面自动恢复</td></tr>
-            <tr><td>Shift / Space</td><td>奔跑 / 跳跃（月球跳 6 倍高）；水下 Space 上浮</td></tr>
-            <tr><td>G</td><td>返回探索模式</td></tr>
+            <tr><td>Mouse / W S A D</td><td>View (360° free look) / walk (true surface gravity)</td></tr>
+            <tr><td>Wheel back / PageUp</td><td><b>Seamless takeoff</b> back to explore mode (view direction kept)</td></tr>
+            <tr><td>Wheel forward on water / PageDown</td><td><b>Dive</b> — low-sensitivity wheel ascent/descent, hover when stopped (hold any depth), auto-resurface</td></tr>
+            <tr><td>Shift / Space</td><td>Run / jump (6× higher on the Moon); Space ascends underwater</td></tr>
+            <tr><td>G</td><td>Back to explore mode</td></tr>
           </table>
         </div>
         <div>
-          <h3>🚀 自由飞行（F 进入）</h3>
+          <h3>🚀 Free flight (F to enter)</h3>
           <table>
-            <tr><td>鼠标 / Q E</td><td>俯仰偏航 / 滚转</td></tr>
-            <tr><td>W S A D R F</td><td>六向平移</td></tr>
-            <tr><td>滚轮 / Shift</td><td>速度档（1 m/s→2 AU/s）/ 加速</td></tr>
-            <tr><td>X</td><td>急停（任意位置悬停驻留）</td></tr>
-            <tr><td>Esc</td><td>返回探索模式</td></tr>
+            <tr><td>Mouse / Q E</td><td>Pitch & yaw / roll</td></tr>
+            <tr><td>W S A D R F</td><td>Six-direction translation</td></tr>
+            <tr><td>Wheel / Shift</td><td>Speed tier (1 m/s → 2 AU/s) / boost</td></tr>
+            <tr><td>X</td><td>Full stop (hover anywhere)</td></tr>
+            <tr><td>Esc</td><td>Back to explore mode</td></tr>
           </table>
-          <h3>⏱ 时间</h3>
+          <h3>⏱ Time</h3>
           <table>
-            <tr><td>[ / ]</td><td>时间倍率 减 / 加（可倒退）</td></tr>
-            <tr><td>P / N</td><td>暂停 / 回到现在</td></tr>
+            <tr><td>[ / ]</td><td>Time warp down / up (reversible)</td></tr>
+            <tr><td>P / N</td><td>Pause / back to now</td></tr>
           </table>
-          <h3>🖥 显示</h3>
+          <h3>🖥 Display</h3>
           <table>
-            <tr><td>O / L / H</td><td>轨道线 / 标签 / 本帮助</td></tr>
-            <tr><td>K</td><td>海外天体（TNO）轨道线开关（默认关闭）</td></tr>
+            <tr><td>O / L / H</td><td>Orbit lines / labels / this help</td></tr>
+            <tr><td>K</td><td>Toggle TNO orbit lines (off by default)</td></tr>
           </table>
         </div>
       </div>
-      <p class="credit">星历：NASA JPL（行星 Standish 元素 + Horizons 拟合卫星轨道，已对照官方数据验证）<br>
-      贴图：NASA/USGS 实测数据（Solar System Scope CC-BY-4.0 / Steve Albers SOS / JPL Photojournal）</p>
+      <p class="credit">Ephemerides: NASA JPL (planets: Standish elements + Horizons-fitted moon orbits, verified against official data)<br>
+      Textures: NASA/USGS measured data (Solar System Scope CC-BY-4.0 / Steve Albers SOS / JPL Photojournal)</p>
     </div>
   </div>
 

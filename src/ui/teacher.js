@@ -46,13 +46,15 @@ const ACTION_LABELS = {
  * @param {Function} opts.select  (bodyId) => void — 选中天体
  * @param {Function} opts.flyTo   (bodyId) => void — 飞往天体
  * @param {Object}   [opts.hud]   HUD 实例（用于显示提示，可选）
+ * @param {Function} [opts.nameOf] (bodyId) => string — 本地化天体名（可选，缺省用 ID）
  */
 export class TeacherToolkit {
-  constructor({ tours, select, flyTo, hud }) {
+  constructor({ tours, select, flyTo, hud, nameOf }) {
     this.tours = tours;
     this.select = select;
     this.flyTo = flyTo;
     this.hud = hud;
+    this.nameOf = nameOf ?? ((id) => id);
   }
 
   /**
@@ -149,7 +151,7 @@ export class TeacherToolkit {
     this.select(bodyId);
     this.flyTo(bodyId);
     if (this.hud) {
-      this.hud.tip(tt('teacher.askHighlight', { name: bodyId }));
+      this.hud.tip(tt('teacher.askHighlight', { name: this.nameOf(bodyId) }));
     }
   }
 
