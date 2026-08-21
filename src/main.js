@@ -911,8 +911,10 @@ function loop() {
 
 // 每帧错误兜底：每个区段独立捕获，仅首次报告（避免控制台刷屏），绝不阻止后续区段。
 // 设计目标：任何单帧异常都不能让 composer.render() 被跳过 → 屏幕永不冻结。
+// 错误同时进入 window.__errLog（探针/回归工具可断言"零错误"），不再静默。
 function loopErr(tag, e) {
   const k = '_e_' + tag;
+  (window.__errLog = window.__errLog || []).push({ tag, msg: String(e?.message || e), t: Date.now() });
   if (!loop[k]) {
     loop[k] = true;
     console.error('[' + tag + ']', e);

@@ -95,8 +95,10 @@ export class Input {
     // ── Wheel ─────────────────────────────────────────────────────────────
     document.addEventListener('wheel', (e) => {
       if (isTyping(e)) return;
+      // deltaMode 归一化：0=像素（Chrome/Edge），1=行（Firefox，×33），2=页（×100）
+      const unit = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 100 : 1;
       // Shift+滚轮 = FOV 变焦（10°–100°），不进距离缩放通道
-      const v = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY) / 100, 1);
+      const v = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY) * unit / 100, 1);
       if (e.shiftKey) this.fovWheel += v;
       else this.wheel += v;
     }, { passive: true });
