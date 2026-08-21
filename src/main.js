@@ -608,6 +608,7 @@ function loop() {
 
   // 时间系统
   handleTimeKeys();
+  input.pollGamepad(appMode); // 手柄（无事件流，须每帧轮询）
   simClock.rateTarget = hud.warpRate(simClock.paused); // rate 在 tick 内指数趋近（平滑换档）
   const jdTT = simClock.tick(dtReal);
 

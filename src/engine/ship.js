@@ -41,6 +41,15 @@ export class Input {
     this.touchSprint  = false;            // held: run
     this.touchJump    = false;            // one-shot: jump (consumed in updateWalk)
 
+    // ── Gamepad（浏览器无手柄事件流，必须每帧轮询）────────────────────
+    this._padIdx = -1;
+    this._padKeys = new Set(); // 手柄模拟的按键（用于精准释放）
+    this._padPrev = [];        // 按钮沿检测
+    dom.addEventListener('gamepadconnected', (e) => { this._padIdx = e.gamepad.index; });
+    dom.addEventListener('gamepaddisconnected', (e) => {
+      if (e.gamepad.index === this._padIdx) this._padIdx = -1;
+    });
+
     // Internal pointer-event tracking
     this._pointers    = new Map();  // pointerId → {x, y}
     this._ptrDownPos  = new Map();  // pointerId → {x, y} at pointerdown
@@ -279,6 +288,61 @@ export class Input {
 
   down(code) { return this.keys.has(code); }
   tapped(code) { return this.justPressed.has(code); }
+
+  /**
+   * 手柄轮询（Gamepad API 无事件流，须每帧调用）。
+   * 映射（标准布局）：
+   *   探索模式：左摇杆=平移（GE 式 WASD 等价）/右摇杆=缩放/LB·RB=时间倍率
+   *   飞行模式：左摇杆=视角/右摇杆=前后平移/左右=横移/LT·RT=速度档
+   *   行走模式：左摇杆=视角/右摇杆=行走
+   *   按钮：A=跳跃 B=惯性观察 X=急停 Y=登陆/返回 Start=暂停 Back=回到现在
+   */
+  pollGamepad(mode = 'orbit') {
+    if (typeof navigator === 'undefined' || !navigator.getGamepads) return;
+    if (this._padIdx < 0) {
+      const pads = navigator.getGamepads();
+      for (let i = 0; i < pads.length; i++) if (pads[i]?.connected) { this._padIdx = i; break; }
+      if (this._padIdx < 0) return;
+    }
+    const gp = navigator.getGamepads()[this._padIdx];
+    if (!gp?.connected) { this._padIdx = -1; return; }
+
+    const dz = (v) => (Math.abs(v) > 0.2 ? v : 0); // 死区
+    const lx = dz(gp.axes[0] ?? 0), ly = dz(gp.axes[1] ?? 0);
+    const rx = dz(gp.axes[2] ?? 0), ry = dz(gp.axes[3] ?? 0);
+
+    // 摇杆 → 按键模拟（与 GE 键盘方案同链路，零侵入）
+    const want = new Set();
+    if (mode === 'orbit') {
+      if (ly < 0) want.add('KeyW'); if (ly > 0) want.add('KeyS');
+      if (lx < 0) want.add('KeyA'); if (lx > 0) want.add('KeyD');
+      if (ry < 0) want.add('PageUp'); if (ry > 0) want.add('PageDown');
+    } else {
+      this.dx += lx * 2.4; this.dy += ly * 2.4; // 左摇杆视角
+      if (mode === 'walk') {
+        this.joystick.x = rx; this.joystick.y = ry; // 右摇杆行走
+      } else {
+        if (ry < 0) want.add('KeyW'); if (ry > 0) want.add('KeyS');
+        if (rx < 0) want.add('KeyA'); if (rx > 0) want.add('KeyD');
+        if (gp.buttons[6]?.pressed) want.add('ShiftLeft');  // LT 减速/加速档
+        if (gp.buttons[7]?.pressed) want.add('Equal');
+      }
+    }
+    // 精准释放：上次模拟的键这次不再需要就删掉
+    for (const k of this._padKeys) if (!want.has(k)) this.keys.delete(k);
+    for (const k of want) this.keys.add(k);
+    this._padKeys = want;
+
+    // 按钮沿 → 一次性按键
+    const BTN = { 0: 'Space', 1: 'KeyV', 2: 'KeyX', 3: 'KeyG', 4: 'BracketLeft', 5: 'BracketRight', 8: 'KeyN', 9: 'KeyP' };
+    for (const [i, code] of Object.entries(BTN)) {
+      const pressed = !!gp.buttons[i]?.pressed;
+      const was = !!this._padPrev[i];
+      if (pressed && !was) { this.keys.add(code); this.justPressed.add(code); }
+      if (!pressed && was && !this._padKeys.has(code)) this.keys.delete(code);
+      this._padPrev[i] = pressed;
+    }
+  }
 
   /**
    * 模式切换时彻底重置所有手势状态（拖拽 / 平移 / 捏合 / 触控点）。
