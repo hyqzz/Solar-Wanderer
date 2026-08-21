@@ -12,6 +12,12 @@ import { J2000 } from './time.js';
 /** 黄赤交角 J2000 */
 export const OBLIQUITY = 23.43928 * DEG;
 
+/** 平黄赤交角（含长期减小项 −46.8″/世纪；IAU 1976/2000 一致）：ε = ε0 − 0.013°·T */
+export function obliquityAt(jdTT) {
+  const T = (jdTT - J2000) / 36525;
+  return (23.43928 - 0.0130042 * T) * DEG;
+}
+
 // IAU 2009/2015 自转常数（角度制；d=J2000起天数, T=儒略世纪）
 // [RA0, RAdot(/T), Dec0, Decdot(/T), W0, Wdot(/d)]
 export const IAU_ROTATION = {
@@ -65,8 +71,9 @@ export function bodyToEclipticMatrix(bodyId, jdTT) {
   const W = (p[4] + p[5] * d) * DEG;
   const icrfToBody = matMul(Rz(W), matMul(Rx(Math.PI / 2 - Dec), Rz(Math.PI / 2 + RA)));
   const bodyToIcrf = transpose(icrfToBody);
-  // 赤道→黄道：本文件 Rx 为被动（坐标系旋转）矩阵，赤道系绕 x 轴转 +ε 得黄道系
-  return matMul(Rx(OBLIQUITY), bodyToIcrf);
+  // 赤道→黄道：本文件 Rx 为被动（坐标系旋转）矩阵，赤道系绕 x 轴转 +ε 得黄道系；
+  // ε 取该时刻平黄赤交角（长期减小项），千年级回溯时极点位置正确
+  return matMul(Rx(obliquityAt(jdTT)), bodyToIcrf);
 }
 
 /** 自转轴（北极）方向，黄道J2000 单位矢量 */

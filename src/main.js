@@ -67,12 +67,20 @@ composer.addPass(new RenderPass(scene, camera));
 // 注：已移除 UnrealBloomPass。真实太空中不存在后期泛光光晕，本项目以 1:1 物理真实为最高目标。
 composer.addPass(new OutputPass());
 
-// 运行时帧率兜底：识别失败的弱 GPU 在持续低帧时一次性降档
+// 运行时帧率自适应：持续低帧降档、持续高帧恢复（双向）
 const fpsGuard = makeFpsGuard(renderer, () => {
   for (const [, e] of builder.bodies) {
     if (e.mat?.userData.uniforms?.uDetailMode) e.mat.userData.uniforms.uDetailMode.value = 0;
   }
   hud.tip(t('tip.quality'));
+}, () => {
+  // 恢复：按天体类型重建 detailMode（与 builder.detailModeOf 同规则）
+  for (const [, e] of builder.bodies) {
+    if (e.mat?.userData.uniforms?.uDetailMode) {
+      e.mat.userData.uniforms.uDetailMode.value =
+        (e.phys.type === 'gas' || e.phys.type === 'ice') ? 2 : (e.phys.landable ? 1 : 0);
+    }
+  }
 });
 
 const hud = new HUD();

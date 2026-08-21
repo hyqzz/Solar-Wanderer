@@ -513,14 +513,15 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       const distFade = THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 300) - 1) * 0.8, 0, 0.9);
       const albedoScale = Math.sqrt((GLINT_ALBEDO[id] ?? 0.15) / 0.3);
       e.glint.material.opacity = distFade * (0.2 + 0.8 * phaseF) * albedoScale;
-      // 卫星 LOD：距母星太远时隐藏卫星网格（光点保留）
+      // 卫星 LOD：迟滞窗口防闪烁（进入 2.8 亿 km 显示、退出 3.2 亿 km 隐藏）；
+      // 网格隐藏时光点保留（远距卫星本就是点源，相位调制后亮度正确）
       if (e.isMoon) {
         const parent = bodies.get(e.parentId);
         const pd = Math.hypot(
           parent.posKm[0] - shipPosKm[0], parent.posKm[1] - shipPosKm[1], parent.posKm[2] - shipPosKm[2]
         );
-        e.mesh.visible = pd < 3e8; // 3 亿 km 内显示卫星
-        e.glint.visible = e.mesh.visible;
+        if (e.mesh.visible && pd > 3.2e8) e.mesh.visible = false;
+        else if (!e.mesh.visible && pd < 2.8e8) e.mesh.visible = true;
       }
     }
     const dSunKm = Math.hypot(shipPosKm[0], shipPosKm[1], shipPosKm[2]);

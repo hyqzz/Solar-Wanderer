@@ -70,25 +70,45 @@ export function initQuality(renderer) {
   return QUALITY;
 }
 
-/** 运行时帧率兜底：持续低帧 → 一次性降低像素比并关闭细节着色器 */
-export function makeFpsGuard(renderer, onDegrade) {
-  let acc = 0, n = 0, lowSec = 0, done = false;
+/** 运行时帧率自适应：持续低帧降档，持续高帧恢复——双向调节（可升可降）。
+ * 降档快（4s 低帧即降，保流畅优先）；升档慢且克制（连续 20s 高帧才回升，
+ * 且最多回升 2 次，防止升降振荡）。 */
+export function makeFpsGuard(renderer, onDegrade, onRestore) {
+  let acc = 0, n = 0, lowSec = 0, highSec = 0, upgrades = 0;
+  let degraded = false;
+  let savedRatio = null;
   return (dt) => {
-    if (done) return;
     acc += dt; n++;
-    if (acc >= 1) {
-      const fps = n / acc;
-      acc = 0; n = 0;
-      // 移动端容忍更低帧率（25 fps）
-      const threshold = IS_MOBILE ? 25 : 28;
-      lowSec = fps < threshold ? lowSec + 1 : 0;
-      if (lowSec >= (IS_MOBILE ? 3 : 4)) {
-        done = true;
-        renderer.setPixelRatio(1);
-        QUALITY.detail = false;
-        console.warn('[quality] 持续低帧 → 自动降低像素比/关闭细节着色器');
-        onDegrade?.();
+    if (acc < 1) return;
+    const fps = n / acc;
+    acc = 0; n = 0;
+    const lowThreshold = IS_MOBILE ? 25 : 28;
+    const highThreshold = IS_MOBILE ? 45 : 55;
+    // 降档
+    lowSec = fps < lowThreshold ? lowSec + 1 : 0;
+    if (!degraded && lowSec >= (IS_MOBILE ? 3 : 4)) {
+      degraded = true;
+      savedRatio = renderer.getPixelRatio();
+      renderer.setPixelRatio(1);
+      QUALITY.detail = false;
+      console.warn('[quality] 持续低帧 → 自动降低像素比/关闭细节着色器');
+      onDegrade?.();
+      return;
+    }
+    // 回升（仅对已降档的实例；保守：连续 20s 高帧，最多 2 次）
+    if (degraded) {
+      highSec = fps > highThreshold ? highSec + 1 : 0;
+      if (highSec >= 20 && upgrades < 2) {
+        upgrades++;
+        degraded = false;
+        lowSec = 0; highSec = 0;
+        renderer.setPixelRatio(savedRatio ?? 1);
+        QUALITY.detail = true;
+        console.info('[quality] 持续高帧 → 恢复像素比/细节着色器（第 ' + upgrades + ' 次）');
+        onRestore?.();
       }
+    } else {
+      highSec = 0;
     }
   };
 }
