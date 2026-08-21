@@ -608,7 +608,7 @@ function loop() {
 
   // 时间系统
   handleTimeKeys();
-  simClock.rate = hud.warpRate(simClock.paused);
+  simClock.rateTarget = hud.warpRate(simClock.paused); // rate 在 tick 内指数趋近（平滑换档）
   const jdTT = simClock.tick(dtReal);
 
   // 星历驱动（try-catch 保护：builder.update 改动较多，任何异常不应卡死渲染循环）

@@ -43,16 +43,19 @@ test('SimClock.setNow 接近系统时间', () => {
   assert.ok(Math.abs(c.jdTT - now) < 1e-5);
 });
 
-test('SimClock：后台/睡眠恢复后按完整挂钟时间追赶', () => {
+test('SimClock：后台/睡眠恢复后追赶池快速放完而非瞬移', () => {
   const c = new SimClock();
   c.rate = 1; // 实时
   const jd0 = c.jdTT;
   // 模拟系统睡眠 2 小时（_wallMs 回退）
   c._wallMs -= 2 * 3600 * 1000;
   c.tick(0);
-  // 应推进 2 小时，而不是被限制在 60 秒
-  const expected = jd0 + (2 * 3600) / 86400;
-  assert.ok(Math.abs(c.jdTT - expected) < 1e-9, `睡眠 2h 后应推进 2h，实际差 ${(c.jdTT - jd0) * 86400}s`);
+  // 新行为：不在单帧瞬移（首帧 dtReal=0 不推进），差额进追赶池
+  assert.ok(Math.abs(c.jdTT - jd0) < 1e-12, '恢复首帧不应瞬移');
+  // 连续帧以 ≤1000× 快速放完追赶池，最终严格等于 2 小时
+  for (let i = 0; i < 20; i++) c.tick(1);
+  const expected = jd0 + (2 * 3600) / 86400 + 20 / 86400; // 追赶 2h + 20 帧各 1s 实时
+  assert.ok(Math.abs(c.jdTT - expected) < 1e-6, `追赶结束后应精确等于实际流逝，实际差 ${(c.jdTT - expected) * 86400}s`);
 });
 
 test('SimClock：暂停时不追赶挂钟时间', () => {

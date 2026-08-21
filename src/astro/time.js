@@ -60,33 +60,58 @@ export function centuriesTT(jdTT) {
 /** 仿真时钟：以 TT 儒略日推进，支持倍率（含负）、暂停、回到现在 */
 export class SimClock {
   constructor() {
-    this.rate = 1; // 仿真秒 / 真实秒
+    this._rate = 1;       // 当前倍率（平滑后的实际值）
+    this._rateTarget = 1; // 目标倍率（UI 阶梯改这个，_rate 指数趋近）
     this.paused = false;
     this._wallMs = Date.now();
+    this._lagSec = 0;     // 后台/睡眠积压的仿真秒（追赶池，快速放完而非瞬移）
     this.setNow();
   }
+
+  /** 当前倍率。直接赋值 = 瞬时切换（测试/兼容路径），同时重置目标值 */
+  get rate() { return this._rate; }
+  set rate(v) { this._rate = v; this._rateTarget = v; }
+  /** 目标倍率：UI 改这里，实际倍率平滑趋近 */
+  get rateTarget() { return this._rateTarget; }
+  set rateTarget(v) { this._rateTarget = v; }
 
   setNow() {
     this.jdTT = jdUTtoTT(dateToJD(new Date()));
     this._wallMs = Date.now();
+    this._lagSec = 0;
   }
 
   /** 跳转到指定 TT 儒略日（书签/导览/课堂同步还原用） */
   set(jdTT) {
     this.jdTT = jdTT;
     this._wallMs = Date.now();
+    this._lagSec = 0;
   }
 
   /**
-   * 正常帧用 dtReal；若 wallElapsed 比 dtReal 多出 1 秒以上（tab 后台、系统睡眠/休眠恢复），
-   * 则用完整挂钟经过时间追赶，确保左上角仿真时刻始终与真实流逝时间严格同步。
+   * 正常帧用 dtReal；倍率按指数趋近 rateTarget（τ≈0.12s，避免瞬间换向的生硬感）。
+   * 若 wallElapsed 比 dtReal 多出 1 秒以上（tab 后台、系统睡眠恢复），差额进入追赶池，
+   * 以 min(1000×, 当前倍率×2) 的速度快速放完——天体滑到正确时刻而非瞬移。
    */
   tick(dtReal) {
     const nowMs = Date.now();
+    const k = 1 - Math.exp(-Math.max(dtReal, 0) / 0.12);
+    this._rate += (this._rateTarget - this._rate) * k; // 直接写 _rate，避免 setter 重置目标
     if (!this.paused) {
       const wallElapsed = (nowMs - this._wallMs) / 1000;
-      const elapsed = wallElapsed > dtReal + 1 ? wallElapsed : dtReal;
-      this.jdTT += (elapsed * this.rate) / DAY_SECONDS;
+      if (wallElapsed > dtReal + 1) {
+        this._lagSec += Math.max(0, wallElapsed - dtReal) * this._rate;
+      }
+      let adv = dtReal * this._rate;
+      if (this._lagSec !== 0) {
+        const cap = dtReal * Math.max(1000, Math.abs(this._rate) * 2);
+        const bleed = Math.abs(this._lagSec) > cap ? Math.sign(this._lagSec) * cap : this._lagSec;
+        adv += bleed;
+        this._lagSec -= bleed;
+      }
+      this.jdTT += adv / DAY_SECONDS;
+    } else {
+      this._lagSec = 0;
     }
     this._wallMs = nowMs;
     return this.jdTT;
