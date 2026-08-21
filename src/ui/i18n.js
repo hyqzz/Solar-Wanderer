@@ -143,6 +143,8 @@ const D = {
   'tip.urlUpdated': { zh: '🔗 地址栏已更新（Ctrl+L）', en: '🔗 Address bar updated (Ctrl+L)', es: '🔗 Barra de direcciones actualizada (Ctrl+L)', ja: '🔗 アドレスバーを更新（Ctrl+L）', fr: '🔗 Barre d\'adresse mise à jour (Ctrl+L)', de: '🔗 Adressleiste aktualisiert (Strg+L)', ru: '🔗 Адресная строка обновлена (Ctrl+L)' },
   'tip.bookmarkSaved': { zh: '🔖 书签已保存：{name}（Ctrl+Shift+B 回到最近书签）', en: '🔖 Bookmark saved: {name} (Ctrl+Shift+B to jump back)', es: '🔖 Marcador guardado: {name}', ja: '🔖 ブックマーク保存：{name}', fr: '🔖 Signet enregistré : {name}', de: '🔖 Lesezeichen gespeichert: {name}', ru: '🔖 Закладка сохранена: {name}' },
   'tip.bookmarkNone': { zh: '🔖 暂无书签', en: '🔖 No bookmarks yet', es: '🔖 Sin marcadores', ja: '🔖 ブックマークなし', fr: '🔖 Aucun signet', de: '🔖 Keine Lesezeichen', ru: '🔖 Нет закладок' },
+  'tip.humanOn': { zh: '🧍 人体比例剪影已显示（Y 关闭）', en: '🧍 Human scale figure shown (Y to hide)', es: '🧍 Figura humana visible (Y)', ja: '🧍 人体スケール表示（Y で閉じる）', fr: '🧍 Silhouette humaine affichée (Y)', de: '🧍 Maßstabsfigur eingeblendet (Y)', ru: '🧍 Силуэт для масштаба показан (Y)' },
+  'tip.humanOff': { zh: '🧍 人体比例剪影已隐藏', en: '🧍 Human scale figure hidden', es: '🧍 Figura oculta', ja: '🧍 非表示', fr: '🧍 Silhouette masquée', de: '🧍 Ausgeblendet', ru: '🧍 Скрыто' },
 
   // ── HUD 面板 ─────────────────────────────────────────────────────────
   'hud.flightTo': { zh: '前往 {name}　{p}%', en: 'To {name}　{p}%', es: 'Hacia {name}　{p}%', ja: '{name}へ　{p}%', fr: 'Vers {name}　{p}%', de: 'Nach {name}　{p}%', ru: 'К {name}　{p}%' },
@@ -234,6 +236,7 @@ const D = {
   'tc.stop':      { zh: '⏹ 急停', en: '⏹ Stop', es: '⏹ Detener', ja: '⏹ 停止', fr: '⏹ Arrêter', de: '⏹ Stopp', ru: '⏹ Стоп' },
   'tc.goto':      { zh: '✈ 前往', en: '✈ Go', es: '✈ Ir', ja: '✈ 移動', fr: '✈ Aller', de: '✈ Fliegen', ru: '✈ Лететь' },
   'tc.reset':     { zh: '↺ 复位', en: '↺ Reset', es: '↺ Reiniciar', ja: '↺ リセット', fr: '↺ Réinitialiser', de: '↺ Zurücksetzen', ru: '↺ Сброс' },
+  'tc.audio':     { zh: '🔊 音效', en: '🔊 Sound', es: '🔊 Sonido', ja: '🔊 音声', fr: '🔊 Son', de: '🔊 Ton', ru: '🔊 Звук' },
   'tc.inertial':  { zh: '🛰 惯性', en: '🛰 Inertial', es: '🛰 Inercial', ja: '🛰 慣性', fr: '🛰 Inertiel', de: '🛰 Inertial', ru: '🛰 Инерц.' },
   'tc.jump':      { zh: '↑ 跳跃', en: '↑ Jump', es: '↑ Saltar', ja: '↑ ジャンプ', fr: '↑ Sauter', de: '↑ Springen', ru: '↑ Прыжок' },
   'tc.ascend':    { zh: '▲', en: '▲', es: '▲', ja: '▲', fr: '▲', de: '▲', ru: '▲' },

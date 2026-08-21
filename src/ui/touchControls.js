@@ -475,6 +475,11 @@ export class TouchControls {
       resetBtn.addEventListener('click', () => { this.input.justPressed.add('KeyR'); });
       el.appendChild(resetBtn);
 
+      // 音效开关（移动端无键盘 M 键的入口）
+      const audioBtn = this._btn(t('tc.audio'), 'tc-audio-btn', 'tc-action-btn');
+      audioBtn.addEventListener('click', () => { this.cb.toggleAudio?.(); });
+      el.appendChild(audioBtn);
+
     } else if (mode === 'walk') {
       // Return to orbit
       const backBtn = this._btn(t('tc.orbit'), 'tc-back-btn', 'tc-action-btn primary');

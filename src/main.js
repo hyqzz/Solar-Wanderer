@@ -35,6 +35,7 @@ import { ScaleReference } from './ui/scaleRef.js';
 import { Bookmarks } from './ui/bookmarks.js';
 import { TourSystem } from './ui/tours.js';
 import { Narrator } from './ui/tts.js';
+import { buildTourUI } from './ui/tourUI.js';
 import { TeacherToolkit } from './ui/teacher.js';
 import { EclipseSystem } from './scene/eclipses.js';
 import { WebXRManager } from './engine/webxr.js';
@@ -194,6 +195,7 @@ async function init() {
       switchToFly:    switchToFly,
       switchToOrbit:  switchToOrbit,
       toggleOrbits:   () => { orbitLinesOn = !orbitLinesOn; },
+      toggleAudio:    () => { audioEngine?.toggle(); },
       warpUp:         () => hud.warpUp(),
       warpDown:       () => hud.warpDown(),
     });
@@ -262,11 +264,13 @@ async function init() {
     flyTo: (id) => flyTo(id),
     select: (id) => select(id),
     getMode: () => appMode,
-    setMode: (m) => { /* 模式切换由导览检查点驱动 */ },
+    setMode: (m) => { if (m === 'orbit' && appMode !== 'orbit') switchToOrbit(); },
     hud: hud,
   });
+  // 导览 UI 接通（目录入口 + 播放控制条）；onNarration 由 TTS 开关状态门控
+  const tourUIState = buildTourUI(tourSystem, narrator);
   tourSystem.onNarration = (text) => {
-    if (narrator.supported) narrator.speak(text, LANG);
+    if (narrator.supported && tourUIState.ttsOn) narrator.speak(text, LANG);
   };
 
   // 教师工具包（#42）：传 TourSystem 实例本身（isActive/_activeTourId 定义在实例上）
@@ -281,22 +285,28 @@ async function init() {
   // 日食阴影系统（#25）
   eclipseSystem = new EclipseSystem(scene, world);
 
-  // WebXR/VR 支持（#33）
+  // WebXR/VR 支持（#33）：支持时添加入口按钮并接通控制器回调
   webxr = new WebXRManager(renderer, camera, scene);
   webxr.init().then((supported) => {
-    if (supported) {
-      // VR 按钮可在此添加到 HUD
-    }
+    if (!supported) return;
+    const btn = webxr.createButton();
+    if (btn) document.body.appendChild(btn);
+    webxr.setControllerCallback(handleXREvent);
   });
 
   // Apollo 着陆点地标（#34）和火星车路径（#35）—— try-catch 保护，失败不应阻止渲染循环启动
   try { createApolloLandmarks(scene, terrainMgr); } catch (e) { console.error('[Apollo landmarks]', e); }
   try { createRoverSites(scene, terrainMgr); } catch (e) { console.error('[Rover sites]', e); }
 
-  // 键盘快捷键：C 指南针、M 音效、Ctrl+B 保存书签、Ctrl+Shift+B 回到最近书签、R 比例参照
+  // 键盘快捷键：C 指南针、M 音效、Ctrl+B 保存书签、Ctrl+Shift+B 回到最近书签、Y 人体比例剪影（行走模式）
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyC' && !e.repeat) { e.preventDefault(); compass?.toggle(); }
     if (e.code === 'KeyM' && !e.repeat) { e.preventDefault(); audioEngine?.toggle(); }
+    if (e.code === 'KeyY' && !e.repeat && appMode === 'walk') {
+      e.preventDefault();
+      const on = scaleRef?.toggleHuman();
+      showActionTip(t(on ? 'tip.humanOn' : 'tip.humanOff'));
+    }
     if (e.code === 'KeyB' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       if (e.shiftKey) restoreLatestBookmark();
@@ -1176,8 +1186,51 @@ function applyLocationHash() {
   select(focusId);
 }
 
-/** 保存当前视点为命名书签（Ctrl+B）；orbit 模式记录精确视角，fly/walk 记录焦点与时间 */
-function saveBookmark() {
+// ── VR 控制器事件（WebXRManager 回调）─────────────────────────────────
+const _xrOrigin = new THREE.Vector3();
+const _xrDir = new THREE.Vector3();
+const _xrV = new THREE.Vector3();
+
+function handleXREvent(ev) {
+  if (ev.type === 'teleport' || ev.type === 'zoom') {
+    // 摇杆前后 / 双手捏合 → 探索模式下按焦点缩放（方向统一：前推/捏合=靠近）
+    if (appMode !== 'orbit') return;
+    const factor = ev.type === 'teleport' ? (1 - ev.forward * 0.4) : (1 + ev.delta * 4);
+    const next = orbitCam.distTarget * Math.min(1.5, Math.max(0.67, factor));
+    const minD = registry.get(orbitCam.focusId)?.minDistKm ?? 0.01;
+    orbitCam.distTarget = Math.max(next, minD);
+  } else if (ev.type === 'raycast') {
+    // 控制器射线拾取：按天体张角打分（近似 pickBody 的 VR 版）
+    _xrOrigin.set(ev.origin.x, ev.origin.y, ev.origin.z);
+    _xrDir.set(ev.direction.x, ev.direction.y, ev.direction.z).normalize();
+    const hit = pickBodyByRay(_xrOrigin, _xrDir);
+    if (hit) {
+      select(hit);
+      showActionTip(`${bodyName(registry.get(hit))}`, 1800);
+    }
+  }
+  // grab（单手抓取平移）暂未映射：避免与浮动原点重定心冲突，待 VR 实机调优
+}
+
+/** VR 射线拾取：命中角 = min(天体半径张角 + 0.3° 容差)，取相对命中角最小者 */
+function pickBodyByRay(origin, dir) {
+  let best = null, bestScore = 1;
+  for (const [id, e] of registry) {
+    if (!e.relObj || !e.phys?.radiusKm) continue;
+    e.relObj.getWorldPosition(_xrV);
+    _xrV.sub(origin);
+    const dist = _xrV.length();
+    if (dist < 1e-6) continue;
+    _xrV.divideScalar(dist);
+    const ang = Math.acos(Math.min(1, Math.max(-1, _xrV.dot(dir))));
+    const hitAng = Math.atan(e.phys.radiusKm / dist) + 0.005;
+    const score = ang / hitAng;
+    if (score < bestScore) { bestScore = score; best = id; }
+  }
+  return best;
+}
+
+/** 保存当前视点为命名书签（Ctrl+B）；orbit 模式记录精确视角，fly/walk 记录焦点与时间 */function saveBookmark() {
   if (!bookmarks) return;
   const focusId = appMode === 'orbit' ? orbitCam.focusId : (selectedId ?? orbitCam.focusId);
   const entry = registry.get(focusId);

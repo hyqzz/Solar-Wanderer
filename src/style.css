@@ -73,6 +73,20 @@ html, body {
   font-size: 11px; color: rgba(180, 210, 240, 0.55);
   pointer-events: none; transition: opacity 0.8s; letter-spacing: 0.4px;
 }
+/* 导览控制条：底部居中，仅导览播放中显示 */
+#tour-bar {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px; z-index: 40;
+  background: rgba(10, 18, 32, 0.82); border: 1px solid rgba(120, 170, 230, 0.35);
+  border-radius: 10px; padding: 7px 12px; backdrop-filter: blur(6px);
+  font-size: 13px; color: #cfe4ff; max-width: 92vw;
+}
+#tour-bar span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50vw; }
+#tour-bar button {
+  background: rgba(60, 100, 160, 0.35); color: #d8ecff; border: 1px solid rgba(140, 190, 240, 0.35);
+  border-radius: 6px; width: 30px; height: 26px; cursor: pointer; font-size: 13px; line-height: 1;
+}
+#tour-bar button:hover { background: rgba(90, 140, 210, 0.5); }
 .big { font-size: 16px; font-weight: bold; color: #e8f4ff; }
 .dim { opacity: 0.65; font-size: 12px; }
 .warn { color: #ffb86b; font-size: 12px; }
