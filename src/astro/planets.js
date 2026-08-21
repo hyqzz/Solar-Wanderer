@@ -55,13 +55,13 @@ export const PLANETS = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn'
 const MOON_MASS_FRACTION = 1 / 82.300577 / (1 + 1 / 82.300577);
 
 /**
- * 高精度星历开关：true = VSOP87（±3000 年 < 0.1°），false = Standish 元素（默认）。
- * Standish 元素在 1800–2050 年内精度足够且计算更快，是测试基准；
- * VSOP87 用于需要长时段外推或更高精度的场景（如 #55）。
+ * 高精度星历开关：true = VSOP87 截断版（±3000 年 < 0.1°，默认开启），
+ * false = Standish 元素（1800–2050 年内精度足够、计算更快，供低端设备回退）。
+ * VSOP87 截断版每帧全行星开销在现代设备上可忽略，且长时段外推显著更准。
  */
-let useHighPrecision = false;
+let useHighPrecision = true;
 
-/** 切换星历源：true→VSOP87，false→Standish（默认） */
+/** 切换星历源：true→VSOP87（默认），false→Standish（低端回退） */
 export function setHighPrecision(v) { useHighPrecision = !!v; }
 /** 当前是否使用 VSOP87 高精度星历 */
 export function isHighPrecision() { return useHighPrecision; }
