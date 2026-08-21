@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { TNO_IDS, TNO_DATA, tnoPosition, tnoOrbitPoints } from '../astro/tno.js';
 import { createPlanetMaterial } from './planetMaterial.js';
-import { proceduralMap } from './proceduralTextures.js';
+import { proceduralMapLazy } from './proceduralTextures.js';
 import { eclToWorldArr } from '../config.js';
 import { QUALITY } from '../engine/quality.js';
 
@@ -64,7 +64,7 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
     // 球体网格：分辨率适中（TNO 不可登陆，无需精细地形）
     const seg = Math.max(16, segLo[0]);
     const geo = new THREE.SphereGeometry(d.radiusKm, seg, Math.round(seg / 2));
-    const tex = proceduralMap(id, d.palette ?? 'gray', 512, 256);
+    const tex = proceduralMapLazy(id, d.palette ?? 'gray', 512, 256);
     const mat = createPlanetMaterial({ map: tex, detailMode: 0, radiusKm: d.radiusKm });
     const mesh = new THREE.Mesh(geo, mat);
     group.add(mesh);

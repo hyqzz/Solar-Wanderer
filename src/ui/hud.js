@@ -163,6 +163,20 @@ export class HUD {
       btn.style.cursor = 'pointer';
     }
   }
+
+  /** 后台高清贴图升级进度：非阻塞角标，完成后自动隐去 */
+  setBgLoading(done, total) {
+    const el = document.getElementById('hud-bgload');
+    if (!el || total <= 0) return;
+    if (done >= total) {
+      el.style.opacity = '0';
+      setTimeout(() => { el.style.display = 'none'; }, 800);
+      return;
+    }
+    el.style.display = 'block';
+    el.style.opacity = '1';
+    el.textContent = t('hud.hdLoading', { pct: Math.round((done / total) * 100) });
+  }
 }
 
 /** 光行时间格式化（求知向：让用户直观感受太阳系尺度） */

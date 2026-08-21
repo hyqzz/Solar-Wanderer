@@ -67,6 +67,12 @@ html, body {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   color: rgba(160, 200, 240, 0.7); font-size: 18px; font-weight: 200;
 }
+/* 后台高清贴图升级角标：不打扰操作，完成自动淡出 */
+#hud-bgload {
+  position: absolute; bottom: 12px; left: 14px;
+  font-size: 11px; color: rgba(180, 210, 240, 0.55);
+  pointer-events: none; transition: opacity 0.8s; letter-spacing: 0.4px;
+}
 .big { font-size: 16px; font-weight: bold; color: #e8f4ff; }
 .dim { opacity: 0.65; font-size: 12px; }
 .warn { color: #ffb86b; font-size: 12px; }

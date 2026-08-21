@@ -1,0 +1,94 @@
+{
+  "callisto.jpg": {
+    "p": "callisto.webp",
+    "h": "e4f0655faf11"
+  },
+  "charon.jpg": {
+    "p": "charon.webp",
+    "h": "1cf9acb7d28c"
+  },
+  "earth_clouds.jpg": {
+    "p": "earth_clouds.webp",
+    "h": "a25550396360"
+  },
+  "earth_day.jpg": {
+    "p": "earth_day.webp",
+    "h": "ddbbed834e82"
+  },
+  "earth_night.jpg": {
+    "p": "earth_night.webp",
+    "h": "cd80ca143718"
+  },
+  "europa.png": {
+    "p": "europa.webp",
+    "h": "3a9ca1a6c7b8"
+  },
+  "ganymede.jpg": {
+    "p": "ganymede.webp",
+    "h": "1427ebcef4ff"
+  },
+  "io.jpg": {
+    "p": "io.webp",
+    "h": "ce9aec4e8f2f"
+  },
+  "jupiter.jpg": {
+    "p": "jupiter.webp",
+    "h": "409ecf0c682c"
+  },
+  "mars.jpg": {
+    "p": "mars.webp",
+    "h": "75e98457f683"
+  },
+  "mercury.jpg": {
+    "p": "mercury.webp",
+    "h": "6ff02d014140"
+  },
+  "milkyway.jpg": {
+    "p": "milkyway.webp",
+    "h": "7c119ae30b36"
+  },
+  "moon.jpg": {
+    "p": "moon.webp",
+    "h": "42f12ef0e062"
+  },
+  "neptune.jpg": {
+    "p": "neptune.webp",
+    "h": "4ff333c5cccc"
+  },
+  "pluto.jpg": {
+    "p": "pluto.webp",
+    "h": "5b3d38ba701e"
+  },
+  "saturn.jpg": {
+    "p": "saturn.webp",
+    "h": "c5e21408f3f5"
+  },
+  "saturn_ring.png": {
+    "p": "saturn_ring.webp",
+    "h": "9b1bb78abceb"
+  },
+  "sun.jpg": {
+    "p": "sun.webp",
+    "h": "0833ed7cb52d"
+  },
+  "titan.jpg": {
+    "p": "titan.webp",
+    "h": "398eb2d7f592"
+  },
+  "triton.jpg": {
+    "p": "triton.webp",
+    "h": "07577b5808bc"
+  },
+  "uranus.jpg": {
+    "p": "uranus.webp",
+    "h": "39fba155ca70"
+  },
+  "venus_atmosphere.jpg": {
+    "p": "venus_atmosphere.webp",
+    "h": "22cf75fcbbbf"
+  },
+  "venus_surface.jpg": {
+    "p": "venus_surface.webp",
+    "h": "1549a36da4bb"
+  }
+}

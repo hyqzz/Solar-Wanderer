@@ -198,6 +198,7 @@ const D = {
   'start.loading': { zh: '加载中…', en: 'Loading…', es: 'Cargando…', ja: '読み込み中…', fr: 'Chargement…', de: 'Laden…', ru: 'Загрузка…' },
   'start.loadingTex': { zh: '加载真实行星贴图… {done}/{total}', en: 'Loading real planet textures… {done}/{total}', es: 'Cargando texturas reales de planetas… {done}/{total}', ja: '実惑星テクスチャを読み込み中… {done}/{total}', fr: 'Chargement des textures planétaires réelles… {done}/{total}', de: 'Echte Planetentexturen laden… {done}/{total}', ru: 'Загрузка текстур планет… {done}/{total}' },
   'start.enter': { zh: '点击进入太阳系', en: 'Enter the solar system', es: 'Entrar al sistema solar', ja: '太陽系に入る', fr: 'Entrer dans le système solaire', de: 'Sonnensystem betreten', ru: 'Войти в Солнечную систему' },
+  'hud.hdLoading': { zh: '高清贴图加载中 {pct}%', en: 'Loading HD textures {pct}%', es: 'Cargando texturas HD {pct}%', ja: 'HDテクスチャ読み込み中 {pct}%', fr: 'Chargement des textures HD {pct}%', de: 'HD-Texturen laden {pct}%', ru: 'Загрузка HD-текстур {pct}%' },
   'start.hint': {
     zh: '进入后单击画面锁定鼠标 · H 查看完整操作说明',
     en: 'Click to lock the pointer after entering · press H for full controls',

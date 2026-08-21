@@ -84,3 +84,57 @@ export function proceduralBands(bodyId, colors, w = 1024, h = 512) {
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
+
+// ── 惰性生成 ─────────────────────────────────────────────────────
+// 逐像素 fbm 噪声的生成成本约 0.2–0.5s/张，数十颗无贴图天体同步生成曾阻塞启动 10s+。
+// 改为：启动时返回纯色占位纹理（微秒级），真实贴图在首帧渲染后逐张后台生成并换图。
+const jobQueue = [];
+let jobRunning = false;
+
+function scheduleJobs() {
+  if (jobRunning) return;
+  jobRunning = true;
+  const step = () => {
+    const job = jobQueue.shift();
+    if (job) { try { job(); } catch { /* 单张失败不阻塞队列 */ } }
+    if (jobQueue.length) setTimeout(step, 0); // 每帧之间执行一张，保持交互流畅
+    else jobRunning = false;
+  };
+  // 延迟启动，让 init/首帧渲染优先完成
+  setTimeout(step, 50);
+}
+
+function placeholderTex(preset) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2; canvas.height = 2;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = `rgb(${preset.base[0]},${preset.base[1]},${preset.base[2]})`;
+  ctx.fillRect(0, 0, 2, 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+/** 惰性程序化贴图：立即返回占位纹理，真实贴图后台生成后无缝替换 */
+export function proceduralMapLazy(bodyId, palette = 'gray', w = 1024, h = 512) {
+  const tex = placeholderTex(PRESETS[palette] ?? PRESETS.gray);
+  jobQueue.push(() => {
+    tex.image = proceduralMap(bodyId, palette, w, h).image;
+    tex.needsUpdate = true;
+  });
+  scheduleJobs();
+  return tex;
+}
+
+/** 惰性气巨条带贴图（同上） */
+export function proceduralBandsLazy(bodyId, colors, w = 1024, h = 512) {
+  const mid = colors[Math.floor(colors.length / 2)];
+  const tex = placeholderTex({ base: mid });
+  jobQueue.push(() => {
+    tex.image = proceduralBands(bodyId, colors, w, h).image;
+    tex.needsUpdate = true;
+  });
+  scheduleJobs();
+  return tex;
+}

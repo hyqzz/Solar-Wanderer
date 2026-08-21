@@ -13,8 +13,104 @@ import { QUALITY } from '../engine/quality.js';
 import { createAtmosphere } from './atmosphere.js';
 import { createRings } from './rings.js';
 import { createSun } from './sun.js';
-import { proceduralMap, proceduralBands } from './proceduralTextures.js';
+import { proceduralMapLazy, proceduralBandsLazy } from './proceduralTextures.js';
 import { HeightField } from './terrain.js';
+import { idbGet, idbPut } from '../engine/texCache.js';
+
+/** 全尺寸贴图后台升级优先级：默认视野（地月系/太阳）优先，气巨其次，远端卫星最后 */
+const TEX_PRIORITY = [
+  'earth_day.jpg', 'earth_night.jpg', 'earth_clouds.jpg', 'moon.jpg', 'sun.jpg',
+  'mars.jpg', 'jupiter.jpg', 'saturn.jpg', 'saturn_ring.png', 'milkyway.jpg',
+  'venus_surface.jpg', 'venus_atmosphere.jpg', 'mercury.jpg',
+  'io.jpg', 'europa.png', 'ganymede.jpg', 'callisto.jpg', 'titan.jpg',
+  'uranus.jpg', 'neptune.jpg', 'triton.jpg', 'pluto.jpg', 'charon.jpg',
+];
+const UPGRADE_CONCURRENCY = 3;
+
+function priorityOf(file) {
+  const i = TEX_PRIORITY.indexOf(file);
+  return i === -1 ? TEX_PRIORITY.length : i;
+}
+
+/** 拉全尺寸贴图：优先 IndexedDB 命中，否则网络下载并写缓存；指数退避重试 2 次 */
+async function loadFullImage(file, hash, attempt = 0) {
+  const key = hash ? `${file}@${hash}` : file;
+  try {
+    let blob = await idbGet(key);
+    if (!blob) {
+      const resp = await fetch('textures/' + file);
+      if (!resp.ok) throw new Error('http ' + resp.status);
+      blob = await resp.blob();
+      idbPut(key, blob); // 后台写缓存，不阻塞解码
+    }
+    return await createImageBitmap(blob); // 解码在工作线程，不卡主线程
+  } catch {
+    if (attempt < 2) {
+      await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
+      return loadFullImage(file, hash, attempt + 1);
+    }
+    return null; // 最终失败：保留预览/程序化纹理
+  }
+}
+
+/** 后台升级队列：全尺寸到位后立即换图（替换 image + needsUpdate，材质与采样器不动） */
+async function runUpgradeQueue(queue, cache, pManifest, onBgProgress) {
+  let cursor = 0, doneBg = 0;
+  const worker = async () => {
+    while (cursor < queue.length) {
+      const file = queue[cursor++];
+      const tex = cache.get(file);
+      const bmp = tex ? await loadFullImage(file, pManifest[file]?.h) : null;
+      if (bmp && tex) { tex.image = bmp; tex.needsUpdate = true; }
+      onBgProgress?.(++doneBg, queue.length, file);
+    }
+  };
+  await Promise.all(Array.from({ length: UPGRADE_CONCURRENCY }, worker));
+}
+
+async function loadTextures(onProgress, onBgProgress) {
+  let manifest = {}, pManifest = {};
+  try {
+    manifest = await (await fetch('textures/manifest.json')).json();
+  } catch { /* 离线/无清单 → 全部程序化 */ }
+  try {
+    pManifest = await (await fetch('textures/preview/manifest.json')).json();
+  } catch { /* 无预览层 → 退回直接加载全尺寸 */ }
+  const loader = new THREE.TextureLoader();
+  const cache = new Map();
+  const wanted = new Set();
+  const collect = (t) => { if (t) Object.values(t).forEach((v) => typeof v === 'string' && wanted.add(v)); };
+  Object.values(BODIES).forEach((b) => { collect(b.textures); if (b.rings?.texture) wanted.add(b.rings.texture); });
+  Object.values(MOON_PHYS).forEach((m) => collect(m.textures));
+  wanted.add('milkyway.jpg');
+
+  // L1（阻塞，仅约 0.5MB）：有预览先载预览，无预览才直接载全尺寸
+  let done = 0;
+  const previewed = new Set();
+  const tasks = [...wanted].map((file) => new Promise((resolve) => {
+    const finish = () => { onProgress?.(++done, wanted.size, file); resolve(); };
+    if (!manifest[file]) { finish(); return; }
+    const p = pManifest[file];
+    loader.load(
+      p ? 'textures/preview/' + p.p : 'textures/' + file,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = QUALITY.anisotropy;
+        cache.set(file, tex);
+        if (p) previewed.add(file);
+        finish();
+      },
+      undefined,
+      () => { finish(); } // 失败→兜底
+    );
+  }));
+  await Promise.all(tasks);
+
+  // L2/L3（后台，不阻塞）：全尺寸按优先级队列逐张升级
+  const queue = [...previewed].sort((a, b) => priorityOf(a) - priorityOf(b));
+  const upgrades = runUpgradeQueue(queue, cache, pManifest, onBgProgress);
+  return { cache, upgrades };
+}
 
 /** 不规则小天体（土豆状）：用与行走碰撞同源的 HeightField 变形球网格
  * （视觉=碰撞严格一致；三轴椭球 + 噪声起伏，R9-2c 火卫一/二等） */
@@ -54,46 +150,13 @@ const GAS_BAND_COLORS = {
   neptune: [[60, 90, 200], [80, 120, 220], [50, 80, 180], [90, 140, 230]],
 };
 
-async function loadTextures(onProgress) {
-  let manifest = {};
-  try {
-    manifest = await (await fetch('textures/manifest.json')).json();
-  } catch { /* 离线/无清单 → 全部程序化 */ }
-  const loader = new THREE.TextureLoader();
-  const cache = new Map();
-  const wanted = new Set();
-  const collect = (t) => { if (t) Object.values(t).forEach((v) => typeof v === 'string' && wanted.add(v)); };
-  Object.values(BODIES).forEach((b) => { collect(b.textures); if (b.rings?.texture) wanted.add(b.rings.texture); });
-  Object.values(MOON_PHYS).forEach((m) => collect(m.textures));
-  wanted.add('milkyway.jpg');
-
-  let done = 0;
-  const tasks = [...wanted].map((file) => new Promise((resolve) => {
-    if (!manifest[file]) { done++; resolve(); return; }
-    loader.load(
-      'textures/' + file,
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.anisotropy = QUALITY.anisotropy;
-        cache.set(file, tex);
-        onProgress?.(++done, wanted.size, file);
-        resolve();
-      },
-      undefined,
-      () => { onProgress?.(++done, wanted.size, file); resolve(); } // 失败→兜底
-    );
-  }));
-  await Promise.all(tasks);
-  return cache;
-}
-
-/** 贴图或程序化兜底 */
+/** 贴图或程序化兜底（惰性：占位纹理先行，真实贴图后台生成后换图） */
 function texOf(cache, file, bodyId, phys) {
   if (file && cache.has(file)) return cache.get(file);
   if (phys?.type === 'gas' || phys?.type === 'ice') {
-    return proceduralBands(bodyId, GAS_BAND_COLORS[bodyId] ?? GAS_BAND_COLORS.jupiter);
+    return proceduralBandsLazy(bodyId, GAS_BAND_COLORS[bodyId] ?? GAS_BAND_COLORS.jupiter);
   }
-  return proceduralMap(bodyId, phys?.surface?.palette ?? 'gray');
+  return proceduralMapLazy(bodyId, phys?.surface?.palette ?? 'gray');
 }
 
 function sphereGeo(radiusKm, big) {
@@ -109,8 +172,8 @@ function detailModeOf(phys) {
   return phys.landable ? 1 : 0;
 }
 
-export async function buildSolarSystem(scene, world, onProgress) {
-  const cache = await loadTextures(onProgress);
+export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
+  const { cache, upgrades } = await loadTextures(onProgress, onBgProgress);
   const bodies = new Map();
   const orbitLines = new THREE.Group();
   scene.add(orbitLines);
@@ -437,7 +500,7 @@ export async function buildSolarSystem(scene, world, onProgress) {
     return data;
   }
 
-  return { bodies, sunEntry, orbitLines, update, postWorldUpdate, mapDataOf, cache };
+  return { bodies, sunEntry, orbitLines, update, postWorldUpdate, mapDataOf, cache, upgrades };
 }
 
 function makeGlint(color) {

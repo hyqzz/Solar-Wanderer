@@ -100,7 +100,7 @@ init();
 
 async function init() {
   applyDomI18n();
-  builder = await buildSolarSystem(scene, world, (d, total) => hud.setLoading(d, total));
+  builder = await buildSolarSystem(scene, world, (d, total) => hud.setLoading(d, total), (d, total) => hud.setBgLoading(d, total));
 
   sky = createStarfield(builder.cache.get('milkyway.jpg'));
   scene.add(sky.group); // 背景程序化星空固定相机（零视差）
