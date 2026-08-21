@@ -464,7 +464,6 @@ export class TouchControls {
         el.appendChild(landBtn);
       }
 
-      // 移动版探索模式不显示飞行按钮；飞行模式入口保留在长按/键盘 F（R12）
       // Goto selected
       const gotoBtn = this._btn(t('tc.goto'), 'tc-goto-btn', 'tc-action-btn');
       gotoBtn.addEventListener('click', () => { this.input.justPressed.add('KeyT'); });
@@ -474,6 +473,11 @@ export class TouchControls {
       const resetBtn = this._btn(t('tc.reset'), 'tc-reset-btn', 'tc-action-btn');
       resetBtn.addEventListener('click', () => { this.input.justPressed.add('KeyR'); });
       el.appendChild(resetBtn);
+
+      // 自由飞行入口（此前移动端隐藏，审查 #ui-11 补回；虚拟摇杆+油门在 fly 模式可用）
+      const flyBtn = this._btn(t('tc.fly'), 'tc-fly-btn', 'tc-action-btn');
+      flyBtn.addEventListener('click', () => { this.cb.switchToFly?.(); });
+      el.appendChild(flyBtn);
 
       // 音效开关（移动端无键盘 M 键的入口）
       const audioBtn = this._btn(t('tc.audio'), 'tc-audio-btn', 'tc-action-btn');

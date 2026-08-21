@@ -238,6 +238,7 @@ const D = {
   'tc.goto':      { zh: '✈ 前往', en: '✈ Go', es: '✈ Ir', ja: '✈ 移動', fr: '✈ Aller', de: '✈ Fliegen', ru: '✈ Лететь' },
   'tc.reset':     { zh: '↺ 复位', en: '↺ Reset', es: '↺ Reiniciar', ja: '↺ リセット', fr: '↺ Réinitialiser', de: '↺ Zurücksetzen', ru: '↺ Сброс' },
   'tc.audio':     { zh: '🔊 音效', en: '🔊 Sound', es: '🔊 Sonido', ja: '🔊 音声', fr: '🔊 Son', de: '🔊 Ton', ru: '🔊 Звук' },
+  'tc.fly':       { zh: '🚀 飞行', en: '🚀 Fly', es: '🚀 Volar', ja: '🚀 飛行', fr: '🚀 Voler', de: '🚀 Fliegen', ru: '🚀 Лететь' },
   'tc.inertial':  { zh: '🛰 惯性', en: '🛰 Inertial', es: '🛰 Inercial', ja: '🛰 慣性', fr: '🛰 Inertiel', de: '🛰 Inertial', ru: '🛰 Инерц.' },
   'tc.jump':      { zh: '↑ 跳跃', en: '↑ Jump', es: '↑ Saltar', ja: '↑ ジャンプ', fr: '↑ Sauter', de: '↑ Springen', ru: '↑ Прыжок' },
   'tc.ascend':    { zh: '▲', en: '▲', es: '▲', ja: '▲', fr: '▲', de: '▲', ru: '▲' },

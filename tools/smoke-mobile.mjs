@@ -201,7 +201,7 @@ for (const lang of ['zh', 'en']) {
     ['Directory closed by default',  r.dirClosedByDefault],
     ['☰ opens directory',            r.dirOpens],
     ['Directory auto-hides on go',   r.dirAutoHides],
-    ['No orbit-mode fly button',     !r.flyBtnInOrbit],
+    ['Orbit-mode fly button present',  r.flyBtnInOrbit], // 审查 #ui-11：移动端补回飞行入口
     ['Backdrop does not dim',        !r.backdropDimming],
     ['Help shows touch content',     r.helpTouchContent],
     ['.key badges hidden',           !r.keyBadgeVisible],
