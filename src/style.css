@@ -844,3 +844,12 @@ html.touch .help-inner { touch-action: pan-y; }
 
 /* ── 汉堡菜单：宽度适中 ── */
 .touch #tc-menu { min-width: 160px; max-width: 220px; }
+
+/* 可访问性：运动敏感用户减少启动屏动画 */
+@media (prefers-reduced-motion: reduce) {
+  .nebula-glow, .star-particles, .title-block .main-title, .sub-title,
+  .start-card, #start-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}
