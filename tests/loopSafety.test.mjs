@@ -8,8 +8,9 @@ import { DEMTileSource, DEM_SOURCES } from '../src/scene/demTiles.js';
 // ── DEMTileSource：离线回退 + 同步采样不抛异常 ──────────────────────
 
 test('DEMTileSource：无配置天体 hasSource=false', () => {
-  assert.equal(DEMTileSource.hasSource('earth'), false);
+  assert.equal(DEMTileSource.hasSource('ceres'), false); // 谷神星等无 DEM 配置
   assert.equal(DEMTileSource.hasSource('mercury'), false);
+  assert.equal(DEMTileSource.hasSource('earth'), true); // ETOPO1 已接入
   assert.equal(DEMTileSource.hasSource('moon'), true);
   assert.equal(DEMTileSource.hasSource('mars'), true);
 });
@@ -39,7 +40,7 @@ test('DEMTileSource：requestTiles 离线后为空操作不抛异常', () => {
 });
 
 test('DEMTileSource：requestTiles 未配置天体为空操作', () => {
-  const src = new DEMTileSource('earth'); // earth 无 DEM 配置
+  const src = new DEMTileSource('mercury'); // mercury 无 DEM 配置
   assert.equal(src.config, null);
   assert.doesNotThrow(() => src.requestTiles({ x: 0, y: 1, z: 0 }, 8));
 });
