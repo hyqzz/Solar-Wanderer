@@ -883,6 +883,15 @@ function loop() {
   } catch (e) { console.error('[webxr]', e); }
 
   try { fpsGuard(dtReal); } catch (e) { loopErr('fpsGuard', e); }
+  // Shift+滚轮：FOV 变焦（10°–100°，等效全画幅焦距提示）
+  try {
+    if (input.fovWheel !== 0) {
+      camera.fov = THREE.MathUtils.clamp(camera.fov * Math.pow(1.12, input.fovWheel), 10, 100);
+      camera.updateProjectionMatrix();
+      const mm = 43.27 / (2 * Math.tan(camera.fov * Math.PI / 360));
+      showActionTip(t('tip.fov', { deg: camera.fov.toFixed(0), mm: mm.toFixed(0) }), 1200);
+    }
+  } catch (e) { loopErr('fov', e); }
   try { input.endFrame(); } catch (e) { loopErr('input', e); }
   try {
     composer.render();

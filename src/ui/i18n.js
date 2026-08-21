@@ -145,6 +145,7 @@ const D = {
   'tip.bookmarkNone': { zh: '🔖 暂无书签', en: '🔖 No bookmarks yet', es: '🔖 Sin marcadores', ja: '🔖 ブックマークなし', fr: '🔖 Aucun signet', de: '🔖 Keine Lesezeichen', ru: '🔖 Нет закладок' },
   'tip.humanOn': { zh: '🧍 人体比例剪影已显示（Y 关闭）', en: '🧍 Human scale figure shown (Y to hide)', es: '🧍 Figura humana visible (Y)', ja: '🧍 人体スケール表示（Y で閉じる）', fr: '🧍 Silhouette humaine affichée (Y)', de: '🧍 Maßstabsfigur eingeblendet (Y)', ru: '🧍 Силуэт для масштаба показан (Y)' },
   'tip.humanOff': { zh: '🧍 人体比例剪影已隐藏', en: '🧍 Human scale figure hidden', es: '🧍 Figura oculta', ja: '🧍 非表示', fr: '🧍 Silhouette masquée', de: '🧍 Ausgeblendet', ru: '🧍 Скрыто' },
+  'tip.fov': { zh: '🔭 FOV {deg}° ≈ {mm}mm', en: '🔭 FOV {deg}° ≈ {mm}mm', es: '🔭 FOV {deg}° ≈ {mm}mm', ja: '🔭 FOV {deg}° ≈ {mm}mm', fr: '🔭 FOV {deg}° ≈ {mm}mm', de: '🔭 FOV {deg}° ≈ {mm}mm', ru: '🔭 FOV {deg}° ≈ {mm}mm' },
 
   // ── HUD 面板 ─────────────────────────────────────────────────────────
   'hud.flightTo': { zh: '前往 {name}　{p}%', en: 'To {name}　{p}%', es: 'Hacia {name}　{p}%', ja: '{name}へ　{p}%', fr: 'Vers {name}　{p}%', de: 'Nach {name}　{p}%', ru: 'К {name}　{p}%' },

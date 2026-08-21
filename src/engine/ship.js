@@ -26,7 +26,7 @@ const clampMove = (m) => Math.max(-150, Math.min(150, m));
 export class Input {
   constructor(dom, canvas = null) {
     this.keys = new Set();
-    this.dx = 0; this.dy = 0; this.wheel = 0;
+    this.dx = 0; this.dy = 0; this.wheel = 0; this.fovWheel = 0;
     this.locked = false;
     this.justPressed = new Set();
     this.drag = { active: false, dx: 0, dy: 0 };
@@ -95,7 +95,10 @@ export class Input {
     // ── Wheel ─────────────────────────────────────────────────────────────
     document.addEventListener('wheel', (e) => {
       if (isTyping(e)) return;
-      this.wheel += Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY) / 100, 1);
+      // Shift+滚轮 = FOV 变焦（10°–100°），不进距离缩放通道
+      const v = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY) / 100, 1);
+      if (e.shiftKey) this.fovWheel += v;
+      else this.wheel += v;
     }, { passive: true });
 
     // ── Window blur ───────────────────────────────────────────────────────
@@ -366,7 +369,7 @@ export class Input {
   }
 
   endFrame() {
-    this.dx = 0; this.dy = 0; this.wheel = 0;
+    this.dx = 0; this.dy = 0; this.wheel = 0; this.fovWheel = 0;
     this.drag.dx = 0; this.drag.dy = 0;
     this.pan.dx  = 0; this.pan.dy  = 0;
     this.look.dx = 0; this.look.dy = 0;
