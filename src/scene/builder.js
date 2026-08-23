@@ -7,7 +7,7 @@ import { planetPosition, PLANETS, orbitPoints } from '../astro/planets.js';
 import { moonGeocentric } from '../astro/moon.js';
 import { moonLocalPosition, moonOrbitNormal, moonOrbitPoints, MOON_IDS } from '../astro/moons.js';
 import { bodyToEclipticMatrix, tidalLockMatrix } from '../astro/rotation.js';
-import { eclToWorldArr, eclToWorld, eclMatrixToWorldQuat, KM_PER_AU } from '../config.js';
+import { eclToWorldArr, eclToWorld, eclMatrixToWorldQuat, KM_PER_AU, asset } from '../config.js';
 import { createPlanetMaterial, createCloudMaterial } from './planetMaterial.js';
 import { QUALITY } from '../engine/quality.js';
 import { createAtmosphere } from './atmosphere.js';
@@ -38,7 +38,7 @@ async function loadFullImage(file, hash, attempt = 0) {
   try {
     let blob = await idbGet(key);
     if (!blob) {
-      const resp = await fetch('textures/' + file);
+      const resp = await fetch(asset('textures/' + file));
       if (!resp.ok) throw new Error('http ' + resp.status);
       blob = await resp.blob();
       idbPut(key, blob); // 后台写缓存，不阻塞解码
@@ -71,10 +71,10 @@ async function runUpgradeQueue(queue, cache, pManifest, onBgProgress) {
 async function loadTextures(onProgress, onBgProgress) {
   let manifest = {}, pManifest = {};
   try {
-    manifest = await (await fetch('textures/manifest.json')).json();
+    manifest = await (await fetch(asset('textures/manifest.json'))).json();
   } catch { /* 离线/无清单 → 全部程序化 */ }
   try {
-    pManifest = await (await fetch('textures/preview/manifest.json')).json();
+    pManifest = await (await fetch(asset('textures/preview/manifest.json'))).json();
   } catch { /* 无预览层 → 退回直接加载全尺寸 */ }
   const loader = new THREE.TextureLoader();
   const cache = new Map();
@@ -92,7 +92,7 @@ async function loadTextures(onProgress, onBgProgress) {
     if (!manifest[file]) { finish(); return; }
     const p = pManifest[file];
     loader.load(
-      p ? 'textures/preview/' + p.p : 'textures/' + file,
+      p ? asset('textures/preview/' + p.p) : asset('textures/' + file),
       (tex) => {
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.anisotropy = QUALITY.anisotropy;

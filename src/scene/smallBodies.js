@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { solveKepler, KM_PER_AU, DEG } from '../astro/kepler.js';
+import { asset } from '../config.js';
 
 const GM_SUN = 1.32712440018e11; // km³/s²
 const KIND_STYLE = [
@@ -28,7 +29,7 @@ export function createSmallBodies() {
 
   async function load() {
     try {
-      const resp = await fetch('data/smallbodies.json');
+      const resp = await fetch(asset('data/smallbodies.json'));
       if (!resp.ok) return;
       const json = await resp.json();
       bodies = json.bodies;

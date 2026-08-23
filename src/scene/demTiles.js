@@ -26,6 +26,7 @@
 // 缺失时自动回退到现有程序化噪声地形。
 
 import { IS_MOBILE } from '../engine/quality.js';
+import { asset } from '../config.js';
 
 /**
  * DEM 数据源配置（可配置，支持扩展）。
@@ -36,7 +37,7 @@ import { IS_MOBILE } from '../engine/quality.js';
 export const DEM_SOURCES = {
   moon: {
     name: 'LOLA',
-    url: 'dem/moon/{z}/{x}/{y}.png',
+    url: 'dem/moon/{z}/{x}/{y}.png',  // 相对站点根，经 asset() 解析
     // LOLA 高程范围：-9 km（深坑底）到 +11 km（含裕量），共 20 km
     heightScale: 20,
     heightOffset: -9,
@@ -203,10 +204,10 @@ export class DEMTileSource {
 
   /** 实际发起网络请求并解码瓦片 */
   async _fetchTile(level, x, y) {
-    const url = this.config.url
+    const url = asset(this.config.url
       .replace('{z}', level)
       .replace('{x}', x)
-      .replace('{y}', y);
+      .replace('{y}', y));
     try {
       const res = await fetch(url, { mode: 'cors' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

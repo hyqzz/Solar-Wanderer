@@ -3,6 +3,12 @@
 
 import * as THREE from 'three';
 
+
+/** 静态资源基准路径：/en/ 子页面相对根目录需上溯一级（运行时 fetch 不受构建路径重写影响） */
+export const ASSET_BASE = (typeof document !== 'undefined' && document.documentElement?.dataset?.base) || './';
+/** 拼接静态资源 URL（textures/ data/ dem/ 等站点根路径资源） */
+export const asset = (p) => ASSET_BASE + p;
+
 export const KM_PER_AU = 149597870.7;
 export const C_KM_S = 299792.458;
 
