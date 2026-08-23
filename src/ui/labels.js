@@ -44,10 +44,12 @@ export class Labels {
   }
 
   /**
-   * @param occluder {pos:Vector3(相机相对), r:km}|null 近旁天体遮挡（站在星球上看不到地平线下的标签）
+   * @param occluders 遮挡体数组 [{id, pos:Vector3(相机相对), r:km}] —— 所有投影角足够大的天体都参与
+   * （修复：原实现仅在相机贴近最近天体 2.5R 内才遮挡，远处天体的标签会叠加在眼前行星盘面上）
    */
-  update(selectedId, occluder = null) {
+  update(selectedId, occluders = []) {
     if (!this.visible) return;
+    const occList = Array.isArray(occluders) ? occluders : (occluders ? [occluders] : []);
     const w = window.innerWidth, h = window.innerHeight;
     let bestAim = null, bestAng = 0.09; // ~5°
     const frame = []; // 本帧可见标签（重叠避让用）
@@ -63,13 +65,16 @@ export class Labels {
       const vz = rel.x * _fwd.x + rel.y * _fwd.y + rel.z * _fwd.z;
       if (vz <= 0) { el.style.display = 'none'; item._hideStreak = 0; continue; }
 
-      // 球体遮挡测试：视线与近旁天体相交且目标在交点之后 → 隐藏
+      // 球体遮挡测试：视线与任一前景天体相交且目标在交点之后 → 隐藏
       let wantHide = false;
-      if (occluder && dist > 1) {
-        const tc = (rel.x * occluder.pos.x + rel.y * occluder.pos.y + rel.z * occluder.pos.z) / dist;
-        if (tc > 0 && tc < dist - occluder.r * 0.5) {
-          const d2 = occluder.pos.lengthSq() - tc * tc;
-          if (d2 < occluder.r * occluder.r * 0.96) wantHide = true;
+      if (occList.length && dist > 1) {
+        for (const oc of occList) {
+          if (oc.id === target.id) continue; // 自身标签不遮挡
+          const tc = (rel.x * oc.pos.x + rel.y * oc.pos.y + rel.z * oc.pos.z) / dist;
+          if (tc > 0 && tc < dist - oc.r * 0.5) {
+            const d2 = oc.pos.lengthSq() - tc * tc;
+            if (d2 < oc.r * oc.r * 0.96) { wantHide = true; break; }
+          }
         }
       }
       const ndc = rel.clone().project(this.camera);

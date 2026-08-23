@@ -15,6 +15,17 @@ const browser = await puppeteer.launch({
   defaultViewport: { width: 1600, height: 900 },
 });
 const page = await browser.newPage();
+// 桌面代表性视图：本机触屏会让 headless 上报 coarse 指针，覆盖为桌面精细指针
+// （真实桌面 Chrome 上报 pointer:fine；移动端路径由 tools/smoke-mobile.mjs 覆盖）
+await page.evaluateOnNewDocument(() => {
+  const orig = window.matchMedia.bind(window);
+  window.matchMedia = (q) => {
+    if (/pointer\s*:\s*coarse/.test(q)) return { matches: false, addEventListener() {}, addListener() {} };
+    if (/any-pointer\s*:\s*fine/.test(q)) return { matches: true, addEventListener() {}, addListener() {} };
+    return orig(q);
+  };
+  Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 });
+});
 const errors = [];
 page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
@@ -179,21 +190,29 @@ check('F 从飞行模式切回探索模式', await ev(() => window.__game.getMod
 
 // ════════════ F. 时间系统 ════════════
 console.log('\n═══ F. 时间系统 ═══');
+// 低帧率环境下按键→主循环处理有一帧延迟，用轮询等待值落地（消除测试竞态）
+async function waitExpr(fn, arg, timeoutMs = 3000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) { if (await ev(fn, arg)) return true; await sleep(150); }
+  return false;
+}
 const rate0 = await ev(() => window.__game.simClock.rateTarget);
-await page.keyboard.press('BracketRight'); await sleep(200);
+await page.keyboard.press('BracketRight');
+const rate1ok = await waitExpr((r0) => window.__game.simClock.rateTarget > r0, rate0);
 const rate1 = await ev(() => window.__game.simClock.rateTarget);
-check('] 加速时间', rate1 > rate0, `${rate0}→${rate1}`);
-await page.keyboard.press('BracketLeft'); await sleep(200);
-check('[ 减速时间', await ev(() => window.__game.simClock.rateTarget) === rate0);
-await page.keyboard.press('KeyP'); await sleep(200);
+check('] 加速时间', rate1ok, `${rate0}→${rate1}`);
+await page.keyboard.press('BracketLeft');
+check('[ 减速时间', await waitExpr((r0) => window.__game.simClock.rateTarget === r0, rate0));
+await page.keyboard.press('KeyP');
+await waitExpr(() => window.__game.simClock.paused === true, null);
 const jdA = await ev(() => window.__game.simClock.jdTT);
 await sleep(700);
 const jdB = await ev(() => window.__game.simClock.jdTT);
 check('P 暂停（jdTT 冻结）', jdA === jdB);
 await shot('08-time-paused');
-await page.keyboard.press('KeyN'); await sleep(200);
-const resumed = await ev(() => ({ rateT: window.__game.simClock.rateTarget, paused: window.__game.simClock.paused }));
-check('N 回到现在（rateTarget=1, 未暂停）', resumed.rateT === 1 && !resumed.paused);
+await page.keyboard.press('KeyN');
+const resumedOk = await waitExpr(() => window.__game.simClock.rateTarget === 1 && !window.__game.simClock.paused, null);
+check('N 回到现在（rateTarget=1, 未暂停）', resumedOk);
 
 // ════════════ G. 导览（真实 UI 点击） ════════════
 console.log('\n═══ G. 导览 ═══');
@@ -239,9 +258,12 @@ check('M 音频开关', await ev((v) => window.__game.audioEngine._enabled !== v
 await page.keyboard.press('KeyM'); await sleep(200);
 await waitArrival(); // 导览退出的 flyTo 可能仍在进行，先等到位（V 在飞行中不响应是设计行为）
 const iner0 = await ev(() => window.__game.orbitCam.inertial);
-await page.keyboard.press('KeyV'); await sleep(300);
-check('V 惯性观察开关', await ev((v) => window.__game.orbitCam.inertial !== v, iner0));
-await page.keyboard.press('KeyV'); await sleep(200);
+await page.keyboard.press('KeyV');
+let vOk = false;
+for (let i = 0; i < 20 && !vOk; i++) { await sleep(150); vOk = await ev((v) => window.__game.orbitCam.inertial !== v, iner0); }
+check('V 惯性观察开关', vOk);
+await page.keyboard.press('KeyV');
+for (let i = 0; i < 20; i++) { await sleep(150); if (await ev((v) => window.__game.orbitCam.inertial === v, iner0)) break; }
 await page.keyboard.down('Control'); await page.keyboard.press('KeyL'); await page.keyboard.up('Control');
 await sleep(300);
 check('Ctrl+L 分享链接无报错', errors.length === 0);

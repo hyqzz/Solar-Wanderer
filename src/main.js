@@ -772,13 +772,16 @@ function loop() {
   } else {
     hud.updateTarget(null);
   }
-  // 标签遮挡：贴近天体时，地平线以下/天体背面的标签隐藏
-  let occluder = null;
-  if (nearest && nearest.distSurface < nearest.radiusKm * 2.5) {
-    const e = builder.bodies.get(nearest.id);
-    occluder = { pos: e.group.position, r: nearest.radiusKm * 0.999 };
+  // 标签遮挡：所有投影角半径足够大的天体都参与（视线相交且目标在后 → 隐藏）。
+  // 阈值 0.002 rad ≈ 0.11°：只留盘面上值得遮挡的天体，成本每帧仅几十次射线-球测试。
+  const occluders = [];
+  for (const [bid, be] of builder.bodies) {
+    const gp = be.group.position; // 浮动原点后即为相机相对坐标
+    const d = gp.length();
+    const r = be.phys.radiusKm;
+    if (d > r && r / d > 0.002) occluders.push({ id: bid, pos: gp, r: r * 0.999 });
   }
-  labels.update(selectedId, occluder);
+  labels.update(selectedId, occluders);
   document.getElementById('crosshair').style.display =
     appMode === 'orbit' ? 'none' : '';
 
