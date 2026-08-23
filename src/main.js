@@ -15,7 +15,7 @@ import { surfaceGravity } from './astro/bodies.js';
 import { World } from './engine/floating.js';
 import { Ship, Input } from './engine/ship.js';
 import { OrbitCamera } from './engine/orbitCamera.js';
-import { buildSolarSystem } from './scene/builder.js';
+import { buildSolarSystem, texturesOfBody } from './scene/builder.js';
 import { createStarfield, BRIGHT_STARS, SKY_R } from './scene/starfield.js';
 import { createBelts, createOortCloud } from './scene/belts.js';
 import { createSmallBodies } from './scene/smallBodies.js';
@@ -649,6 +649,16 @@ function loop() {
   const nearest = findNearest();
   nearestCache = nearest;
   const env = makeEnv(nearest);
+
+  // 视点驱动高清贴图插队（每秒）：用户正在环绕/靠近/选中的天体优先升级到全分辨率
+  if (builder?.boostTextures && performance.now() - loop._lastTexBoost > 1000) {
+    loop._lastTexBoost = performance.now();
+    const files = [];
+    for (const id of [orbitCam.focusId, nearest?.id, selectedId]) {
+      if (id) for (const f of texturesOfBody(id)) if (!files.includes(f)) files.push(f);
+    }
+    if (files.length) builder.boostTextures(files);
+  }
 
   // ---------- 模式更新 ----------
   try {

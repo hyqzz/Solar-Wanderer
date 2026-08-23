@@ -25,47 +25,78 @@ const TEX_PRIORITY = [
   'io.jpg', 'europa.png', 'ganymede.jpg', 'callisto.jpg', 'titan.jpg',
   'uranus.jpg', 'neptune.jpg', 'triton.jpg', 'pluto.jpg', 'charon.jpg',
 ];
-const UPGRADE_CONCURRENCY = 3;
+const UPGRADE_CONCURRENCY = 6; // 进入后全速并行升级（预览层已放行，带宽此时空闲）
 
 function priorityOf(file) {
   const i = TEX_PRIORITY.indexOf(file);
   return i === -1 ? TEX_PRIORITY.length : i;
 }
 
-/** 拉全尺寸贴图：优先 IndexedDB 命中，否则网络下载并写缓存；指数退避重试 2 次 */
+/** 拉全尺寸贴图：优先 IndexedDB 命中，否则网络下载并写缓存。
+ * 弱网防护：25s 超时主动断开（否则挂起的 socket 会把队列卡死成"永远模糊"），
+ * 指数退避重试 3 次；最终失败返回 null（保留预览，队列尾再补一轮）。 */
 async function loadFullImage(file, hash, attempt = 0) {
   const key = hash ? `${file}@${hash}` : file;
   try {
     let blob = await idbGet(key);
     if (!blob) {
-      const resp = await fetch(asset('textures/' + file));
-      if (!resp.ok) throw new Error('http ' + resp.status);
-      blob = await resp.blob();
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 25000);
+      try {
+        const resp = await fetch(asset('textures/' + file), { signal: ctl.signal });
+        if (!resp.ok) throw new Error('http ' + resp.status);
+        blob = await resp.blob();
+      } finally {
+        clearTimeout(timer);
+      }
       idbPut(key, blob); // 后台写缓存，不阻塞解码
     }
     return await createImageBitmap(blob); // 解码在工作线程，不卡主线程
   } catch {
-    if (attempt < 2) {
+    if (attempt < 3) {
       await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
       return loadFullImage(file, hash, attempt + 1);
     }
-    return null; // 最终失败：保留预览/程序化纹理
+    return null;
   }
 }
 
-/** 后台升级队列：全尺寸到位后立即换图（替换 image + needsUpdate，材质与采样器不动） */
-async function runUpgradeQueue(queue, cache, pManifest, onBgProgress) {
-  let cursor = 0, doneBg = 0;
+/** 单趟队列执行：工人从队首取任务（队首 = 当前最高优先级，可被 boost 动态重排） */
+async function runQueuePass(queue, cache, pManifest, countFinal) {
+  const failed = [];
   const worker = async () => {
-    while (cursor < queue.length) {
-      const file = queue[cursor++];
+    for (;;) {
+      const file = queue.shift();
+      if (file === undefined) return;
       const tex = cache.get(file);
       const bmp = tex ? await loadFullImage(file, pManifest[file]?.h) : null;
-      if (bmp && tex) { tex.image = bmp; tex.needsUpdate = true; }
-      onBgProgress?.(++doneBg, queue.length, file);
+      if (bmp && tex) {
+        tex.image = bmp;
+        tex.needsUpdate = true;
+        countFinal(file, true);
+      } else {
+        failed.push(file);
+        countFinal(file, false);
+      }
     }
   };
   await Promise.all(Array.from({ length: UPGRADE_CONCURRENCY }, worker));
+  return failed;
+}
+
+/** 后台升级队列：全尺寸到位后立即换图（替换 image + needsUpdate，材质与采样器不动）。
+ * 第一趟失败的文件在所有其他文件完成后补试一轮（弱网大包常被重置，第二遍利用已建立的连接）。 */
+async function runUpgradeQueue(queue, cache, pManifest, onBgProgress) {
+  const total = queue.length;
+  let done = 0;
+  const failed1 = await runQueuePass(queue, cache, pManifest, (f, ok) => {
+    if (ok) onBgProgress?.(++done, total, f);
+  });
+  if (failed1.length) {
+    await runQueuePass(failed1, cache, pManifest, (f) => {
+      onBgProgress?.(++done, total, f); // 第二趟无论成败都计入（最终态）
+    });
+  }
 }
 
 async function loadTextures(onProgress, onBgProgress) {
@@ -109,7 +140,15 @@ async function loadTextures(onProgress, onBgProgress) {
   // L2/L3（后台，不阻塞）：全尺寸按优先级队列逐张升级
   const queue = [...previewed].sort((a, b) => priorityOf(a) - priorityOf(b));
   const upgrades = runUpgradeQueue(queue, cache, pManifest, onBgProgress);
-  return { cache, upgrades };
+  // 视点驱动插队：把指定贴图按给定顺序提到队首（用户正在看/前往的天体优先变清晰）
+  const boost = (files) => {
+    if (!files?.length || !queue.length) return;
+    for (let i = files.length - 1; i >= 0; i--) {
+      const idx = queue.indexOf(files[i]);
+      if (idx > 0) { queue.splice(idx, 1); queue.unshift(files[i]); }
+    }
+  };
+  return { cache, upgrades, boost };
 }
 
 /** 不规则小天体（土豆状）：用与行走碰撞同源的 HeightField 变形球网格
@@ -170,6 +209,17 @@ const GLINT_ALBEDO = {
   titan: 0.22, triton: 0.76, charon: 0.35,
 };
 
+/** 天体 → 其关联贴图文件列表（视点驱动升级优先级用） */
+export function texturesOfBody(id) {
+  const out = [];
+  const b = BODIES[id];
+  if (b?.textures) for (const v of Object.values(b.textures)) if (typeof v === 'string') out.push(v);
+  if (b?.rings?.texture) out.push(b.rings.texture);
+  const m = MOON_PHYS[id];
+  if (m?.textures) for (const v of Object.values(m.textures)) if (typeof v === 'string') out.push(v);
+  return out;
+}
+
 /** 贴图或程序化兜底（惰性：占位纹理先行，真实贴图后台生成后换图） */
 function texOf(cache, file, bodyId, phys) {
   if (file && cache.has(file)) return cache.get(file);
@@ -193,7 +243,7 @@ function detailModeOf(phys) {
 }
 
 export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
-  const { cache, upgrades } = await loadTextures(onProgress, onBgProgress);
+  const { cache, upgrades, boost } = await loadTextures(onProgress, onBgProgress);
   const bodies = new Map();
   const orbitLines = new THREE.Group();
   scene.add(orbitLines);
@@ -553,7 +603,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     return data;
   }
 
-  return { bodies, sunEntry, orbitLines, update, postWorldUpdate, mapDataOf, cache, upgrades };
+  return { bodies, sunEntry, orbitLines, update, postWorldUpdate, mapDataOf, cache, upgrades, boostTextures: boost };
 }
 
 function makeGlint(color) {
