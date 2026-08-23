@@ -27,8 +27,11 @@ function detectMobile() {
   if (typeof window === 'undefined') return false;
   const coarse = window.matchMedia?.('(pointer: coarse)').matches;
   const hasTouch = navigator.maxTouchPoints > 0;
+  // 触屏笔记本同时上报 coarse+fine：有鼠标/触控板（any-pointer:fine）的设备按桌面对待，
+  // 否则触屏 Windows 本会误判为移动端（出现摇杆/移动控制条覆盖桌面 UI）
+  const anyFine = window.matchMedia?.('(any-pointer: fine)').matches;
   const smallScreen = window.screen.width <= 1024 || window.screen.height <= 1024;
-  return (coarse && hasTouch) || (hasTouch && smallScreen);
+  return (coarse && hasTouch && !anyFine) || (hasTouch && smallScreen && !anyFine);
 }
 
 export function initQuality(renderer) {

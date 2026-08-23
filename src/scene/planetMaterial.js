@@ -254,7 +254,9 @@ export function createPlanetMaterial({
         col += albedo * 0.0035;
         if (uHasNight == 1) {
           vec3 city = texture2D(uNight, vUv).rgb;
-          col += city * (1.0 - day) * 0.45;
+          // 城市灯光：1.9 倍增益 + 微暖色温（NASA Black Marble 观感——钠灯金色调，ACES 下去饱和需补偿）
+        vec3 cityGlow = city * vec3(1.12, 1.0, 0.82);
+        col += cityGlow * (1.0 - day) * 1.9;
         }
         if (uOcean == 1) {
           float oceanMask = clamp((albedo.b - max(albedo.r, albedo.g * 0.9)) * 6.0, 0.0, 1.0);
@@ -332,7 +334,12 @@ export function createCloudMaterial(cloudTex) {
         cUV += vec2(disturb * 0.008, disturb * 0.004);
         vec3 cl = texture2D(uMap, cUV).rgb;
         float alpha = clamp(dot(cl, vec3(0.34)) * 1.4, 0.0, 1.0);
-        vec3 col = vec3(1.0) * max(ndl, 0.0) * uSunI + vec3(0.004);
+        // 夜面云层减薄（real：城市灯光从云隙透出；原实现夜面云为近纯黑板，盖住城市灯光）
+        float dayF = smoothstep(-0.06, 0.12, ndl);
+        alpha *= mix(0.42, 1.0, dayF);
+        // 夜面云色：微弱气辉蓝灰（非纯黑），白天照常白亮
+        vec3 nightTint = vec3(0.010, 0.013, 0.020);
+        vec3 col = vec3(1.0) * max(ndl, 0.0) * uSunI + mix(nightTint, vec3(0.004), dayF);
         gl_FragColor = vec4(col, alpha);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
