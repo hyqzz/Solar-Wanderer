@@ -184,6 +184,7 @@ const D = {
   'kind.poi': { zh: '地标', en: 'landmark', es: 'hito', ja: 'ランドマーク', fr: 'repère', de: 'Wahrzeichen', ru: 'ориентир' },
   'kind.tno': { zh: '海外天体', en: 'TNO', es: 'TNO', ja: '海外天体', fr: 'TNO', de: 'TNO', ru: 'ТНО' },
   'kind.region': { zh: '区域', en: 'region', es: 'región', ja: '領域', fr: 'région', de: 'Region', ru: 'регион' },
+  'search.ph': { zh: '🔍 搜索天体 / Search…', en: '🔍 Search bodies…', es: '🔍 Buscar…', ja: '🔍 検索…', fr: '🔍 Rechercher…', de: '🔍 Suchen…', ru: '🔍 Поиск…' },
   'search.orbits': { zh: '🛤 轨道线', en: '🛤 Orbit lines', es: '🛤 Líneas orbitales', ja: '🛤 軌道線', fr: '🛤 Lignes d\'orbite', de: '🛤 Umlaufbahnen', ru: '🛤 Линии орбит' },
   'search.on': { zh: '显示', en: 'shown', es: 'visible', ja: '表示', fr: 'affiché', de: 'angezeigt', ru: 'показ.' },
   'search.off': { zh: '隐藏', en: 'hidden', es: 'oculto', ja: '非表示', fr: 'masqué', de: 'versteckt', ru: 'скрыто' },
@@ -307,6 +308,7 @@ const isTouchDevice = () => typeof navigator !== 'undefined' && navigator.maxTou
 export function applyDomI18n(root = document) {
   for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = t(el.getAttribute('data-i18n'));
   for (const el of root.querySelectorAll('[data-i18n-html]')) el.innerHTML = t(el.getAttribute('data-i18n-html'));
+  for (const el of root.querySelectorAll('[data-i18n-ph]')) el.placeholder = t(el.getAttribute('data-i18n-ph'));
 
   // 移动端：把启动提示改为触摸说明
   if (isTouchDevice()) {

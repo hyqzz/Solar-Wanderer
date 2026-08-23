@@ -19,6 +19,7 @@ export class SearchUI {
     this.onGo = onGo;
     this.opts = opts;
     this.buildDirectory();
+    this.buildSearch(); // 搜索框 DOM 已就位（目录头部），接通搜索
   }
 
   entries() {

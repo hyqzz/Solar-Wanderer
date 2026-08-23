@@ -189,6 +189,10 @@
   <!-- 目录移出 #left-col：移动端 .touch #left-col 会 display:none，fixed 子元素也会被隐藏 -->
   <div id="directory" class="open">
     <div class="dir-head"><span data-i18n="dir.title">🪐 天体目录</span> <span class="dim" data-i18n="dir.sub">点击即前往</span></div>
+    <div id="search-box" style="display:none">
+      <input id="search-input" data-i18n-ph="search.ph" placeholder="🔍 搜索天体 / Search…" autocomplete="off" />
+      <div id="search-results"></div>
+    </div>
     <div id="dir-body"></div>
   </div>
 
