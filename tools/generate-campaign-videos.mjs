@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -46,8 +46,7 @@ function renderFromSequence(name, seqDir, lang, title, sub, dur, musicStart) {
   const outPath = path.join(OUT, name).replace(/\\/g, '/');
   const seqPattern = path.join(seqDir, 'frame_%04d.png').replace(/\\/g, '/');
   const musicPath = MUSIC.replace(/\\/g, '/');
-  const cmd = `ffmpeg -y -framerate ${FPS} -i "${seqPattern}" -ss ${musicStart} -t ${dur} -i "${musicPath}" -vf "${vf}" -af "volume=0.45" -shortest -c:v libx264 -crf 23 -pix_fmt yuv420p "${outPath}"`;
-  execSync(cmd, { stdio: 'pipe' });
+  execFileSync('ffmpeg', ['-y', '-framerate', String(FPS), '-i', seqPattern, '-ss', String(musicStart), '-t', String(dur), '-i', musicPath, '-vf', vf, '-af', 'volume=0.45', '-shortest', '-c:v', 'libx264', '-crf', '23', '-pix_fmt', 'yuv420p', outPath], { stdio: 'pipe' });
   console.log('Rendered', name);
 }
 
@@ -69,22 +68,22 @@ function renderSceneClip(seqDir, lang, title, sub, startFrame, dur, tmpDir, idx,
     `drawtext=fontfile=${font}:text='sw.icodestar.net':fontsize=${ctaSize}:fontcolor=white@0.85:x=60:y=H-120:box=1:boxcolor=black@0.35:boxborderw=12`
   ].join(',');
 
-  const cmd = `ffmpeg -y -framerate ${FPS} -start_number ${startFrame} -i "${seqPattern}" -ss ${musicStart} -t ${dur} -i "${musicPath}" -vf "${vf}" -af "volume=0.45" -shortest -c:v libx264 -crf 23 -pix_fmt yuv420p "${out}"`;
-  execSync(cmd, { stdio: 'pipe' });
+  execFileSync('ffmpeg', ['-y', '-framerate', String(FPS), '-start_number', String(startFrame), '-i', seqPattern, '-ss', String(musicStart), '-t', String(dur), '-i', musicPath, '-vf', vf, '-af', 'volume=0.45', '-shortest', '-c:v', 'libx264', '-crf', '23', '-pix_fmt', 'yuv420p', out], { stdio: 'pipe' });
   return out;
 }
 
 function concatClips(files, outName) {
+  if (!/^[\w.-]+$/.test(outName)) throw new Error(`Invalid outName: ${outName}`);
   const list = files.map(f => `file '${path.resolve(f).replace(/'/g, "'\\''")}'`).join('\n');
-  const listPath = path.join(OUT, `_demo_${outName}_list.txt`);
+  const listPath = `${OUT}/_demo_${outName}_list.txt`;
   fs.writeFileSync(listPath, list);
-  const cmd = `ffmpeg -y -f concat -safe 0 -i "${listPath}" -c copy "${path.join(OUT, outName)}"`;
-  execSync(cmd, { stdio: 'pipe' });
+  execFileSync('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', `${OUT}/${outName}`], { stdio: 'pipe' });
   fs.unlinkSync(listPath);
 }
 
 function renderDemo(name, scenes, lang) {
-  const tmpDir = fs.mkdtempSync(path.join(OUT, `tmp_demo_${lang}_`));
+  if (!/^[a-z]+$/.test(lang)) throw new Error(`Invalid lang: ${lang}`);
+  const tmpDir = fs.mkdtempSync(`${OUT}/tmp_demo_${lang}_`);
   const files = scenes.map((s, i) => renderSceneClip(s.seqDir, lang, s.title, s.sub, s.startFrame, s.dur, tmpDir, i, s.musicStart));
   concatClips(files, name);
   files.forEach(f => fs.unlinkSync(f));
