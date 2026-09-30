@@ -1189,15 +1189,23 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   scene.fog.color.copy(fogColor);
   scene.fog.density = fogDensity;
   sky.setFade(skyFade);
-  belts.visible = skyFade > 0.4;      // 带点云为统计表示，白昼天空中不可见
-  oortCloud.group.visible = skyFade > 0.4; // 奥尔特云同理
-  smallBodies.group.visible = skyFade > 0.4; // 5412 颗真实小天体点云同理（地表审查发现白昼满天"假星"）
-  comets.setSkyFade(skyFade);        // 白昼彗星被日光淹没（白昼大彗星为极端罕见情形，不模拟）
-  tnoScene.setSkyFade(skyFade);      // TNO 远距辉光标记同理（真实 TNO 亮度 17 等以下，白昼绝不可见）
-  builder.setSkyFade(skyFade);       // 行星/卫星远距光点同理（白昼看不见"行星星星"；月球近距仍以实体盘面可见）
-  for (const v of voyagerEntries) v.group.visible = skyFade > 0.4; // 探测器辉光同理（肉眼本不可见）
+  // 统计性点云/暗弱标记的可见性：白昼大气内被日光淹没（skyFade），
+  // 且行走地表时肉眼本就不可见——主带/柯伊伯带点云、真实小天体、奥尔特云、
+  // TNO 辉光（≥17 等）、探测器辉光在任何天体的地表夜晚也看不见
+  // （冥王星地表审查：柯伊伯带点云糊成横贯天空的白带伪影）。
+  // 行星/卫星/彗星夜晚保留（真实夜空可见行星与大彗星）。
+  const surfVis = skyFade > 0.4 && appMode !== 'walk';
+  belts.visible = surfVis;
+  oortCloud.group.visible = surfVis;
+  smallBodies.group.visible = surfVis;
+  comets.setSkyFade(skyFade);
+  tnoScene.setSkyFade(surfVis ? 1 : 0);
+  builder.setSkyFade(skyFade);
+  for (const v of voyagerEntries) v.group.visible = surfVis;
   oortCloud.update(dSunAU);            // 进入云内部按距离淡出（#5）
   document.getElementById('labels').classList.toggle('daysky', skyFade < 0.5);
+  // 行走地表：暗弱目标标签（TNO/彗星/探测器/边界/区域）肉眼不可见，夜晚亦然
+  document.getElementById('labels').classList.toggle('walksky', appMode === 'walk');
 
   // 行走在夜面时的微环境光（地照/星光下的暗适应，保证夜间探索可见性）
   ambient.intensity += ((appMode === 'walk' ? 0.14 : 0.02) - ambient.intensity) * Math.min(dt * 3, 1);

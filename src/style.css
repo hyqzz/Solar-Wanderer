@@ -39,6 +39,7 @@ html, body {
 .body-label.label-star .ld { font-size: 9px; }
 #labels.daysky .label-star { display: none !important; }
 #labels.daysky .label-faint { display: none !important; }
+#labels.walksky .label-faint { display: none !important; } /* 行走地表：暗弱目标肉眼不可见，夜晚亦然 */
 .body-label.aimed { color: #ffe9b0; }
 .body-label.aimed::before { content: "▸ "; }
 .body-label.selected { color: #7fd4ff; font-weight: bold; }
