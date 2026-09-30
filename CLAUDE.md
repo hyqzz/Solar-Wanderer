@@ -65,6 +65,9 @@ npm run fetch-textures # 重新下载贴图资产
   - `node tools/probe-r8-shot.mjs` — 截图探测
   - `node tools/probe-maxdist.mjs` — 400 AU 远距标签可见性
   - `node tools/audit-visuals.mjs` — 视觉审查
+  - `node tools/probe-atlas.mjs` — 日下点满相圆盘图册（17 天体+环+地球夜面）
+  - `node tools/probe-surface.mjs` — 地表行走图册（7 天体地平线+仰天，含白昼星淡断言）
+  - `node tools/probe-starfade.mjs` — 白昼星空淡出链路诊断（skyFade 逐中间量）
   - `node tools/capture-demo.mjs` / `capture-mobile.mjs` — 生成演示截图
 
 ## 技术栈
