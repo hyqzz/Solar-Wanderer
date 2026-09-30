@@ -89,6 +89,7 @@ export function createSun(radiusKm, mapTex) {
     uniforms: coronaUniforms,
     transparent: true,
     depthWrite: false,
+    depthTest: true, // 显式声明（THREE 默认即 true）：日冕可被前景行星遮挡（#14）
     blending: THREE.AdditiveBlending,
     vertexShader: /* glsl */ `
       #include <common>

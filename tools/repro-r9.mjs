@@ -22,6 +22,7 @@ const mkInput = (over = {}) => ({
   drag: { active: false, dx: 0, dy: 0 },
   pan: { active: false, dx: 0, dy: 0 },
   look: { active: false, dx: 0, dy: 0 },
+  joystick: { x: 0, y: 0 }, // 与生产 Input 一致（R9 脚本写于移动端摇杆字段加入之前）
   cursor: null,
   down: () => false, tapped: () => false,
   ...over,

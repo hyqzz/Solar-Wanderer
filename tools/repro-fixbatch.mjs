@@ -18,22 +18,27 @@ const check = (name, cond, detail = '') => {
 const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), 'utf8');
 
 // ============ #12 火星天空：日照半球异常偏亮（Mie 前向不对称过强） ============
-console.log('\n[#12] 火星天空：降低 Mie 前向不对称，消除"半球更亮"');
+console.log('\n[#12] 火星天空：分光谱 Fe₂O₃ 尘埃模型（g 取实测物理范围）');
 {
   // Henyey-Greenstein 相函数：phM(mu) ∝ (1-g²)/(1+g²-2g·mu)^1.5
   const hg = (g, mu) => (1 - g * g) / Math.pow(1 + g * g - 2 * g * mu, 1.5);
   // 日向 mu=1 / 逆日 mu=-1 的亮度比（越大越"半球偏亮"）
   const ratio = (g) => hg(g, 1) / hg(g, -1);
   const oldRatio = ratio(0.55); // 旧值
-  const newRatio = ratio(0.32); // 新值（当前 bodies.js）
   check('复现：旧 mieG=0.55 日/逆日亮度比 > 30（不真实半球偏亮）',
     oldRatio > 30, `oldRatio=${oldRatio.toFixed(1)}`);
-  check('验证：新 mieG=0.32 亮度比 < 10（温和梯度，接近实拍）',
-    newRatio < 10, `newRatio=${newRatio.toFixed(1)}`);
-  check('bodies.js 火星 mieG 已降至 ≤ 0.4',
-    BODIES.mars.atmosphere.mieG <= 0.4, `mieG=${BODIES.mars.atmosphere.mieG}`);
-  check('bodies.js 火星 mie 系数已降至 ≤ 1.3e-6',
-    BODIES.mars.atmosphere.mie <= 1.3e-6, `mie=${BODIES.mars.atmosphere.mie}`);
+  // 当前实现：分光谱 mieG=[0.60,0.65,0.72]（Fe₂O₃ 实测 g≈0.55–0.75），
+  // 蓝通道前向峰最尖 → 蓝色日落光晕（好奇号/毅力号实拍特征）；
+  // 不再用"压低 g"消除半球偏亮（那是早期近似），而以光谱散射 + 日落透过率建模。
+  const m = BODIES.mars.atmosphere;
+  check('bodies.js 火星 mieG 为三分量且在 Fe₂O₃ 实测范围 0.55–0.75',
+    Array.isArray(m.mieG) && m.mieG.length === 3 && m.mieG.every((g) => g >= 0.55 && g <= 0.75),
+    `mieG=${m.mieG}`);
+  check('bodies.js 火星 mie 为三分量且每通道 ≤ 2e-6',
+    Array.isArray(m.mie) && m.mie.length === 3 && m.mie.every((v) => v <= 2e-6),
+    `mie=${m.mie}`);
+  check('蓝通道 g > 红通道 g（蓝色日落的分光条件）',
+    m.mieG[2] > m.mieG[0] && m.mie[2] > m.mie[0], `mieG=${m.mieG} mie=${m.mie}`);
 }
 
 // ============ #17 时间应随真实挂钟推进（标签页后台恢复后追赶） ============
@@ -54,9 +59,13 @@ console.log('\n[#17] SimClock：后台恢复用挂钟追赶，而非每帧只走
   c2._wallMs = Date.now() - 30000; // 假装 30 秒前记录的挂钟
   c2.tick(0.016);
   const advSec = (c2.jdTT - j2) * DAY_SECONDS;
-  // 旧实现：只会推进 dtReal=0.016s；新实现：用挂钟 30s 追赶
-  check('复现/验证：后台 30s 后单帧追赶≈30s（旧实现仅 0.016s）',
-    advSec > 25 && advSec < 35, `advSec=${advSec.toFixed(2)}s`);
+  // 旧实现：只会推进 dtReal=0.016s；新实现：差额进追赶池，每帧最多放 dt×min(1000, rate×2)
+  // （30s 积压 → 首帧放 16s、次帧放完，既快速追平又非单帧瞬移）
+  check('复现/验证：后台 30s 首帧追赶 >5s（旧实现仅 0.016s）',
+    advSec > 5, `advSec=${advSec.toFixed(2)}s`);
+  const adv2 = (() => { const a = c2.jdTT; c2.tick(0.016); return (c2.jdTT - a) * DAY_SECONDS; })();
+  check('追赶池两帧内放完 30s 积压（合计 25–35s）',
+    advSec + adv2 > 25 && advSec + adv2 < 35, `合计=${(advSec + adv2).toFixed(2)}s`);
 
   // 追赶上限 60s（防超长后台一次性暴冲）
   const c3 = new SimClock();

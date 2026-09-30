@@ -1,8 +1,9 @@
 import puppeteer from 'puppeteer';
 
-// 回归验证：移动版从地表自动着陆 → 起飞后，相机被抬升到星球半径 2.5 倍以上，
-// GE 式单指拖拽灵敏度恢复到可用水平（>5°/150px）。
-// 旧实现只抬升 ~半径的 0.2%，导致地表附近 drag/pinch 几乎无响应。
+// 回归验证：移动版从地表自动着陆 → 起飞后无缝回到探索模式（视向连续微抬升），
+// 且近地表单指拖拽灵敏度下限生效（≥0.05°/150px，GE 式抓地拖动 ≈11km 地面滑移）。
+// 旧实现（a7f7093 前）起飞后贴地灵敏度 2e-6 rad/px，几乎无响应；
+// 中间方案抬升到 2.5R 已由 42cea26 废弃（瞬移破坏视向连续性）。
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -56,10 +57,16 @@ async function main() {
   const afterTakeoff = await getState();
   console.log('After takeoff:', afterTakeoff);
   assert(afterTakeoff.appMode === 'orbit', 'should return to orbit after takeoff');
-  assert(afterTakeoff.dist > afterTakeoff.radiusKm * 2.4,
-    `takeoff should lift to >2.4x radius, got dist=${afterTakeoff.dist.toFixed(1)}km`);
+  // 42cea26 起：起飞不再瞬移到 2.5R，而是无缝微抬升（视向连续，R7 #1），
+  // 触控可用性改由移动端灵敏度下限（orbitCamera sensMin 1.2e-5）保证
+  assert(afterTakeoff.dist > afterTakeoff.radiusKm + 0.04,
+    `takeoff should lift off surface, got dist=${afterTakeoff.dist.toFixed(1)}km`);
+  assert(afterTakeoff.dist < afterTakeoff.radiusKm * 1.5,
+    `takeoff should stay near surface (seamless), got dist=${afterTakeoff.dist.toFixed(1)}km`);
 
-  // 灵敏度回归：150px 水平拖动应产生明显经度变化（>5°）
+  // 灵敏度回归：150px 水平拖动应产生可用的地面位移。GE 式"抓地拖动"下近地表
+  // 角量小而地面位移大：移动端下限 1.2e-5 rad/px × 150px ≈ 0.10°，在贴地高度
+  // 对应 ~11km 地面滑移（约半屏）——断言下限生效即可（旧 2.5R 抬升方案已废弃）
   const sens = await page.evaluate(() => {
     const g = window.__game;
     const oc = g.orbitCam;
@@ -89,7 +96,7 @@ async function main() {
     return Math.abs(oc.lon - lonBefore) * 180 / Math.PI;
   });
   console.log(`Drag sensitivity: ${sens.toFixed(2)}° per 150px drag`);
-  assert(sens > 5, `drag sensitivity too low: ${sens.toFixed(2)}°`);
+  assert(sens > 0.05, `drag sensitivity below mobile floor: ${sens.toFixed(3)}°`);
 
   console.log('All mobile takeoff assertions passed.');
   await browser.close();
