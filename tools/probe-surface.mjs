@@ -91,6 +91,24 @@ for (const [id, R, latDeg] of BODIES) {
     oc.lat = lat; oc.lon = lon; oc.tilt = 0; oc.heading = 0;
     oc.dist = oc.distTarget = R + 0.002; // 2m 高度 → 自动登陆
   }, id, R, lat, lon);
+  // DEM 天体（月/火/地球）：等基础层就绪后按真实高程精降（真实地表可低于
+  // 基准球面数公里，固定 R+0.002 会悬空不落）
+  const t1 = Date.now();
+  while (Date.now() - t1 < 20000) {
+    const ready = await ev((id) => window.__game.terrainMgr.baseReady(id), id);
+    if (ready) break;
+    await sleep(500);
+  }
+  await ev((id, lat, lon) => {
+    const g = window.__game;
+    const oc = g.orbitCam;
+    if (g.getMode() !== 'orbit' || oc.focusId !== id) return;
+    const V = Object.getPrototypeOf(g.camera.position).constructor;
+    const dir = new V(
+      Math.cos(lat) * Math.cos(-lon), Math.sin(lat), Math.cos(lat) * Math.sin(-lon));
+    const h = g.terrainMgr.heightAt(id, dir);
+    oc.dist = oc.distTarget = h + 0.002;
+  }, id, lat, lon);
   const ok = await waitWalk();
   console.log(id, ok ? 'walk' : 'WALK-TIMEOUT');
   if (!ok) continue;

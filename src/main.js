@@ -53,6 +53,11 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY.pixelRatio));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
+// 近场太阳阴影（行走/超低空时由 builder 的 DirectionalLight 装置投射；
+// 平时无 castShadow 光源，阴影贴图零开销）
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = true;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x000000, 0); // 地形气溶胶透视（仅 fog:true 材质受影响）
@@ -674,7 +679,8 @@ function loop() {
     // 此时应让用户完成手势后再判断是否真正靠近，避免"刚切回探索就吸回行走"。
     const inputIdle = !input.drag.active && !input.pan.active && input.wheel === 0;
     if (nearest?.landable && !orbitCam.flight && nearest.distSurface < 30 &&
-      performance.now() - lastTakeoff > 800 && inputIdle) {
+      performance.now() - lastTakeoff > 800 && inputIdle &&
+      terrainMgr.baseReady(nearest.id)) { // DEM 基础层未就绪前不登陆（地表还在噪声→真实高程切换中）
       _rel.set(
         ship.posKm[0] - nearest.posKm[0], ship.posKm[1] - nearest.posKm[1], ship.posKm[2] - nearest.posKm[2]
       );
@@ -685,7 +691,8 @@ function loop() {
       // 移动端阈值放宽至 5m：捏合缩放步长比鼠标滚轮大，需更宽触发窗口才能触发着陆
       autoLand = altGround < (IS_MOBILE ? 0.005 : 0.0022);
     }
-    if ((autoLand || (input.tapped('KeyG') && nearest?.landable && nearest.distSurface < landRange))
+    if ((autoLand || (input.tapped('KeyG') && nearest?.landable && nearest.distSurface < landRange &&
+        terrainMgr.baseReady(nearest.id)))
       && !orbitCam.flight) {
       ship.enterWalk(env); // 视向严格连续（yaw+pitch 自当前相机反解）
       appMode = 'walk';
@@ -961,6 +968,7 @@ function makeEnv(nearest) {
     heightSolidFn: (id, dir) => terrainMgr.heightSolidAt(id, dir),
     isWater: (id, dir) => terrainMgr.isWater(id, dir),
     phys: (id) => builder.bodies.get(id).phys,
+    baseReady: (id) => terrainMgr.baseReady(id),
   };
 }
 
@@ -1005,11 +1013,33 @@ function handleUIKeys() {
   }
   // 行走模式自动隐藏轨道辅助线（沉浸真实星空）
   const showOrbits = orbitLinesOn && appMode !== 'walk';
-  for (const line of Object.values(builder.orbitLines.userData)) line.visible = showOrbits;
+  // 近距淡出：轨道线是示意辅助而非法线实体，抵达/环绕某天体时其轨道线
+  // 仍横贯视野会破坏临场感（冥王星系统内"轨道比星球还醒目"的投诉）。
+  // 6R→300R 平滑淡入：月距 38 万 km 处看地球轨道线仍接近全显，登陆前完全隐去。
+  for (const [id, line] of Object.entries(builder.orbitLines.userData)) {
+    const e = builder.bodies.get(id);
+    let f = 1;
+    if (e) {
+      const R = e.phys.radiusKm;
+      const d = Math.hypot(
+        e.posKm[0] - ship.posKm[0], e.posKm[1] - ship.posKm[1], e.posKm[2] - ship.posKm[2]
+      ) - R;
+      f = THREE.MathUtils.smoothstep(d, R * 6, R * 300);
+    }
+    line.visible = showOrbits && f > 0.01;
+    if (line.visible) line.material.opacity = (line.userData.baseOpacity ?? 0.3) * f;
+  }
   // 海外天体（TNO）轨道线：独立开关（K），默认关闭（#4）
   const showTnoOrbits = tnoOrbitsOn && appMode !== 'walk';
   for (const [, e] of tnoScene.entries) {
-    if (e.orbitLine) e.orbitLine.visible = showTnoOrbits;
+    if (!e.orbitLine) continue;
+    const R = e.phys.radiusKm ?? 500;
+    const d = Math.hypot(
+      e.posKm[0] - ship.posKm[0], e.posKm[1] - ship.posKm[1], e.posKm[2] - ship.posKm[2]
+    ) - R;
+    const f = THREE.MathUtils.smoothstep(d, R * 6, R * 300);
+    e.orbitLine.visible = showTnoOrbits && f > 0.01;
+    if (e.orbitLine.visible) e.orbitLine.material.opacity = (e.orbitLine.userData.baseOpacity ?? 0.18) * f;
   }
   if (input.tapped('KeyL')) labels.setVisible(!labels.visible);
   if (input.tapped('KeyH')) hud.toggleHelp();

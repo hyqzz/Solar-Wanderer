@@ -304,11 +304,17 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
           float aa2 = 1.0 - smoothstep(0.35, 0.9, fp * 420.0);
           float aa3 = 1.0 - smoothstep(0.35, 0.9, fp * 5200.0);
           float g2 = f2 * aa2, g3 = f3 * aa3;
+          // 4cm 表土颗粒（风化层米粒感，仅 25m 内）：真实月壤/火星尘土在脚下
+          // 呈现毫米-厘米级团聚颗粒，单噪声亮度调制缺少这层"砂砾"质感
+          float f4 = 1.0 - smoothstep(0.006, 0.025, vd);
+          float aa4 = 1.0 - smoothstep(0.35, 0.9, fp * 26000.0);
+          float g4 = f4 * aa4 * uDetailScale;
           float d1 = tnoise2(vObjPos * 35.0);
           float d2 = tnoise2(vObjPos * 420.0) * g2 * uDetailScale;
           float d3 = tnoise2(vObjPos * 5200.0) * g3 * uDetailScale;
-          float dm = 0.78 + 0.46 * (d1 * 0.45 + d2 * 0.33 + d3 * 0.22)
-                   + (1.0 - g2) * 0.075 + (1.0 - g3) * 0.05;
+          float d4 = tnoise(vObjPos * 26000.0) * g4;
+          float dm = 0.78 + 0.46 * (d1 * 0.42 + d2 * 0.31 + d3 * 0.19 + d4 * 0.08)
+                   + (1.0 - g2) * 0.075 + (1.0 - g3) * 0.05 + (1.0 - g4) * 0.02;
           diffuseColor.rgb *= mix(dm, 1.0, vWater);
           // 岸边泡沫：land→water 过渡区（vWater 0..1 内插）叠加白色浪沫（#21）
           float foam = smoothstep(0.05, 0.38, vWater) * (1.0 - smoothstep(0.62, 0.95, vWater));
@@ -358,37 +364,52 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
   return mat;
 }
 
-/** 世界锚定确定性岩石散布：以体固系空间网格哈希决定每块岩石，重建不漂移 */
+/** 世界锚定确定性岩石散布：以体固系空间网格哈希决定每块岩石，重建不漂移。
+ * 真实感要点（地表审查）：
+ * - 实例色采样本地地表反照率（火星红地上不再是灰石头），亮度随机变化模拟风化差异
+ * - 尺寸分布偏向小砾石（幂律：真实地表碎石以小砾为主，巨砾稀少）
+ * - 散布半径边缘按距离渐缩至 0（旧版硬边界：行走时岩石在 330m 处整批跳入/跳出）
+ * - 半埋更深（0.15×尺寸）：风化层中的岩石本就部分掩埋，消除"漂浮感"
+ * - 重建节奏与最内级地形解耦（60m 或 DEM 更新才重建）：旧版每 7.5m 随内级重建，
+ *   DEM 瓦片异步到达时高度变化使岩石整批垂直跳动（"石头跳"根因之一） */
 class RockField {
   constructor(field) {
     this.field = field;
     const sp = field.sp;
-    this.density = sp.craters > 0.8 ? 0.4 : sp.palette === 'ice' ? 0.16 : 0.3;
+    this.density = sp.craters > 0.8 ? 0.42 : sp.palette === 'ice' ? 0.16 : 0.3;
     if (sp.ocean) this.density = 0.12;
-    this.MAX = 320;
-    // 低多边形岩石：二十面体确定性变形
-    const geo = new THREE.IcosahedronGeometry(1, 1);
+    this.CELL = 0.018;  // 18 m 格（加密，小砾石需要更高空间频率）
+    this.RANGE = 0.34;  // 340 m 散布半径
+    const N = Math.floor(this.RANGE / this.CELL);
+    this.MAX = Math.min(640, Math.ceil((2 * N + 1) * (2 * N + 1) * this.density * 1.1));
+    // 岩石网格：detail 2 二十面体确定性变形（detail 1 棱角感太强，
+    // 近看是"低多边形游戏道具"而非风化岩石）
+    const geo = new THREE.IcosahedronGeometry(1, 2);
     const n = makeNoise(hashSeed(field.bodyId + ':rock'));
     const pos = geo.attributes.position;
     const v = new THREE.Vector3();
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i);
-      const k = 1 + 0.42 * n.fbm(v.x * 1.7, v.y * 1.7, v.z * 1.7, 3);
-      pos.setXYZ(i, v.x * k, v.y * k * 0.75, v.z * k);
+      const k = 1 + 0.42 * n.fbm(v.x * 1.7, v.y * 1.7, v.z * 1.7, 3)
+              + 0.14 * n.fbm(v.x * 5.1, v.y * 5.1, v.z * 5.1, 2);
+      pos.setXYZ(i, v.x * k, v.y * k * 0.72, v.z * k);
     }
     geo.computeVertexNormals();
-    const pal = PALETTES[sp.palette] ?? PALETTES.gray;
     const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(pal[0][0] * 0.8, pal[0][1] * 0.8, pal[0][2] * 0.8),
-      roughness: 0.92, metalness: 0, fog: true,
+      color: 0xffffff, // 实例色承载反照率（setColorAt）
+      roughness: 0.93, metalness: 0, fog: true,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.MAX);
     this.mesh.frustumCulled = false;
+    this.mesh.castShadow = true;    // 近场太阳阴影（builder 阴影装置）
+    this.mesh.receiveShadow = true;
     this.mesh.count = 0;
+    this._anchor = null; // 上次重建锚点（重建节奏控制）
     this._m = new THREE.Matrix4();
     this._q = new THREE.Quaternion();
     this._s = new THREE.Vector3();
     this._p = new THREE.Vector3();
+    this._c = new THREE.Color();
   }
 
   /** 简易确定性哈希（整数格 → [0,1)） */
@@ -398,11 +419,14 @@ class RockField {
     return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
   }
 
-  /** origin: 最细级地形原点（实例坐标存原点相对值，与地形同源消 fp32 量化闪烁，R9-2a） */
-  rebuild(anchorDir, origin) {
+  /** origin: 最细级地形原点（实例坐标存原点相对值，与地形同源消 fp32 量化闪烁，R9-2a）。
+   * force: DEM 新瓦片到达时强制重建（高程变化，岩石须随之落地）；
+   * 否则锚点移动 <60m 时跳过（岩石集合不变，避免无效重排） */
+  rebuild(anchorDir, origin, force = false) {
     const R = this.field.phys.radiusKm;
-    const CELL = 0.022; // 22 m 格
-    const RANGE = 0.33; // 330 m 半径内散布
+    if (!force && this._anchor && this._anchor.distanceTo(anchorDir) * R < 0.06) return;
+    this._anchor = (this._anchor ?? new THREE.Vector3()).copy(anchorDir);
+    const CELL = this.CELL, RANGE = this.RANGE;
     this.mesh.position.copy(origin);
     const u = anchorDir.clone().normalize();
     const east = Math.abs(u.y) > 0.999
@@ -423,22 +447,34 @@ class RockField {
         const r1 = RockField.hash(kx, ky, kz, 2);
         const r2 = RockField.hash(kx, ky, kz, 3);
         const r3 = RockField.hash(kx, ky, kz, 4);
+        const r4 = RockField.hash(kx, ky, kz, 5);
         dir.set(
           this._p.x + (r1 - 0.5) * CELL, this._p.y + (r2 - 0.5) * CELL, this._p.z + (r3 - 0.5) * CELL
         ).normalize();
         if (this.field.sp.ocean && this.field.isOcean(dir)) continue; // 海面无岩石
+        // 散布边缘渐缩：250m→330m 缩放至 0，行走时远处岩石平滑消长而非整批跳入
+        const dAnchor = Math.hypot(ix * CELL, iy * CELL);
+        const edge = 1 - sstep(RANGE * 0.74, RANGE * 0.97, dAnchor);
+        if (edge <= 0.01) continue;
         const h = this.field.height(dir);
-        const scale = 0.0004 + r1 * r1 * 0.002; // 0.4 m – 2.4 m
-        this._p.copy(dir).multiplyScalar(h + scale * 0.3).sub(origin);
+        // 幂律尺寸：0.12m 砾石为主，~2.8m 巨砾稀少（r1³ 压缩大端）
+        const scale = (0.00012 + r1 * r1 * r1 * 0.0026) * edge;
+        this._p.copy(dir).multiplyScalar(h + scale * 0.15).sub(origin);
         this._q.setFromAxisAngle(dir, r2 * Math.PI * 2);
         this._s.set(scale * (0.7 + r3 * 0.7), scale, scale * (0.7 + r2 * 0.7));
         this._m.compose(this._p, this._q, this._s);
         this.mesh.setMatrixAt(count, this._m);
+        // 实例色 = 本地地表反照率 × 风化亮度差异（0.62–1.02）：
+        // 岩石就地取材（原位风化/撞击溅射），颜色应与脚下地表同源
+        this.field.color(dir, h, 0.35, this._c);
+        const v = 0.62 + r4 * 0.4;
+        this.mesh.setColorAt(count, this._c.multiplyScalar(v));
         count++;
       }
     }
     this.mesh.count = count;
     this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
 
   dispose() {
@@ -453,8 +489,9 @@ export class TerrainPatchSet {
     this.grid = QUALITY.terrainGrid; // 画质分档（R7 #8）
     const GRID = this.grid;
     const R = field.phys.radiusKm;
-    // 各级半边长（km）：最内 0.03km → 格距 ~1m（R9-2a 行走尺度再加密一级）
-    this.extents = [0.03, 0.12, 0.5, 2.5, 12, 60, 280].filter((e) => e < R * 0.7);
+    // 各级半边长（km）：最内 0.012km → 格距 ~0.4m（脚掌尺度，行走时地面与碰撞
+    // 高度场偏差 <2cm）；次内 0.03km 覆盖中景过渡（R9-2a 行走尺度再加密）
+    this.extents = [0.012, 0.03, 0.12, 0.5, 2.5, 12, 60, 280].filter((e) => e < R * 0.7);
     if (this.extents.length === 0) this.extents = [R * 0.3];
     this.group = new THREE.Group();
     this.levels = [];
@@ -489,10 +526,13 @@ export class TerrainPatchSet {
       const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 2, R);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.frustumCulled = false;
+      mesh.receiveShadow = true; // 近场太阳阴影（岩石/地形自我投影）
+      mesh.castShadow = true;
       this.group.add(mesh);
       this.levels.push({
         mesh, geo, mat, uPatchRel, uFade, extent: this.extents[li],
         origin: new THREE.Vector3(), builtAnchor: new THREE.Vector3(1e9, 0, 0),
+        built: false,   // 首次构建标记（初次/ DEM 更新才淡入，移动重建不闪）
         fadeStart: -1, // -1 = 尚未构建
       });
     }
@@ -501,10 +541,11 @@ export class TerrainPatchSet {
     this.group.add(this.rocks.mesh);
   }
 
-  /** DEM 新瓦片到达后标记脏：后续 update 逐帧重建全部级（最内级优先）以拾取真实高程 */
+  /** DEM 新瓦片到达后标记脏：防抖合并——瓦片流式分批到达时旧逻辑每批都触发
+   * 全级重建淡入（地面反复半透明闪烁，透过半透明外圈看到地平线下黑天空
+   * 形成"黑色地平带"伪影）；现在仅登记 pending，由 update 间隔 ≥1.5s 启扫 */
   markDirty() {
-    this.demDirty = true;
-    for (const lv of this.levels) lv.demClean = false;
+    this.demPending = true;
   }
 
   /** dirLocal: 相机在天体本地系中的方向（单位）。timeSec: 水面波纹时基。
@@ -524,8 +565,16 @@ export class TerrainPatchSet {
     const now = performance.now();
     for (const lv of this.levels) {
       if (lv.fadeStart >= 0 && lv.uFade.value < 1) {
-        lv.uFade.value = Math.min(1, (now - lv.fadeStart) / 800);
+        const p = Math.min(1, (now - lv.fadeStart) / (lv.fadeDur ?? 800));
+        lv.uFade.value = (lv.fadeFrom ?? 0) + (1 - (lv.fadeFrom ?? 0)) * p;
       }
+    }
+    // DEM 防抖提升：瓦片分批到达合并为一轮全级扫（间隔 ≥1.5s）
+    if (this.demPending && !this.demDirty && now - (this._lastDemSweep ?? -1e9) > 1500) {
+      this.demDirty = true;
+      this.demPending = false;
+      this._lastDemSweep = now;
+      for (const lv of this.levels) lv.demClean = false;
     }
     // 首次激活：由外向内逐帧构建（大覆盖先出现，远处进入时感知更自然）
     const initMode = !this._initialized;
@@ -538,23 +587,27 @@ export class TerrainPatchSet {
       // 坐在陈旧噪声地形上而悬浮空中）。每帧扫一级（最内优先），扫完清脏。
       const demRebuild = !initMode && this.demDirty && !lv.demClean;
       if (moveKm > lv.extent * 0.25 || demRebuild) {
-        this.build(lv, dirLocal);
+        // 淡入仅用于"新几何出现"：首次构建全淡入；DEM 高程更新半淡入
+        // （0.35→1, 500ms，避免透过半透地面看到地平线下黑天空）；
+        // 随移动的常规重建不淡入（顶点仍在同一连续高度场上，重置淡入
+        // 会让地面每走几步闪一次——行走/奔跑时地面闪烁的根因，#18 回归修正）
+        this.build(lv, dirLocal, !lv.built ? 'full' : demRebuild ? 'dem' : 'none');
         lv.builtAnchor.copy(dirLocal);
         lv.demClean = true;
         if (li === 0) {
-          this.rocks.rebuild(dirLocal, lv.origin);
+          this.rocks.rebuild(dirLocal, lv.origin, demRebuild);
         }
         if (this.levels.every((l) => l.demClean)) this.demDirty = false;
         break; // 分帧：其余级下一帧再建
       }
     }
     // 全部级至少构建一次后标记已初始化
-    if (initMode && this.levels.every(lv => lv.fadeStart >= 0)) {
+    if (initMode && this.levels.every(lv => lv.built)) {
       this._initialized = true;
     }
   }
 
-  build(lv, anchor) {
+  build(lv, anchor, fadeMode = 'full') {
     const GRID = this.grid;
     const R = this.field.phys.radiusKm;
     const u = anchor.clone().normalize();
@@ -612,7 +665,15 @@ export class TerrainPatchSet {
     }
     lv.geo.attributes.color.needsUpdate = true;
     lv.geo.attributes.slope.needsUpdate = true;
-    lv.fadeStart = performance.now(); // 启动淡入计时（#18）
+    if (fadeMode === 'none') {
+      lv.uFade.value = 1; // 移动重建：保持不透明，不重启淡入
+    } else {
+      lv.fadeFrom = fadeMode === 'dem' ? 0.35 : 0;
+      lv.fadeDur = fadeMode === 'dem' ? 500 : 800;
+      lv.uFade.value = lv.fadeFrom;
+      lv.fadeStart = performance.now();
+    }
+    lv.built = true;
   }
 
   dispose() {
@@ -666,6 +727,16 @@ export class TerrainManager {
   isWater(bodyId, dirLocal) {
     const f = this.field(bodyId);
     return !!(f.sp.ocean && f.isOcean(dirLocal));
+  }
+
+  /** DEM 基础层（全球 1×1 瓦片）是否就绪：就绪前 height() 返回噪声地形，
+   * 就绪后切换为真实高程——两者可差数公里。登陆/行走必须等基础层就绪，
+   * 否则会在噪声地表落地后看着真实地面"塌陷"到数公里之下。 */
+  baseReady(bodyId) {
+    if (!DEMTileSource.hasSource(bodyId)) return true;
+    const dem = this.demSources.get(bodyId);
+    if (!dem) return false; // 尚未创建（地形未激活）
+    return dem.isOffline || dem.cache.size > 0;
   }
 
   /** 按相机距表面距离选择 DEM 分辨率层级（近=高分辨率，远=低分辨率） */

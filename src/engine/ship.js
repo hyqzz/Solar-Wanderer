@@ -415,6 +415,7 @@ export class Ship {
       bodyId: null, localPos: new THREE.Vector3(),
       yaw: 0, pitch: 0, vAlt: 0, grounded: false,
       smx: 0, smy: 0, diving: false, submerged: false,
+      groundSmooth: null, // 接地视线低通状态（null = 未初始化）
     };
     // 音频状态快照：供外部 AudioEngine 读取（不直接调用 audio，解耦）。
     // updateWalk / updateFly 每帧刷新，main.js 集成时传给 AudioEngine.update()。
@@ -429,7 +430,9 @@ export class Ship {
       this.speedSetting = Math.min(MAX_SPEED, Math.max(MIN_SPEED, this.speedSetting));
     }
     if (input.tapped('KeyG') && env.nearest) {
-      if (this.mode === 'fly' && env.nearest.landable && env.nearest.distSurface < 20) {
+      // DEM 基础层未就绪时不登陆（地表高程尚未切换到真实数据，落地后地面会塌陷）
+      const ready = !env.baseReady || env.baseReady(env.nearest.id);
+      if (this.mode === 'fly' && env.nearest.landable && env.nearest.distSurface < 20 && ready) {
         this.enterWalk(env);
       } else if (this.mode === 'walk') {
         this.exitWalk(env);
@@ -543,6 +546,7 @@ export class Ship {
     w.pitch = Math.asin(THREE.MathUtils.clamp(_v3.dot(upv), -1, 1));
     w.smx = 0; w.smy = 0;
     w.diving = false; w.submerged = false;
+    w.groundSmooth = null; // 重新初始化接地低通（登陆点高程为初值）
     this.vel.set(0, 0, 0);
   }
 
@@ -649,7 +653,29 @@ export class Ship {
       else if (w.submerged && rr >= surfR - 0.0001) { w.diving = false; w.submerged = false; w.vAlt = 0; }
     }
     const groundFn = w.diving ? (env.heightSolidFn ?? env.heightFn) : env.heightFn;
-    const ground   = groundFn(w.bodyId, dir) + WALK_EYE_KM;
+    let ground = groundFn(w.bodyId, dir) + WALK_EYE_KM;
+    // 接地视线低通：解析高度场含分米级微地形，且 DEM 瓦片异步到达会突变局部
+    // 高程——视线高度直连时每步都在微抖动/瓦片到达瞬间跳动。非对称时间常数：
+    // 地面上升快速跟随（防穿进坡里），下降缓慢沉降（自然步态下台阶感）。
+    if (w.groundSmooth == null) w.groundSmooth = ground;
+    if (w.grounded) {
+      const delta = ground - w.groundSmooth;
+      // 大偏差（>5m）= DEM 高分辨率瓦片到达导致的地形权威更新（山地粗/细
+      // 层级可差数百米）：此时地形网格同步淡变，相机贴地滑翔跟随而非自由落体
+      // （旧逻辑 ground 骤降 → grounded=false → 从数公里高空物理坠落 1 分钟）
+      const big = Math.abs(delta) > 0.005;
+      const tau = big ? 0.55 : (delta > 0 ? 0.03 : 0.11);
+      w.groundSmooth += delta * (1 - Math.exp(-dt / tau));
+      if (Math.abs(delta) < 1e-7) w.groundSmooth = ground;
+      if (big) {
+        w.localPos.copy(dir).multiplyScalar(w.groundSmooth); // 贴地滑翔
+        w.vAlt = 0;
+        ground = w.groundSmooth;
+      }
+    } else {
+      w.groundSmooth = ground; // 空中/跳跃：不滤波，落地帧再接管
+    }
+    ground = w.grounded ? w.groundSmooth : ground;
     if (w.localPos.length() <= ground) {
       w.localPos.copy(dir).multiplyScalar(ground);
       w.vAlt = 0; w.grounded = true;

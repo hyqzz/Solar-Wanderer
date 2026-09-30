@@ -258,6 +258,20 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   // 太阳点光源（物理上太阳是光源本身；行星用自定义着色器，光源供地形 StandardMaterial 用）
   const sunLight = new THREE.PointLight(0xfff2e0, 1, 0, 0);
   sun.group.add(sunLight);
+  // 近场太阳阴影装置：行走/超低空时把光照从点光源平滑移交到跟随玩家的
+  // 平行光（地表尺度上阳光本就近似平行），由它投射岩石/地形自我阴影——
+  // 无阴影的岩石像贴图浮在地上（地表审查"照片级"缺口之首）。
+  // 平行光正交阴影框 ±400m 只覆盖近场；w=0 时 castShadow 关闭、零开销。
+  const sunShadow = new THREE.DirectionalLight(0xfff2e0, 0);
+  sunShadow.castShadow = false;
+  sunShadow.shadow.mapSize.set(QUALITY.tier === 'lite' ? 1024 : 2048, QUALITY.tier === 'lite' ? 1024 : 2048);
+  sunShadow.shadow.camera.left = -0.4; sunShadow.shadow.camera.right = 0.4;
+  sunShadow.shadow.camera.top = 0.4; sunShadow.shadow.camera.bottom = -0.4;
+  sunShadow.shadow.camera.near = 0.02; sunShadow.shadow.camera.far = 6;
+  sunShadow.shadow.bias = -0.00008;
+  sunShadow.shadow.normalBias = 0.0006; // km 单位 = 0.6m：抵消地形网格 0.4m 采样自遮挡痤疮
+  scene.add(sunShadow);
+  scene.add(sunShadow.target);
   scene.add(sun.group);
   world.register(sunEntry.posKm, sun.group);
   bodies.set('sun', sunEntry);
@@ -339,6 +353,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     sun.group.add(oline);
     orbitLines.userData[id] = oline;
     oline.userData.isOrbit = true;
+    oline.userData.baseOpacity = 0.3; // 近距淡出基准（main.js 按相机距离调制）
 
     scene.add(group);
     world.register(entry.posKm, group);
@@ -398,6 +413,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     }));
     bodies.get(phys.parent).group.add(oline);
     oline.userData.isOrbit = true;
+    oline.userData.baseOpacity = 0.25;
     orbitLines.userData[id] = oline;
 
     scene.add(group);
@@ -597,6 +613,25 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
         0.878 + (gt[2] - 0.878) * w);
     } else {
       sunLight.color.setHex(0xfff2e0);
+    }
+    // 近场阴影移交：可登陆天体表面 2.7km 以下，光照平滑从点光源切到平行光
+    // 阴影装置（局部阳光本就近似平行）；0.3km 以下完全由装置接管。
+    // 点光源保留远景/其它天体照明，二者方向在玩家处一致，过渡无缝。
+    const wSh = (nearestE && nearestE.phys.landable)
+      ? THREE.MathUtils.smoothstep(2.7 - Math.max(nearestSurf, 0), 0, 2.4) : 0;
+    if (wSh > 0.003) {
+      _sunDir.copy(sun.group.position).normalize(); // 世界系（相机为原点）：相机→太阳
+      sunShadow.position.copy(_sunDir).multiplyScalar(3);
+      sunShadow.target.position.set(0, 0, 0);
+      sunShadow.intensity = sunLight.intensity * wSh;
+      sunShadow.color.copy(sunLight.color);
+      sunShadow.visible = true;
+      sunShadow.castShadow = true;
+      sunLight.intensity *= 1 - wSh;
+    } else if (sunShadow.visible) {
+      sunShadow.visible = false;
+      sunShadow.castShadow = false;
+      sunShadow.intensity = 0;
     }
     sun.update(simTimeSec, dSunKm);
   }

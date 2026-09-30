@@ -92,6 +92,7 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
         color: ORBIT_COLOR, transparent: true, opacity: 0.18, fog: false,
       }));
       orbitLine.userData.isOrbit = true;
+      orbitLine.userData.baseOpacity = 0.18;
       orbitLine.frustumCulled = false;
       orbitLine.visible = false; // 默认关闭（由 main.js KeyK 控制，#4）
       orbitLinesGroup.add(orbitLine);
