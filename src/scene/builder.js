@@ -535,12 +535,16 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   }
 
   /** world.update 之后调用：相机相对量（大气/环中心、远距光点尺寸、卫星可见性） */
+  let glintSkyFade = 1; // 白昼大气内远距光点熄灭（日光淹没，真实白昼看不见行星"星星"）
   function postWorldUpdate(shipPosKm, simTimeSec) {
+    let nearestE = null, nearestSurf = Infinity;
     for (const [id, e] of bodies) {
       if (id === 'sun') continue;
       const dist = Math.hypot(
         e.posKm[0] - shipPosKm[0], e.posKm[1] - shipPosKm[1], e.posKm[2] - shipPosKm[2]
       );
+      const surf = dist - e.phys.radiusKm;
+      if (surf < nearestSurf) { nearestSurf = surf; nearestE = e; }
       // 远距光点亮度物理化：相位角 φ（天体处 太阳-天体-相机 夹角）+ 几何反照率
       // 朗伯球相位函数：(sinφ + (π−φ)cosφ)/π，满相 φ=0 最亮，背相 φ→π 熄灭
       const bsX = -e.posKm[0], bsY = -e.posKm[1], bsZ = -e.posKm[2]; // 天体→太阳
@@ -561,7 +565,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       e.glint.scale.setScalar(glintSize);
       const distFade = THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 300) - 1) * 0.8, 0, 0.9);
       const albedoScale = Math.sqrt((GLINT_ALBEDO[id] ?? 0.15) / 0.3);
-      e.glint.material.opacity = distFade * (0.2 + 0.8 * phaseF) * albedoScale;
+      e.glint.material.opacity = distFade * (0.2 + 0.8 * phaseF) * albedoScale * glintSkyFade;
       // 卫星 LOD：迟滞窗口防闪烁（进入 2.8 亿 km 显示、退出 3.2 亿 km 隐藏）；
       // 网格隐藏时光点保留（远距卫星本就是点源，相位调制后亮度正确）
       if (e.isMoon) {
@@ -575,9 +579,25 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     }
     const dSunKm = Math.hypot(shipPosKm[0], shipPosKm[1], shipPosKm[2]);
     const dAU = Math.max(dSunKm / KM_PER_AU, 0.05);
-    // 地形 Standard 材质光强：与行星材质同款暗适应补偿（外太阳系地表行走可见）
+    // 地形 Standard 材质光强：感知暗适应——人眼会适应光强，真实站在水星正午地表
+    // 看到的并非"10倍地球亮度的白炽世界"，而是略亮的暗灰荒原。内外太阳系统一
+    // 用 0.55 幂压缩动态范围（旧版仅外太阳系压缩，水星地表 1/d² 全量 26× 被
+    // ACES 削顶成白水泥地——地表审查发现）。
     const li = 1 / (dAU * dAU);
-    sunLight.intensity = 2.5 * (li >= 1 ? li : Math.pow(li, 0.55));
+    sunLight.intensity = 2.5 * Math.pow(li, 0.55);
+    // 地表光照穿霾色滤：厚霾天体（金星/土卫六）的阳光被气溶胶滤成橙色并衰减
+    // （Venera 橙琥珀原野 / Huygens 橙色漫射光实拍）；随高度指数恢复为自然阳光
+    const gt = nearestE?.phys.atmosphere?.groundTint;
+    if (gt) {
+      const w = Math.exp(-Math.max(nearestSurf, 0) / (nearestE.phys.atmosphere.rayleighScaleKm * 3));
+      sunLight.intensity *= 1 + ((nearestE.phys.atmosphere.groundDim ?? 1) - 1) * w;
+      sunLight.color.setRGB(
+        1.0 + (gt[0] - 1.0) * w,       // 基准色 0xfff2e0 = (1, 0.949, 0.878)，按 w 混入滤镜色
+        0.949 + (gt[1] - 0.949) * w,
+        0.878 + (gt[2] - 0.878) * w);
+    } else {
+      sunLight.color.setHex(0xfff2e0);
+    }
     sun.update(simTimeSec, dSunKm);
   }
 
@@ -603,7 +623,9 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     return data;
   }
 
-  return { bodies, sunEntry, orbitLines, update, postWorldUpdate, mapDataOf, cache, upgrades, boostTextures: boost };
+  return { bodies, sunEntry, orbitLines, update, postWorldUpdate, mapDataOf, cache, upgrades, boostTextures: boost,
+    /** 白昼大气内远距光点淡出（与星空淡出同一阈值） */
+    setSkyFade(f) { glintSkyFade = f > 0.4 ? 1 : 0; } };
 }
 
 function makeGlint(color) {

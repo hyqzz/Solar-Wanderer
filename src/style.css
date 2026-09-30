@@ -38,6 +38,7 @@ html, body {
 .body-label.label-star { font-size: 10px; color: rgba(150, 165, 195, 0.6); pointer-events: none; }
 .body-label.label-star .ld { font-size: 9px; }
 #labels.daysky .label-star { display: none !important; }
+#labels.daysky .label-faint { display: none !important; }
 .body-label.aimed { color: #ffe9b0; }
 .body-label.aimed::before { content: "▸ "; }
 .body-label.selected { color: #7fd4ff; font-weight: bold; }

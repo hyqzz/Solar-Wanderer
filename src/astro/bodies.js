@@ -27,7 +27,9 @@ export const BODIES = {
       heightKm: 90, rayleighScaleKm: 15.9, mieScaleKm: 5,
       // Rayleigh 橙色偏向：CO₂ + H₂SO₄ 云层优先吸收蓝光（Venera 着陆器实拍：橙琥珀色天空）
       rayleigh: [8e-6, 4.5e-6, 1.0e-6],
-      mie: 3e-6,   // 降低 Mie（硫酸云为漫射散射，无方向偏向）
+      // 分光 Mie（橙色加权）：旧版灰色 mie 使地表仰望的厚霾单散射呈奶油白；
+      // 真实金星：阳光穿过 90km CO₂+硫酸霾后蓝光被吸收殆尽，天空为橙琥珀色（Venera 实拍）。
+      mie: [4.5e-6, 2.6e-6, 0.9e-6],
       mieG: 0.65,  // 降低：厚云层使散射更均匀，消除太阳方向过亮
       multiplier: 1.5,
       haze: 0.90,  // 极厚气溶胶层
@@ -36,6 +38,9 @@ export const BODIES = {
       interiorBoost: 5,
       interiorBoostM: 0.6,  // Mie 低值：无方向性光晕（太阳不可见于地表）
       fogDensityMult: 5,    // 地表能见度约 5~20 km（Venera 实测数据）
+      // 地表光照穿霾色滤：92 bar CO₂ + 硫酸云把直射阳光滤成橙琥珀色并大幅衰减
+      // （Venera 13/14 实拍：橙褐色玄武岩原野，照度仅地球阴天窗边水平）
+      groundTint: [1.0, 0.50, 0.14], groundDim: 0.55,
     },
     textures: { map: 'venus_surface.jpg', clouds: 'venus_atmosphere.jpg', cloudsOpaque: true },
     desc: '大小与地球相仿的”姊妹星”，却被 92 倍地球气压的 CO₂ 浓密大气与硫酸云覆盖，表面 465°C，自转方向逆行且一天长于一年。',
@@ -208,6 +213,9 @@ export const MOON_PHYS = {
                              // 使霾层内散射呈橙色——旧值灰色 mie 把盘面洗成粉米白
                              rayleigh: [8e-7, 5e-7, 2e-7], mie: [1.6e-6, 1.2e-6, 0.7e-6], mieG: 0.7, multiplier: 1.6,
                              interiorBoost: 1.9,
+                             // 地表光照穿霾色滤：tholin 橙霾把 0.1% 的残余阳光滤成橙色漫射光
+                             // （Huygens 着陆实拍：整个地表场景笼罩在橙色光中）
+                             groundTint: [1.0, 0.60, 0.28], groundDim: 0.9,
                              haze: 0.30 }, // 烃类烟霾（tholin），橙色近地面雾霾极厚
                desc: '唯一拥有浓密大气的卫星（1.5 倍地球气压），表面有液态甲烷的湖泊与河流，橙色烟霾笼罩全球。' },
   iapetus:   { nameZh: '土卫八', nameEn: 'Iapetus', parent: 'saturn', radiusKm: 734.5, gm: 120.51,

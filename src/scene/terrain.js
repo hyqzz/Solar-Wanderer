@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { makeNoise, hashSeed } from '../util/noise.js';
 import { QUALITY } from '../engine/quality.js';
 import { DEMTileSource } from './demTiles.js';
+import { TERRAIN_GRADE } from './planetMaterial.js';
 
 // 极冠霜冻覆盖颜色（palette → [r,g,b]，仅 color() 有地图时也生效）
 const FROST_PALETTES = {
@@ -183,7 +184,16 @@ export class HeightField {
     const t = 0.5 + 0.5 * n.fbm(dir.x * 60, dir.y * 60, dir.z * 60, 3);
     let r, g, b;
     if (m) {
-      r = m[0] / 255; g = m[1] / 255; b = m[2] / 255;
+      // 与行星材质同源的逐天体反照率分级（水星地表白水泥地修复：贴图 0.5 灰 × 分级 0.40）
+      const tg = TERRAIN_GRADE[this.bodyId];
+      const gr = tg?.grade ?? [1, 1, 1];
+      r = m[0] / 255 * gr[0]; g = m[1] / 255 * gr[1]; b = m[2] / 255 * gr[2];
+      // 同款饱和度补偿（ACES 去饱和）：地球陆地否则发灰（盘面有 uSat，地形没有）
+      const ts = tg?.sat ?? 1;
+      if (ts !== 1) {
+        const lum = (r + g + b) / 3;
+        r = lum + (r - lum) * ts; g = lum + (g - lum) * ts; b = lum + (b - lum) * ts;
+      }
       r = r * 0.82 + (pal[0][0] + (pal[1][0] - pal[0][0]) * t) * 0.18;
       g = g * 0.82 + (pal[0][1] + (pal[1][1] - pal[0][1]) * t) * 0.18;
       b = b * 0.82 + (pal[0][2] + (pal[1][2] - pal[0][2]) * t) * 0.18;

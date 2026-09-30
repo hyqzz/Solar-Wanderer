@@ -101,6 +101,7 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
   }
 
   const _sunDir = new THREE.Vector3();
+  let skyFadeF = 1; // 白昼大气内辉光标记淡出（真实 TNO ≥17 等，白昼绝不可见）
 
   // 光速（km/天）：光行时视位置修正（与 builder 一致）
   const C_KM_PER_DAY = 299792.458 * 86400;
@@ -140,11 +141,16 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
       e.glint.scale.setScalar(Math.max(dist * 0.006, e.phys.radiusKm * 6));
       // 不透明度：远距常驻（0.85），接近天体（< 半径×60）时淡出，避免糊住表面
       e.glint.material.opacity =
-        THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 60) - 0.3), 0, 1) * 0.85;
+        THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 60) - 0.3), 0, 1) * 0.85 * skyFadeF;
       // 球体：仅在较近时渲染（远距纯辉光头，省填充率且更像彗星点光）
       e.mesh.visible = dist < e.phys.radiusKm * 900;
     }
   }
 
-  return { entries, update };
+  return {
+    entries,
+    update,
+    /** 白昼大气内辉光标记淡出（与星空淡出同一阈值） */
+    setSkyFade(f) { skyFadeF = f > 0.4 ? 1 : 0; },
+  };
 }

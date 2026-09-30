@@ -487,7 +487,7 @@ function setupLabels() {
     labels.add({
       id, name: bodyName(t),
       kind: t.kind === 'moon' ? 'moon' : t.kind === 'planet' || t.kind === 'star' ? 'planet'
-        : t.kind === 'region' ? 'region' : 'poi',
+        : ['region', 'tno', 'comet', 'probe', 'boundary'].includes(t.kind) ? t.kind : 'poi',
       radiusKm: t.phys?.radiusKm ?? 1,
       getRelPos: (v) => v.copy(t.relObj.position),
     });
@@ -1064,6 +1064,8 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   let immersion = 0; // 气巨大气浸没（全屏云雾层，R7 #5）
   let immTint = null;
   let waterFx = null; // 水下环境（R9-2b）
+  let _groundTintW = 0;        // 地表穿霾色滤权重（金星/土卫六，0=自然阳光）
+  let _groundTintCol = null;   // 滤镜色 [r,g,b]
   const fogColor = new THREE.Color(0x000000);
   if (nearest) {
     const e = builder.bodies.get(nearest.id);
@@ -1114,6 +1116,10 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
     }
     if (inAtmo) {
       const alt = Math.max(nearest.distSurface, 0);
+      if (atm.groundTint) {
+        _groundTintCol = atm.groundTint;
+        _groundTintW = Math.exp(-alt / (atm.rayleighScaleKm * 3));
+      }
       _rel.set(
         ship.posKm[0] - e.posKm[0], ship.posKm[1] - e.posKm[1], ship.posKm[2] - e.posKm[2]
       ).normalize();
@@ -1138,8 +1144,11 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       fogDensity = (1 / 180) * Math.exp(-alt / atm.rayleighScaleKm) * hazeDensity * (atm.fogDensityMult ?? 1);
       // 星空淡出：白昼且身处稠密层内
       const density = Math.exp(-alt / (atm.rayleighScaleKm * 2.2));
-      // 系数 1.0：正午 day=1 density=1 → skyFade=0，星星完全消失（物理正确，任何有大气的行星白昼均不见星）
-      skyFade = THREE.MathUtils.clamp(1 - day * density, 0, 1);
+      // 白昼星消：散射天空亮度取决于视线路径上的整层气柱，而非局地密度——
+      // 即使站在 21km 的奥林帕斯山顶，火星正午天空依旧亮得看不见星。
+      // 系数 3.0：地表/低海拔白昼 → skyFade=0 星光全灭（物理正确）；
+      // 30km 平流层白昼 density≈0.2 → skyFade≈0.4 亮星依稀可见（与真实高空气球观测一致）。
+      skyFade = THREE.MathUtils.clamp(1 - day * density * 3.0, 0, 1);
       // 穿越云层薄纱（R9-2b）：掠过云甲板高度时短暂白雾，入气更有层次
       if (e.cloudMesh && !waterFx) {
         const hc = e.phys.radiusKm * 0.0035;
@@ -1182,11 +1191,28 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   sky.setFade(skyFade);
   belts.visible = skyFade > 0.4;      // 带点云为统计表示，白昼天空中不可见
   oortCloud.group.visible = skyFade > 0.4; // 奥尔特云同理
+  smallBodies.group.visible = skyFade > 0.4; // 5412 颗真实小天体点云同理（地表审查发现白昼满天"假星"）
+  comets.setSkyFade(skyFade);        // 白昼彗星被日光淹没（白昼大彗星为极端罕见情形，不模拟）
+  tnoScene.setSkyFade(skyFade);      // TNO 远距辉光标记同理（真实 TNO 亮度 17 等以下，白昼绝不可见）
+  builder.setSkyFade(skyFade);       // 行星/卫星远距光点同理（白昼看不见"行星星星"；月球近距仍以实体盘面可见）
+  for (const v of voyagerEntries) v.group.visible = skyFade > 0.4; // 探测器辉光同理（肉眼本不可见）
   oortCloud.update(dSunAU);            // 进入云内部按距离淡出（#5）
   document.getElementById('labels').classList.toggle('daysky', skyFade < 0.5);
 
   // 行走在夜面时的微环境光（地照/星光下的暗适应，保证夜间探索可见性）
   ambient.intensity += ((appMode === 'walk' ? 0.14 : 0.02) - ambient.intensity) * Math.min(dt * 3, 1);
+  // 环境光穿霾色滤：厚霾天体的"天光"本身即橙色漫射（与直射光同步，见 builder 地表光照）
+  {
+    const gt = _groundTintW > 0 ? _groundTintCol : null;
+    if (gt) {
+      ambient.color.setRGB(
+        0x40 / 255 + (gt[0] * 0.6 - 0x40 / 255) * _groundTintW,
+        0x48 / 255 + (gt[1] * 0.6 - 0x48 / 255) * _groundTintW,
+        0x58 / 255 + (gt[2] * 0.6 - 0x58 / 255) * _groundTintW);
+    } else {
+      ambient.color.setHex(0x404858);
+    }
+  }
 
   // 方向性眼睛适应（#21）：进入强光快（瞳孔收缩 ~0.4s），进入暗处慢（视杆适应 ~1.4s）
   const adaptSpeed = exposureTarget < renderer.toneMappingExposure ? 2.5 : 0.7;

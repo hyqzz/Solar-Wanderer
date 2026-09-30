@@ -22,9 +22,13 @@ export class Labels {
   /** target: { id, nameZh, getRelPos():Vector3(相机相对km), radiusKm, kind, distText? } */
   add(target) {
     const el = document.createElement('div');
+    // label-faint：白昼天空（daysky）中物理上不可见的暗弱目标，整体隐藏保沉浸感
+    // （TNO ≥17 等、彗星、探测器、边界/区域标记在白昼地表天空中均不可见）
+    const faint = ['tno', 'comet', 'probe', 'boundary', 'region'].includes(target.kind);
     el.className = 'body-label' + (target.kind === 'moon' ? ' label-moon' : '') +
       (target.kind === 'poi' ? ' label-poi' : '') +
-      (target.kind === 'fixstar' ? ' label-star' : '');
+      (target.kind === 'fixstar' ? ' label-star' : '') +
+      (faint ? ' label-faint' : '');
     el.innerHTML = `<span class="ln">${target.name ?? target.nameZh}</span><span class="ld"></span>`;
     el.addEventListener('click', (e) => {
       e.stopPropagation();

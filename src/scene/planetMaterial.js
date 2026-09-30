@@ -38,6 +38,12 @@ const BODY_GRADE = {
   callisto: { grade: [0.90, 0.90, 0.92] },         // 压暗压冷，突出亮坑
   titan:   { veil: 0.94, veilColor: [0.92, 0.45, 0.14] }, // 不透明橙色霾（卡西尼自然色：柔和卡其橙盘）
 };
+// 地形层（terrain.js 顶点色采样同一份贴图）需要同步这份反照率校正，
+// 否则从太空看分级正确的暗天体（水星 0.40×），落到地表却是未分级的亮贴图色。
+// sat 一并导出（地球：盘面靠 uSat 补偿 ACES 去饱和，地形若无同款饱和度陆地会发灰）。
+export const TERRAIN_GRADE = Object.fromEntries(
+  Object.entries(BODY_GRADE).filter(([, v]) => v.grade).map(([k, v]) => [k, { grade: v.grade, sat: v.sat ?? 1 }])
+);
 
 export function createPlanetMaterial({
   map, nightMap = null, oceanSpec = false, ringShadow = null,

@@ -121,6 +121,11 @@ export function createComets(world) {
 
   return {
     entries,
+    /** 白昼大气内隐藏彗星（日光散射淹没，与星空淡出同一阈值） */
+    setSkyFade(f) {
+      const vis = f > 0.4;
+      for (const e of entries) e.group.visible = vis;
+    },
     update(jdTT, shipPosKm) {
       for (const e of entries) {
         // 光行时视位置（与行星一致：相机看到 t − d/c 时刻）
