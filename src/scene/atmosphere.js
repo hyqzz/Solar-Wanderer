@@ -164,23 +164,29 @@ export function createAtmosphere(phys, auroraMode = 0) {
           if (uAuroraMode > 0 && uAuroraStrength > 0.001) {
             vec3 srel = stretch(p - uCenter);
             float sh = length(srel) - uRg;
-            // 极光高度带：地球 60-180km，木星/土星 30-500km（更厚的极光层）
-            float altMin = (uAuroraMode == 2 || uAuroraMode == 3) ? 30.0 : 60.0;
-            float altMax = (uAuroraMode == 2 || uAuroraMode == 3) ? 500.0 : 180.0;
-            float altF = smoothstep(altMin, altMin + 20.0, sh)
-                       * (1.0 - smoothstep(altMax - 40.0, altMax, sh));
+            // 极光高度带：气巨 30-500km（与 300-350km 厚壳层取交集）。
+            // 地球/海卫一壳层仅 60/20km——硬编码 60-180km 会整条落在壳外，
+            // 采样永远为零（地球极光因此从不渲染）。薄壳按壳厚比例贴顶部分布。
+            float shellH = uRa - uRg;
+            float altMin, altMax;
+            if (uAuroraMode == 2 || uAuroraMode == 3) { altMin = 30.0; altMax = min(500.0, shellH); }
+            else { altMin = shellH * 0.35; altMax = shellH * 0.97; }
+            float altF = smoothstep(altMin, altMin + (altMax - altMin) * 0.25, sh)
+                       * (1.0 - smoothstep(altMax - (altMax - altMin) * 0.35, altMax, sh));
             // 磁纬度（近似为地理纬度：用自转轴方向 dot）
             float magLat = dot(normalize(srel), uAxis);
             float poleProx = abs(magLat);
             // 极光卵：极区边缘的环形带（poleProx ~0.85-0.96）
             float oval = smoothstep(0.80, 0.90, poleProx)
                        * (1.0 - smoothstep(0.96, 1.0, poleProx));
-            // 帘幕：垂直光带（沿极轴方向拉伸的噪声）+ 时间扰动
-            float curtain1 = pnoise(srel * 5.0 + vec3(0.0, 0.0, uTime * 0.4));
-            float curtain2 = pnoise(srel * 11.0 + vec3(uTime * 0.2, 0.0, 0.0));
+            // 帘幕：体固坐标按半径归一 → 波长约 Rg/45 的竖直光带（地球 ~140km，
+            // 木星 ~1550km）+ 时间扰动。旧版 srel*5.0 以 km 为尺度，波长 ~1km
+            // 远低于步进采样率 → 混叠平均成均匀绿雾，无帘幕结构。
+            float curtain1 = pnoise(srel / uRg * 28.0 + vec3(0.0, 0.0, uTime * 0.06));
+            float curtain2 = pnoise(srel / uRg * 90.0 + vec3(uTime * 0.03, 0.0, 0.0));
             float auroraInt = altF * oval
-                            * (0.5 + 0.5 * curtain1)
-                            * (0.7 + 0.3 * curtain2);
+                            * (0.12 + 0.88 * smoothstep(0.28, 0.92, curtain1))
+                            * (0.55 + 0.45 * curtain2);
             auroraInt *= uSolarActivity * uAuroraStrength;
             // 极光颜色（不同天体不同激发粒子）：
             //  地球=OI 557.7nm 绿；木星=H3+ 蓝紫；土星=H3+ 粉紫；海卫一=弱 N2 红
@@ -189,9 +195,10 @@ export function createAtmosphere(phys, auroraMode = 0) {
             else if (uAuroraMode == 2) aColor = vec3(0.55, 0.35, 1.0);
             else if (uAuroraMode == 3) aColor = vec3(0.80, 0.45, 0.90);
             else aColor = vec3(0.90, 0.40, 0.30);
-            // 按壳层厚度归一化（气巨壳层数千 km，直接 ×ds 会被 ACES 压白——
-            // 此前木星/土星极光因此整体被移除）。归一化后强度与壳层厚度无关。
-            auroraL += aColor * auroraInt * ds * (220.0 / max(t1 - t0, 1.0));
+            // 按极光带厚度归一化（非壳层总光程）：nadīr 方向 auroraL≈aColor，
+            // 临边方向光程变长自然增亮（薄发射壳的物理正确临边增亮）。
+            // 旧版按 220/(t1-t0) 归一——为气巨厚壳调参，薄壳地球会爆白 5-6 倍。
+            auroraL += aColor * auroraInt * ds / max(altMax - altMin, 1.0) * 0.12;
           }
         }
 
