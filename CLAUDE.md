@@ -134,7 +134,7 @@ npm run fetch-textures # 重新下载贴图资产
 1. 卫星轨道用双历元经验长期率（λ/ϖ/Ω 分解，tools/fit-moons.mjs），一阶长期漂移正确；伽利略卫星拉普拉斯共振章动未建模，一年后残余相位误差约 2–4°——建议每季度跑 `npm run fit-moons`。
 2. 日月食阴影锥为几何近似（无贝塞尔落区精确计算）。
 3. 地形：月球/火星/地球为真实 DEM（LOLA/MOLA/ETOPO1 四叉树瓦片，tools/fetch-dem.mjs 生成，public/dem/ 随站点部署）；其余天体仍为噪声+真实反照率融合。
-4. 气巨大红斑等特征为静态贴图，不随系统 III 经度对准。
+4. 木星大红斑/条带已有动态化（uTime 纬向风+对流胞+大红斑漂移，planetMaterial.js），但大红斑漂移速率为视觉化近似，未与系统 III 经度严格对准。
 
 ## 代码风格（来自 CONTRIBUTING.md）
 
