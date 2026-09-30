@@ -121,23 +121,23 @@ export function orbitalPeriodYears(name) {
 }
 
 /**
- * 轨道线采样：当前时刻起一整圈（按当前元素冻结），返回 n 个点的 km 坐标数组。
+ * 轨道线采样：从当前时刻起，用真实星历函数逐点追踪一整圈（含 VSOP87 周期项、
+ * 地球含月球绕质心摆动），而不是冻结开普勒元素画理想椭圆——
+ * 旧实现中轨道线与天体实际轨迹存在系统性偏差（VSOP87 vs Standish 差最高 ~0.1°，
+ * 外行星整圈累积更明显），缩放足够大时可见天体不在自己的轨道线上。
+ * 数值追踪保证轨道线永远穿过天体本体。 n 点均匀时间采样（近心点附近空间密度
+ * 自然更高，符合开普勒第二定律的真实弧长分布）。
  */
 export function orbitPoints(name, jdTT, n = 512) {
   const key = name === 'earth' ? 'emb' : name;
   const T = centuriesTT(jdTT);
   const { el, rate } = TABLE[key];
-  const base = {
-    aAU: el[0] + rate[0] * T,
-    e: el[1] + rate[1] * T,
-    iDeg: el[2] + rate[2] * T,
-    LDeg: el[3] + rate[3] * T,
-    periDeg: el[4] + rate[4] * T,
-    nodeDeg: el[5] + rate[5] * T,
-  };
+  const aAU = el[0] + rate[0] * T;
+  // 高斯引力常数导出恒星周期（天）：a³ 开方 × 回归年
+  const periodDays = Math.sqrt(aAU * aAU * aAU) * 365.256898326;
   const pts = new Float64Array(n * 3);
   for (let i = 0; i < n; i++) {
-    const p = elementsToEcliptic({ ...base, LDeg: base.periDeg + (i / (n - 1)) * 360 });
+    const p = planetPosition(name, jdTT + (i / (n - 1)) * periodDays);
     pts[i * 3] = p.x;
     pts[i * 3 + 1] = p.y;
     pts[i * 3 + 2] = p.z;
