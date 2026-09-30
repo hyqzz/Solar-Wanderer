@@ -188,6 +188,10 @@ export function createAtmosphere(phys, auroraMode = 0) {
                             * (0.12 + 0.88 * smoothstep(0.28, 0.92, curtain1))
                             * (0.55 + 0.45 * curtain2);
             auroraInt *= uSolarActivity * uAuroraStrength;
+            // 白昼面不可见：极光是微弱发射光，被日光散射完全淹没（真实地球/土星极光
+            // 均只在夜面可见；土星 H3+ 极光更是紫外/红外辐射，白昼面渲染成紫斑伪影）。
+            // 本采样点被行星遮挡阳光（夜面）→ 全强度；日照面 → 4% 残余（接近不可见）
+            if (!shadowed) auroraInt *= 0.04;
             // 极光颜色（不同天体不同激发粒子）：
             //  地球=OI 557.7nm 绿；木星=H3+ 蓝紫；土星=H3+ 粉紫；海卫一=弱 N2 红
             vec3 aColor;

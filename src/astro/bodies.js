@@ -47,7 +47,10 @@ export const BODIES = {
     surface: { ampKm: 2.5, roughness: 0.5, craters: 0, palette: 'earth', ocean: true },
     atmosphere: {
       heightKm: 60, rayleighScaleKm: 8.5, mieScaleKm: 1.2,
-      rayleigh: [5.802e-6, 13.558e-6, 33.1e-6], mie: 3.996e-6, mieG: 0.76, multiplier: 1,
+      // multiplier 0.72：太空视角减弱盘面内散射（真实 Blue Marble 观感为深蓝海洋，
+      // 强 Rayleigh 内散射把整个白昼面罩上一层淡青纱）；地表天空亮度由 interiorBoost 补偿回 1.0
+      rayleigh: [5.802e-6, 13.558e-6, 33.1e-6], mie: 3.996e-6, mieG: 0.76, multiplier: 0.66,
+      interiorBoost: 1.52, // ≈1/0.66：补偿 multiplier 降低对地表/低空无散射天空亮度的影响
     },
     textures: { map: 'earth_day.jpg', night: 'earth_night.jpg', clouds: 'earth_clouds.jpg' },
     desc: '已知唯一存在生命的行星。71% 表面被液态水覆盖，氮氧大气，一颗大卫星稳定着自转轴。你的家园。',
@@ -98,7 +101,9 @@ export const BODIES = {
       heightKm: 300, rayleighScaleKm: 40, mieScaleKm: 40,
       rayleigh: [3.5e-7, 3.0e-7, 2.0e-7], mie: 2.5e-7, mieG: 0.7, multiplier: 0.8,
     },
-    rings: { innerKm: 74500, outerKm: 140220, texture: 'saturn_ring.png', tint: [1.35, 1.16, 0.88] },
+    // tint 接近中性偏亮：真实环以水冰为主呈亮灰白色（卡西尼实拍），
+    // 旧值 [1.35,1.16,0.88] 暖棕化过度，整环呈现均一黄褐
+    rings: { innerKm: 74500, outerKm: 140220, texture: 'saturn_ring.png', tint: [1.18, 1.15, 1.06] },
     textures: { map: 'saturn.jpg' },
     desc: '拥有壮丽冰质环系的气态巨行星，密度低于水。环厚度平均仅约 20 米，却宽达数万公里。',
   },
@@ -197,8 +202,13 @@ export const MOON_PHYS = {
                landable: true, surface: { ampKm: 1.5, roughness: 0.4, craters: 0.1, palette: 'titan' },
                textures: { map: 'titan.jpg' },
                atmosphere: { heightKm: 200, rayleighScaleKm: 20, mieScaleKm: 30,
-                             rayleigh: [8e-7, 5e-7, 2e-7], mie: 1.2e-6, mieG: 0.7, multiplier: 3,
-                             haze: 0.38 }, // 烃类烟霾（tholin），橙色近地面雾霾极厚
+                             // multiplier 1.6：太空视角降低霾层盘面内散射（旧值 3.0 把橙色霾
+                             // 洗成粉米色；卡西尼实拍为饱和橙黄盘）；地表橙色天空由 interiorBoost 补偿
+                             // 分光 mie：tholin 霾强烈吸收蓝光（红>绿>蓝散射），
+                             // 使霾层内散射呈橙色——旧值灰色 mie 把盘面洗成粉米白
+                             rayleigh: [8e-7, 5e-7, 2e-7], mie: [1.6e-6, 1.2e-6, 0.7e-6], mieG: 0.7, multiplier: 1.6,
+                             interiorBoost: 1.9,
+                             haze: 0.30 }, // 烃类烟霾（tholin），橙色近地面雾霾极厚
                desc: '唯一拥有浓密大气的卫星（1.5 倍地球气压），表面有液态甲烷的湖泊与河流，橙色烟霾笼罩全球。' },
   iapetus:   { nameZh: '土卫八', nameEn: 'Iapetus', parent: 'saturn', radiusKm: 734.5, gm: 120.51,
                landable: true, surface: { ampKm: 4, roughness: 0.55, craters: 1.0, palette: 'iapetus' },

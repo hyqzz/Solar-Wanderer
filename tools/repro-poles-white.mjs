@@ -3,7 +3,9 @@
 // 根因：① 火星程序化极冠低至纬度 ~51° 且混 70% 白（真实极冠多在 80°+）；
 //       ② 木星/土星极光发射 auroraL += aColor*auroraInt*ds 中 ds 为 km，
 //          气巨大气壳跨度数千 km → 累积辐亮度被 ACES 压成白色。
-// 还原：移除火星极冠分支；AURORA_MODE 摘除 jupiter/saturn（地球/海卫一保留）。
+// 当前设计（#29 + 真实感修订）：火星极冠分支已移除；木/土极光保留（壳层相对高度带，
+// dd31e86），但白昼面衰减至 4%（真实极光为微弱发射，日照面被散射光淹没——
+// 土星白昼极区紫斑伪影即白昼极光泄漏，2026-09 修复）。
 // 用法：node tools/repro-poles-white.mjs
 import puppeteer from 'puppeteer';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -38,6 +40,7 @@ const info = await page.evaluate(() => {
     jupAurora: jup?.atmoMesh?.material.userData.uniforms.uAuroraMode.value,
     satAurora: sat?.atmoMesh?.material.userData.uniforms.uAuroraMode.value,
     earthAurora: earth?.atmoMesh?.material.userData.uniforms.uAuroraMode.value,
+    atmoFrag: earth?.atmoMesh?.material.fragmentShader ?? '',
   };
 });
 
@@ -45,9 +48,11 @@ check('火星材质着色器已无极冠白色混色（0.85, 0.88, 0.92）',
   !info.marsFrag.includes('0.85, 0.88, 0.92'), '仍包含极冠分支');
 check('火星材质着色器保留其他效果（尘暴分支仍在）',
   info.marsFrag.includes('uBodyId == 4'), '尘暴分支意外丢失');
-check('木星大气 uAuroraMode = 0（极光已摘除）', info.jupAurora === 0, `=${info.jupAurora}`);
-check('土星大气 uAuroraMode = 0（极光已摘除）', info.satAurora === 0, `=${info.satAurora}`);
+check('木星大气 uAuroraMode = 2（#29 极光保留，壳层相对高度带）', info.jupAurora === 2, `=${info.jupAurora}`);
+check('土星大气 uAuroraMode = 3（#29 极光保留）', info.satAurora === 3, `=${info.satAurora}`);
 check('地球大气 uAuroraMode = 1（绿极光保留，未过度还原）', info.earthAurora === 1, `=${info.earthAurora}`);
+check('大气着色器含白昼面极光衰减（!shadowed → ×0.04，防白昼极区紫斑）',
+  info.atmoFrag.includes('if (!shadowed) auroraInt *= 0.04'), '白昼衰减分支缺失');
 check('无页面运行时错误', errors.length === 0, errors.join(' | '));
 
 await browser.close();

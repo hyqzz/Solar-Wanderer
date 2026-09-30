@@ -20,6 +20,25 @@ const BODY_ID_MAP = {
   saturn: BODY_SATURN, triton: BODY_TRITON,
 };
 
+// 逐天体色彩分级（对标 NASA/JPL 实测影像：信使号/旅行者/卡西尼/新视野号参考观感）。
+// 引擎的 1/d² 辐照 + 暗适应曝光补偿在物理上正确，但与公众熟知的探测器影像观感有系统偏差
+// （探测器影像本身做了各自的曝光/增强），此处按天体逐一校正：
+// - grade：反照率增益（亮度/色温）
+// - sat：饱和度（ACES 压缩去饱和的补偿）
+// - veil/veilColor：不透明霾罩（土卫六：可见光完全无法穿透的橙色 tholin 烟雾，
+//   卡西尼可见光影像为无表面特征的橙色圆盘；降到霾层高度以下才逐渐显露出表面）
+const BODY_GRADE = {
+  mercury: { grade: [0.40, 0.38, 0.36] },          // 真实反照率 0.09，暗灰微棕（MESSENGER）
+  earth:   { grade: [0.84, 0.92, 1.02], sat: 1.50 }, // 深蓝海洋 + 陆地饱和（Blue Marble）
+  jupiter: { sat: 1.12 },                          // 条带对比（贴图偏淡）
+  uranus:  { grade: [1.50, 1.65, 1.70] },          // 淡青（旅行者 2 号观感）
+  neptune: { grade: [2.20, 2.50, 2.80] },          // 亮天蓝（旅行者 2 号观感；30 AU 暗适应后仍偏暗）
+  pluto:   { grade: [1.10, 0.92, 0.72], sat: 1.65 }, // 暖桃棕（新视野号增强色；贴图偏灰）
+  triton:  { grade: [1.08, 1.00, 0.95], sat: 1.45 }, // 粉白氮冰（旅行者 2 号）
+  callisto: { grade: [0.90, 0.90, 0.92] },         // 压暗压冷，突出亮坑
+  titan:   { veil: 0.94, veilColor: [0.92, 0.45, 0.14] }, // 不透明橙色霾（卡西尼自然色：柔和卡其橙盘）
+};
+
 export function createPlanetMaterial({
   map, nightMap = null, oceanSpec = false, ringShadow = null,
   detailMode = 0, radiusKm = 1, // detailMode: 0 无 / 1 岩质 / 2 气巨冰巨
@@ -50,6 +69,11 @@ export function createPlanetMaterial({
     uBodyId: { value: BODY_ID_MAP[bodyId] ?? 0 }, // 天体 ID（着色器分支）
     uCloudTex: { value: cloudTex ?? DUMMY_TEX },  // 地球云层贴图（地表投影用）
     uHasClouds: { value: cloudTex ? 1 : 0 },
+    // 逐天体色彩分级（BODY_GRADE 表；缺省 = 无修正）
+    uGrade: { value: new THREE.Vector3(...(BODY_GRADE[bodyId]?.grade ?? [1, 1, 1])) },
+    uSat: { value: BODY_GRADE[bodyId]?.sat ?? 1.0 },
+    uVeil: { value: BODY_GRADE[bodyId]?.veil ?? 0.0 },
+    uVeilColor: { value: new THREE.Vector3(...(BODY_GRADE[bodyId]?.veilColor ?? [0, 0, 0])) },
   };
 
   const mat = new THREE.ShaderMaterial({
@@ -96,6 +120,10 @@ export function createPlanetMaterial({
       uniform int uBodyId;
       uniform sampler2D uCloudTex;
       uniform int uHasClouds;
+      uniform vec3 uGrade;
+      uniform float uSat;
+      uniform float uVeil;
+      uniform vec3 uVeilColor;
       varying vec2 vUv;
       varying vec3 vNormalW;
       varying vec3 vPosW;
@@ -121,10 +149,10 @@ export function createPlanetMaterial({
         #include <logdepthbuf_fragment>
         vec3 n = normalize(vNormalW);
         vec3 albedo = texture2D(uMap, vUv).rgb;
+        float app = uRadius / max(length(vPosW), uRadius); // 视半径因子（相机恒在原点，浮动原点）
         // 程序化细节（按行星视半径淡入，远观恒等于原贴图）
         if (uDetailMode > 0) {
           float dist = length(vPosW); // 相机恒在原点（浮动原点）
-          float app = uRadius / max(dist, uRadius); // 视半径因子 0..1
           // 淡入范围从 0.01 起（#18：更远处开始出现程序细节，平滑球面→地形过渡）
           float fade = smoothstep(0.01, 0.18, app);
           if (fade > 0.001) {
@@ -135,8 +163,12 @@ export function createPlanetMaterial({
               float t1 = pnoise(ps * 48.0);
               float t2 = pnoise(ps * 190.0) * smoothstep(0.18, 0.7, app);
               float storm = smoothstep(0.74, 0.95, pnoise(p * 85.0 + 13.7));
-              albedo *= 1.0 + fade * ((t1 - 0.5) * 0.16 + (t2 - 0.5) * 0.10);
-              albedo = mix(albedo, albedo * vec3(1.10, 1.05, 0.97), fade * storm * 0.55);
+              // 土星极区降噪：湍流/风暴涡在极盖（贴图蓝灰极区）上叠加出紫斑伪影，
+              // 真实土星极区为平滑六边形急流结构——极区程序化细节衰减到 0
+              float polarDamp = 1.0;
+              if (uBodyId == 6) polarDamp = 1.0 - smoothstep(0.78, 0.92, abs(p.y));
+              albedo *= 1.0 + fade * polarDamp * ((t1 - 0.5) * 0.16 + (t2 - 0.5) * 0.10);
+              albedo = mix(albedo, albedo * vec3(1.10, 1.05, 0.97), fade * storm * 0.55 * polarDamp);
             } else {
               // 岩质/冰面：三尺度各向同性细节（#21：比原来多一层，地形接管前中距离更真实）
               float t1 = pnoise(p * 64.0);
@@ -160,15 +192,16 @@ export function createPlanetMaterial({
             // 对流胞：近距离才淡入（app > 0.15），远观不可见避免摩尔纹
             float conv = pnoise(jp * 25.0 + vec3(uTime * 0.03)) * smoothstep(0.15, 0.5, app);
             albedo *= 1.0 + conv * 0.06;
-            // 大红斑：~22°S 反气旋，随 System III 缓慢漂移
-            float lon = atan(vObjPos.z, vObjPos.x);
-            float grsLon = uTime * 0.00006; // 漂移速率（视觉化，非精确轨道力学）
-            float grsLatDist = abs(lat + 0.38); // 纬度匹配
-            float grsLonDist = abs(angleDiff(lon, grsLon));
-            // smoothstep 要求 edge0 < edge1（GLSL ES 规范），用 1-smoothstep 实现反向衰减
-            float grs = (1.0 - smoothstep(0.0, 0.45, grsLonDist))
-                      * (1.0 - smoothstep(0.0, 0.16, grsLatDist));
-            albedo = mix(albedo, vec3(0.62, 0.28, 0.16), grs * 0.6);
+            // 大红斑：贴图（卡西尼拼接）自带 GRS 于 ~22°S——原位增强其红橙色饱和度。
+            // 旧版在漂移经度叠加第二个程序化红斑，与贴图红斑分离后形成双斑/洗白圈。
+            // 在 UV 空间定位（对球面 UV 约定稳健）：贴图 GRS 中心 u≈0.368, v≈0.628。
+            {
+              vec2 grsD = vec2(angleDiff(vUv.x, 0.368), vUv.y - 0.628);
+              float grs = (1.0 - smoothstep(0.008, 0.040, abs(grsD.x)))
+                        * (1.0 - smoothstep(0.004, 0.022, abs(grsD.y)));
+              vec3 grsCol = albedo * vec3(1.80, 0.74, 0.52) + vec3(0.05, 0.004, 0.0);
+              albedo = mix(albedo, grsCol, grs * 0.85);
+            }
           }
           // === Issue #36：季节性极地冰冠（仅地球保留） ===
           // 火星分支已移除：程序冰冠低至纬度 ~51° 且混入 70% 白色，远大于真实
@@ -196,6 +229,30 @@ export function createPlanetMaterial({
             albedo = mix(albedo, vec3(0.92, 0.94, 0.99), cap * 0.55);
           }
         }
+        // 逐天体色彩分级（对标探测器实测影像；BODY_GRADE 表）
+        albedo *= uGrade;
+        albedo = mix(vec3(dot(albedo, vec3(0.3333))), albedo, uSat);
+        // 地球深海蓝：开阔大洋水体反照率极低（~0.03-0.06，吸收红绿光），
+        // 贴图海洋像素偏亮偏青；按蓝色掩码压暗并加深蓝移（Blue Marble/阿波罗实拍观感）
+        if (uBodyId == 3) {
+          float om = clamp((albedo.b - max(albedo.r, albedo.g * 0.9)) * 6.0, 0.0, 1.0);
+          albedo *= mix(vec3(1.0), vec3(0.52, 0.60, 0.86), om * 0.8);
+        }
+        // 土星极区重着色：贴图极盖为蓝灰斑驳（2013 蓝极期数据），经临边昏暗+ACES 后
+        // 呈紫斑伪影；真实（2017+ 卡西尼后期）极区为金色乳白。随后叠加北极六边形
+        // （~77°N 波数 6 驻波急流，卡西尼实拍标志特征；体固系随波自转）。
+        if (uBodyId == 6) {
+          vec3 pp = vObjPos / uRadius;
+          float poleF = smoothstep(0.84, 0.95, abs(pp.y));
+          albedo = mix(albedo, vec3(0.79, 0.74, 0.60), poleF * 0.78);
+          float hexBand = smoothstep(0.950, 0.968, pp.y) * (1.0 - smoothstep(0.978, 0.995, pp.y));
+          albedo *= 1.0 + cos(6.0 * atan(pp.z, pp.x)) * hexBand * 0.06;
+        }
+        // 不透明霾罩（土卫六）：远观为无特征橙色盘（卡西尼可见光实拍）；
+        // 下降穿越霾层（~200 km，app≈0.93 对应高度 < 7.5%R）时逐渐显露表面。
+        float veilEff = uVeil;
+        if (uDetailMode > 0) veilEff = uVeil * (1.0 - smoothstep(0.50, 0.93, app));
+        albedo = mix(albedo, uVeilColor, veilEff);
         float ndl = dot(n, uSunDir);
         float day = smoothstep(-0.06, 0.12, ndl);
         // === Issue #26：地球云层在地表的软阴影 ===
@@ -209,7 +266,8 @@ export function createPlanetMaterial({
           float disturb = pnoise(vec3(vUv * 8.0, uTime * 0.008));
           cUV += vec2(disturb * 0.008, disturb * 0.004);
           vec3 cloudCol = texture2D(uCloudTex, cUV).rgb;
-          float cloudAlpha = clamp(dot(cloudCol, vec3(0.34)) * 1.4, 0.0, 1.0);
+          // 阈值化云 alpha：贴图背景灰会在全盘面罩上薄白纱，真实地球有大片晴空区
+          float cloudAlpha = clamp((dot(cloudCol, vec3(0.34)) - 0.10) * 1.8, 0.0, 1.0);
           cloudShadow = 1.0 - cloudAlpha * 0.32 * day;
         }
         // 环投影：沿太阳方向与环平面求交，落在环半径内则按环光学深度遮挡直射光
@@ -254,16 +312,18 @@ export function createPlanetMaterial({
         col += albedo * 0.0035;
         if (uHasNight == 1) {
           vec3 city = texture2D(uNight, vUv).rgb;
-          // 城市灯光：1.9 倍增益 + 微暖色温（NASA Black Marble 观感——钠灯金色调，ACES 下去饱和需补偿）
+          // 城市灯光：3.0 倍增益 + 微暖色温（ISS 夜拍观感——金色灯网；ACES 低照度区压缩需补偿）
         vec3 cityGlow = city * vec3(1.12, 1.0, 0.82);
-        col += cityGlow * (1.0 - day) * 1.9;
+        col += cityGlow * (1.0 - day) * 3.0;
         }
         if (uOcean == 1) {
           float oceanMask = clamp((albedo.b - max(albedo.r, albedo.g * 0.9)) * 6.0, 0.0, 1.0);
           vec3 v = normalize(cameraPosition - vPosW);
           vec3 h = normalize(uSunDir + v);
-          float spec = pow(max(dot(n, h), 0.0), 90.0);
-          col += vec3(1.0, 0.97, 0.9) * spec * oceanMask * uSunI * max(ndl, 0.0) * 1.6;
+          // 太阳耀斑：真实海面耀斑是紧凑亮斑（阵风粗糙海面 ~3° 散布），
+          // 旧值 90 次幂过宽（整片白昼面中央巨大白晕），1.6 倍增益洗白海洋
+          float spec = pow(max(dot(n, h), 0.0), 340.0);
+          col += vec3(1.0, 0.97, 0.9) * spec * oceanMask * uSunI * max(ndl, 0.0) * 1.1;
         }
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -333,7 +393,9 @@ export function createCloudMaterial(cloudTex) {
         float disturb = pnoise(vec3(vUv * 8.0, uTime * 0.008));
         cUV += vec2(disturb * 0.008, disturb * 0.004);
         vec3 cl = texture2D(uMap, cUV).rgb;
-        float alpha = clamp(dot(cl, vec3(0.34)) * 1.4, 0.0, 1.0);
+        // 阈值化 alpha（与行星材质云影公式保持一致）：去除贴图背景灰造成的全球薄纱，
+        // 真实地球约六成云量且存在大片深蓝晴空海域
+        float alpha = clamp((dot(cl, vec3(0.34)) - 0.10) * 1.8, 0.0, 1.0);
         // 夜面云层减薄（real：城市灯光从云隙透出；原实现夜面云为近纯黑板，盖住城市灯光）
         float dayF = smoothstep(-0.06, 0.12, ndl);
         alpha *= mix(0.42, 1.0, dayF);
