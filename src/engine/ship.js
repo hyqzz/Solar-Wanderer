@@ -116,7 +116,8 @@ export class Input {
 
     // ── Canvas: Pointer Events (mouse + touch unified) ────────────────────
     canvas.addEventListener('pointerdown', (e) => {
-      canvas.setPointerCapture(e.pointerId);
+      // 指针可能已失效（合成事件/边缘浏览器时序），捕获失败不应中断手势跟踪
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* 手势状态照常记录 */ }
       const pt = { x: e.clientX, y: e.clientY };
       this._pointers.set(e.pointerId, { ...pt });
       this._ptrDownPos.set(e.pointerId, { ...pt });

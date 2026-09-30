@@ -274,6 +274,11 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
             mix(mix(thash(i), thash(i + vec3(1,0,0)), f.x), mix(thash(i + vec3(0,1,0)), thash(i + vec3(1,1,0)), f.x), f.y),
             mix(mix(thash(i + vec3(0,0,1)), thash(i + vec3(1,0,1)), f.x), mix(thash(i + vec3(0,1,1)), thash(i + vec3(1,1,1)), f.x), f.y),
             f.z);
+        }
+        // 双八度去网格化：单八度值噪声的等值线呈轴对齐圆角方块（地表"迷宫/砖块"假象），
+        // 叠加一个坐标循环置换（zxy ≈ 绕(1,1,1)旋转120°）的倍频八度打破格点排列。
+        float tnoise2(vec3 p) {
+          return tnoise(p) * 0.667 + tnoise(p.zxy * 2.13 + vec3(17.31, 9.17, 5.23)) * 0.333;
         }`)
       .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
         {
@@ -282,8 +287,8 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
           float vd = length(vViewPosition);
           float f2 = 1.0 - smoothstep(0.15, 0.9, vd);   // 2.4m 细节 900m 外淡出
           float f3 = 1.0 - smoothstep(0.015, 0.09, vd); // 20cm 细节 90m 外淡出
-          float d1 = tnoise(vObjPos * 35.0);
-          float d2 = tnoise(vObjPos * 420.0) * f2 * uDetailScale;
+          float d1 = tnoise2(vObjPos * 35.0);
+          float d2 = tnoise2(vObjPos * 420.0) * f2 * uDetailScale;
           float d3 = tnoise(vObjPos * 5200.0) * f3 * uDetailScale;
           float dm = 0.78 + 0.46 * (d1 * 0.45 + d2 * 0.33 + d3 * 0.22)
                    + (1.0 - f2) * 0.075 + (1.0 - f3) * 0.05;
@@ -302,9 +307,12 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
       .replace('#include <normal_fragment_begin>', /* glsl */ `#include <normal_fragment_begin>
         {
           // 程序化凹凸（屏幕导数法）；水面 = 三向行进波叠加（SpaceEngine 式海面，#21）
+          // bump 振幅 0.7m：旧值 1.6m 在 2.4m 波长上形成 ~45° 视在坡度，
+          // 格点极值处法线汇聚成规则黑色圆坑阵列（月面"黑点阵"假象）；
+          // 真实风化层米级起伏为厘米-分米级，0.7m 保留立体感而不产生深坑。
           float vdb = length(vViewPosition);
           float bf = 1.0 - smoothstep(0.1, 1.2, vdb);
-          float hRock = (tnoise(vObjPos * 420.0) * 0.68 + tnoise(vObjPos * 5200.0) * 0.32) * 0.0016 * bf * uDetailScale;
+          float hRock = (tnoise2(vObjPos * 420.0) * 0.68 + tnoise(vObjPos * 5200.0) * 0.32) * 0.0007 * bf * uDetailScale;
           float wf = 1.0 - smoothstep(0.05, 14.0, vdb);
           float hWave = (tnoise(vObjPos * 820.0  + vec3(uTime * 0.07,  0.0,          uTime * 0.05 )) * 0.50
                        + tnoise(vObjPos * 2800.0 - vec3(uTime * 0.12,  uTime * 0.04, 0.0          )) * 0.35
@@ -469,8 +477,11 @@ export class TerrainPatchSet {
     this.group.add(this.rocks.mesh);
   }
 
-  /** DEM 新瓦片到达后标记脏：下次 update 强制重建最内级以拾取真实高程 */
-  markDirty() { this.demDirty = true; }
+  /** DEM 新瓦片到达后标记脏：后续 update 逐帧重建全部级（最内级优先）以拾取真实高程 */
+  markDirty() {
+    this.demDirty = true;
+    for (const lv of this.levels) lv.demClean = false;
+  }
 
   /** dirLocal: 相机在天体本地系中的方向（单位）。timeSec: 水面波纹时基。
    * 每帧最多重建 1 级。首次激活由外向内（最大覆盖先出现）；后续正常内向外优先。
@@ -498,15 +509,18 @@ export class TerrainPatchSet {
       const li = initMode ? this.levels.length - 1 - i : i;
       const lv = this.levels[li];
       const moveKm = lv.builtAnchor.distanceTo(dirLocal) * R;
-      // DEM 新数据到达时，强制重建最内级（即使相机静止）以拾取真实高程
-      const demRebuild = this.demDirty && li === 0;
+      // DEM 新瓦片到达 → 全部级都需要重建（旧逻辑仅最内级：中远地形永久停留在
+      // 程序化噪声高程上，与近处 DEM 地形错位出断崖/平台，30m 外的岩石也因
+      // 坐在陈旧噪声地形上而悬浮空中）。每帧扫一级（最内优先），扫完清脏。
+      const demRebuild = !initMode && this.demDirty && !lv.demClean;
       if (moveKm > lv.extent * 0.25 || demRebuild) {
         this.build(lv, dirLocal);
         lv.builtAnchor.copy(dirLocal);
+        lv.demClean = true;
         if (li === 0) {
           this.rocks.rebuild(dirLocal, lv.origin);
-          this.demDirty = false; // 最内级重建后清除脏标记
         }
+        if (this.levels.every((l) => l.demClean)) this.demDirty = false;
         break; // 分帧：其余级下一帧再建
       }
     }

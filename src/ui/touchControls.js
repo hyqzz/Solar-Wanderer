@@ -267,7 +267,7 @@ export class TouchControls {
       if (this._jsPointerId !== null) return;
       e.preventDefault();
       e.stopPropagation();
-      base.setPointerCapture(e.pointerId);
+      try { base.setPointerCapture(e.pointerId); } catch { /* 合成/失效指针不阻断摇杆 */ }
       this._jsPointerId = e.pointerId;
       const rect = base.getBoundingClientRect();
       this._jsOrigin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
