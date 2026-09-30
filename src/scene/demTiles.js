@@ -275,17 +275,45 @@ export class DEMTileSource {
   /**
    * 同步获取高程（从缓存读取，不发起网络请求）。
    * 供 HeightField.height() 热路径调用——必须同步以避免地形构建阻塞。
+   *
+   * 全局像素格采样（修瓦片边界断崖）：瓦片由全球画布切割而来（fetch-dem.mjs），
+   * 像素 i 覆盖区间 [i, i+1)，中心在 i+0.5。旧实现在每块瓦片内独立把
+   * fx∈[0,1] 映射到像素 [0, s-1]——同一条边界经度在东侧瓦片取第 0 列、
+   * 西侧取第 255 列，而这两列在数据里相距一个像素（z4 ≈ 86m）；
+   * 陡坡（撞击坑壁梯度可达 ~1km/像素）上相邻地形顶点因此高差百米，
+   * 沿瓦片边界形成贯穿各级 LOD 的垂直"巨墙"（lon=0° 等永久边界最易触发）。
+   * 现改为在全球连续像素坐标系中做双线性插值，跨界时从相邻瓦片取像素，
+   * 边界处连续；经度环绕、纬度钳制与瓦片坐标约定一致。
+   *
    * @param {THREE.Vector3} dir 方向向量（+Y=北极, +X=本初子午线）
    * @returns {number|null} 海拔 km，或 null（缓存未命中/离线）
    */
   getHeightSync(dir) {
     if (!this.config || this._offline) return null;
     const { lat, lon } = dirToLatLon(dir);
-    // 从高到低分辨率尝试：优先使用最精细的缓存瓦片
+    const s = this.config.tileSize;
+    // 从高到低分辨率尝试：该级所需的 ≤4 块瓦片全部命中才使用，否则落到下一级
     for (let level = this.sampleLevel; level >= 0; level--) {
-      const t = latLonToTile(lat, lon, level);
-      const tile = this.cache.get(level, t.x, t.y);
-      if (tile) return this._sampleTile(tile, t.fx, t.fy);
+      const n = 2 ** level;
+      const span = n * s; // 全球像素宽
+      // 全球连续像素坐标（数据中心约定 → 减 0.5 使插值以像素中心为节点）
+      let gx = ((lon + 180) / 360) * span - 0.5;
+      let gy = ((90 - lat) / 180) * span - 0.5;
+      gx = ((gx % span) + span) % span;              // 经度环绕（180° 接缝同此路径）
+      gy = Math.max(0, Math.min(span - 1.001, gy));  // 纬度钳制（极区不环绕）
+      const x0 = Math.floor(gx), y0 = Math.floor(gy);
+      const tx = gx - x0, ty = gy - y0;
+      const px = (X, Y) => {
+        const Xi = ((X % span) + span) % span;
+        const Yi = Math.max(0, Math.min(span - 1, Y));
+        const tile = this.cache.get(level, Math.floor(Xi / s), Math.floor(Yi / s));
+        return tile ? tile.data[(Yi % s) * s + (Xi % s)] : null;
+      };
+      const h00 = px(x0, y0), h10 = px(x0 + 1, y0);
+      const h01 = px(x0, y0 + 1), h11 = px(x0 + 1, y0 + 1);
+      if (h00 === null || h10 === null || h01 === null || h11 === null) continue;
+      return h00 * (1 - tx) * (1 - ty) + h10 * tx * (1 - ty)
+           + h01 * (1 - tx) * ty + h11 * tx * ty;
     }
     return null; // 无缓存瓦片 → 调用方回退到程序化噪声
   }
