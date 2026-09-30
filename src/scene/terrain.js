@@ -287,11 +287,18 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
           float vd = length(vViewPosition);
           float f2 = 1.0 - smoothstep(0.15, 0.9, vd);   // 2.4m 细节 900m 外淡出
           float f3 = 1.0 - smoothstep(0.015, 0.09, vd); // 20cm 细节 90m 外淡出
+          // 足迹抗混叠：斜视坡面上像素在地面压缩数十倍，2.4m 细节在淡出距离内仍欠采样，
+          // 形成覆盖整片坡面的规则黑/白摩尔点阵（火星背光坡最明显）。fwidth 足迹超过
+          // 半个噪声格/像素时按足迹衰减（等效 mip 钳制），亮度用 (1-g)*均值 补偿不变暗。
+          float fp = length(fwidth(vObjPos));
+          float aa2 = 1.0 - smoothstep(0.35, 0.9, fp * 420.0);
+          float aa3 = 1.0 - smoothstep(0.35, 0.9, fp * 5200.0);
+          float g2 = f2 * aa2, g3 = f3 * aa3;
           float d1 = tnoise2(vObjPos * 35.0);
-          float d2 = tnoise2(vObjPos * 420.0) * f2 * uDetailScale;
-          float d3 = tnoise(vObjPos * 5200.0) * f3 * uDetailScale;
+          float d2 = tnoise2(vObjPos * 420.0) * g2 * uDetailScale;
+          float d3 = tnoise2(vObjPos * 5200.0) * g3 * uDetailScale;
           float dm = 0.78 + 0.46 * (d1 * 0.45 + d2 * 0.33 + d3 * 0.22)
-                   + (1.0 - f2) * 0.075 + (1.0 - f3) * 0.05;
+                   + (1.0 - g2) * 0.075 + (1.0 - g3) * 0.05;
           diffuseColor.rgb *= mix(dm, 1.0, vWater);
           // 岸边泡沫：land→water 过渡区（vWater 0..1 内插）叠加白色浪沫（#21）
           float foam = smoothstep(0.05, 0.38, vWater) * (1.0 - smoothstep(0.62, 0.95, vWater));
@@ -312,7 +319,14 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
           // 真实风化层米级起伏为厘米-分米级，0.7m 保留立体感而不产生深坑。
           float vdb = length(vViewPosition);
           float bf = 1.0 - smoothstep(0.1, 1.2, vdb);
-          float hRock = (tnoise2(vObjPos * 420.0) * 0.68 + tnoise(vObjPos * 5200.0) * 0.32) * 0.0007 * bf * uDetailScale;
+          // 同一足迹抗混叠（与颜色细节共用）：凹凸梯度在欠采样时直接把法线搅成点阵
+          float fpb = length(fwidth(vObjPos));
+          float bab2 = 1.0 - smoothstep(0.35, 0.9, fpb * 420.0);
+          float bab3 = 1.0 - smoothstep(0.35, 0.9, fpb * 5200.0);
+          // 20cm 倍频改用 tnoise2 去网格 + 独立小振幅（0.15m）：旧值与主频共享 0.7m，
+          // 在 20cm 波长上坡度>70°，法线扰动成规则黑色坑点阵列（近景斜格点阵）
+          float hRock = (tnoise2(vObjPos * 420.0) * 0.68 * 0.0007 * bab2
+                       + tnoise2(vObjPos * 5200.0) * 0.32 * 0.00015 * bab3) * bf * uDetailScale;
           float wf = 1.0 - smoothstep(0.05, 14.0, vdb);
           float hWave = (tnoise(vObjPos * 820.0  + vec3(uTime * 0.07,  0.0,          uTime * 0.05 )) * 0.50
                        + tnoise(vObjPos * 2800.0 - vec3(uTime * 0.12,  uTime * 0.04, 0.0          )) * 0.35
