@@ -11,7 +11,15 @@ import { QUALITY } from '../engine/quality.js';
 import { DEMTileSource } from './demTiles.js';
 import { TERRAIN_GRADE } from './planetMaterial.js';
 
-// 极冠霜冻覆盖颜色（palette → [r,g,b]，仅 color() 有地图时也生效）
+/** sRGB 字节 → 线性反照率（与 GPU 对 SRGBColorSpace 贴图的解码一致）。
+ * 地形顶点色读的是 canvas 的 sRGB 字节，而行星材质采样的是 GPU 解码后的线性值；
+ * 旧实现把字节直接当线性用，地形反照率中灰处偏亮约 2.2×——地表发白，且与盘面
+ * 同色处形成接缝（高空看是"地形从球面里冒出的米色斑块"）。 */
+function srgbToLinear(c) {
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+// 极冠霜冻覆盖颜色（palette → [r,g,b]，仅无贴图天体使用；有贴图时极冠由贴图承载）
 const FROST_PALETTES = {
   mars:   [0.86, 0.82, 0.78], // CO₂干冰，略带玫瑰粉
   ice:    [0.94, 0.96, 1.00], // 水冰，纯白带蓝
@@ -172,8 +180,35 @@ export class HeightField {
 
   /** 顶点颜色：真实贴图反照率 × 坡度岩壁 × 高度调制 */
   color(dir, hKm, slope, out) {
-    // 海面：深海蓝（避免贴图浅蓝 × 细节噪声产生大理石纹）
+    // 海面：与盘面海洋同源——走同一份贴图分级链（grade/sat）并施加
+    // planetMaterial 里同款的"开阔大洋压暗蓝移"掩码（uBodyId==3）。
+    // 旧实现是硬编码的线性深海色，与盘面海洋色不一致：地形瓦片海面与瓦片外
+    // 盘面海洋在太空/高空形成硬边色块（地球 400km 是一块方片、20–100km 是
+    // 地平线深蓝带）。不含细节噪声调制（贴图海洋分辨率低，逐像素调制出大理石纹）。
     if (this.sp.ocean && this.isOcean(dir)) {
+      const m = this.sampleMap(dir);
+      if (m) {
+        const tg = TERRAIN_GRADE[this.bodyId];
+        const gr = tg?.grade ?? [1, 1, 1];
+        let r = srgbToLinear(m[0] / 255) * gr[0];
+        let g = srgbToLinear(m[1] / 255) * gr[1];
+        let b = srgbToLinear(m[2] / 255) * gr[2];
+        const ts = tg?.sat ?? 1;
+        if (ts !== 1) {
+          const lum = (r + g + b) / 3;
+          r = lum + (r - lum) * ts; g = lum + (g - lum) * ts; b = lum + (b - lum) * ts;
+        }
+        if (this.bodyId === 'earth') {
+          const om = Math.min(1, Math.max(0, (b - Math.max(r, g * 0.9)) * 6));
+          const k = om * 0.8;
+          r *= 1 - 0.48 * k; g *= 1 - 0.40 * k; b *= 1 - 0.14 * k;
+        }
+        out.setRGB(
+          Math.min(1, Math.max(0, r)), Math.min(1, Math.max(0, g)), Math.min(1, Math.max(0, b))
+        );
+        return out;
+      }
+      // 无贴图回退：原硬编码深海蓝（避免浅蓝 × 细节噪声产生大理石纹）
       const w = 0.5 + 0.5 * this.noise.fbm(dir.x * 300, dir.y * 300, dir.z * 300, 2);
       out.setRGB(0.03 + w * 0.02, 0.1 + w * 0.04, 0.22 + w * 0.06);
       return out;
@@ -187,44 +222,52 @@ export class HeightField {
       // 与行星材质同源的逐天体反照率分级（水星地表白水泥地修复：贴图 0.5 灰 × 分级 0.40）
       const tg = TERRAIN_GRADE[this.bodyId];
       const gr = tg?.grade ?? [1, 1, 1];
-      r = m[0] / 255 * gr[0]; g = m[1] / 255 * gr[1]; b = m[2] / 255 * gr[2];
+      r = srgbToLinear(m[0] / 255) * gr[0];
+      g = srgbToLinear(m[1] / 255) * gr[1];
+      b = srgbToLinear(m[2] / 255) * gr[2];
       // 同款饱和度补偿（ACES 去饱和）：地球陆地否则发灰（盘面有 uSat，地形没有）
       const ts = tg?.sat ?? 1;
       if (ts !== 1) {
         const lum = (r + g + b) / 3;
         r = lum + (r - lum) * ts; g = lum + (g - lum) * ts; b = lum + (b - lum) * ts;
       }
-      r = r * 0.82 + (pal[0][0] + (pal[1][0] - pal[0][0]) * t) * 0.18;
-      g = g * 0.82 + (pal[0][1] + (pal[1][1] - pal[0][1]) * t) * 0.18;
-      b = b * 0.82 + (pal[0][2] + (pal[1][2] - pal[0][2]) * t) * 0.18;
+      // 有真实贴图时不叠调色板：调色板是给无贴图天体补色的，叠上去会让地形反照率
+      // 偏离盘面同色处，两者在高空/太空的交界形成可见接缝
     } else {
       r = pal[0][0] + (pal[1][0] - pal[0][0]) * t;
       g = pal[0][1] + (pal[1][1] - pal[0][1]) * t;
       b = pal[0][2] + (pal[1][2] - pal[0][2]) * t;
     }
-    // 大尺度地块色调变化（地质单元差异，SpaceEngine 式地貌分区观感）
-    const hue = n.fbm(dir.x * 12 + 7.3, dir.y * 12, dir.z * 12, 3);
-    r *= 1 + hue * 0.07;
-    b *= 1 - hue * 0.06;
-    g *= 1 + hue * 0.02;
-    // 陡坡 → 裸岩（更暗、去饱和）
-    const rock = sstep(0.3, 0.62, slope);
-    const lum = (r + g + b) / 3;
-    r = r * (1 - rock) + (lum * 0.5 + r * 0.12) * rock;
-    g = g * (1 - rock) + (lum * 0.5 + g * 0.12) * rock;
-    b = b * (1 - rock) + (lum * 0.52 + b * 0.12) * rock;
-    // 高度调制
-    const shade = 0.85 + 0.3 * ((hKm - this.phys.radiusKm) / Math.max(this.sp.ampKm, 0.01) - 0.5);
-    // 极冠霜冻：高纬度向 ±y 极点过渡区白化（仅对有 FROST_PALETTES 定义的星体生效）
-    const frost = FROST_PALETTES[this.sp.palette];
-    if (frost) {
-      const polar = sstep(0.76, 0.90, Math.abs(dir.y));
-      if (polar > 0) {
-        r = r * (1 - polar) + frost[0] * polar;
-        g = g * (1 - polar) + frost[1] * polar;
-        b = b * (1 - polar) + frost[2] * polar;
+    // 以下程序化色调项只用于"无真实贴图"的天体（补色/补变化）。
+    // 有贴图时反照率必须与盘面完全同源：盘面材质只做 map×grade×sat(+深海掩码)，
+    // 若地形再叠 hue/rock/shade/frost，同一处地表在高空与盘面同色区会差 20%±
+    // （火星 200km 实测 mean|Δ|=18/255），地形瓦片边界因此显形。真实地貌变化
+    // 由贴图本身承载，立体感由 DEM 几何 + 真实光照提供。
+    if (!m) {
+      // 大尺度地块色调变化（地质单元差异，SpaceEngine 式地貌分区观感）
+      const hue = n.fbm(dir.x * 12 + 7.3, dir.y * 12, dir.z * 12, 3);
+      r *= 1 + hue * 0.07;
+      b *= 1 - hue * 0.06;
+      g *= 1 + hue * 0.02;
+      // 陡坡 → 裸岩（更暗、去饱和）
+      const rock = sstep(0.3, 0.62, slope);
+      const lum2 = (r + g + b) / 3;
+      r = r * (1 - rock) + (lum2 * 0.5 + r * 0.12) * rock;
+      g = g * (1 - rock) + (lum2 * 0.5 + g * 0.12) * rock;
+      b = b * (1 - rock) + (lum2 * 0.52 + b * 0.12) * rock;
+      // 极冠霜冻：高纬度向 ±y 极点过渡区白化（仅对有 FROST_PALETTES 定义的星体生效）
+      const frost = FROST_PALETTES[this.sp.palette];
+      if (frost) {
+        const polar = sstep(0.76, 0.90, Math.abs(dir.y));
+        if (polar > 0) {
+          r = r * (1 - polar) + frost[0] * polar;
+          g = g * (1 - polar) + frost[1] * polar;
+          b = b * (1 - polar) + frost[2] * polar;
+        }
       }
     }
+    // 高度调制（无贴图时的地貌明暗梯度）
+    const shade = m ? 1 : 0.85 + 0.3 * ((hKm - this.phys.radiusKm) / Math.max(this.sp.ampKm, 0.01) - 0.5);
     out.setRGB(
       Math.min(1, Math.max(0, r * shade)),
       Math.min(1, Math.max(0, g * shade)),
@@ -241,7 +284,7 @@ export class HeightField {
  * radiusKm: 用于缩放高频细节/凹凸幅度，避免小天体（Phobos 等）表面出现尖锐片元噪声。
  * 岸边泡沫：land/water 过渡区（vWater∈(0,1)）叠加动态白沫噪声。
  * 水面波纹：三向行进波叠加（SpaceEngine 式海面）。 */
-function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371) {
+function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371, uWaterFade = null) {
   const detailScale = Math.min(1, radiusKm / 400); // 与 HeightField.height() 一致
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true, roughness: 0.95, metalness: 0.0, fog: true,
@@ -256,6 +299,7 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
     shader.uniforms.uTime = uTime;
     shader.uniforms.uFade = uFade;
     shader.uniforms.uDetailScale = uDetailScale;
+    if (uWaterFade) shader.uniforms.uWaterFade = uWaterFade;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
         uniform vec3 uPatchRel;
@@ -276,6 +320,7 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
         uniform float uTime;
         uniform float uFade;
         uniform float uDetailScale;
+        uniform float uWaterFade;
         float thash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         float tnoise(vec3 p) {
           vec3 i = floor(p), f = fract(p);
@@ -301,19 +346,25 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
           // 形成覆盖整片坡面的规则黑/白摩尔点阵（火星背光坡最明显）。fwidth 足迹超过
           // 半个噪声格/像素时按足迹衰减（等效 mip 钳制），亮度用 (1-g)*均值 补偿不变暗。
           float fp = length(fwidth(vObjPos));
+          float aa1 = 1.0 - smoothstep(0.35, 0.9, fp * 35.0);
           float aa2 = 1.0 - smoothstep(0.35, 0.9, fp * 420.0);
           float aa3 = 1.0 - smoothstep(0.35, 0.9, fp * 5200.0);
+          // d1（28m 尺度）此前没有足迹钳制：轨道高度下 28m 细节远低于一个像素，
+          // 混叠成随机噪声，使地形与盘面同色区差 ~11/255（火星 200km 实测），
+          // 瓦片边界因此显形。按与 aa2/aa3 相同的足迹准则钳制，亮度用均值补偿。
+          float g1 = aa1;
           float g2 = f2 * aa2, g3 = f3 * aa3;
           // 4cm 表土颗粒（风化层米粒感，仅 25m 内）：真实月壤/火星尘土在脚下
           // 呈现毫米-厘米级团聚颗粒，单噪声亮度调制缺少这层"砂砾"质感
           float f4 = 1.0 - smoothstep(0.006, 0.025, vd);
           float aa4 = 1.0 - smoothstep(0.35, 0.9, fp * 26000.0);
           float g4 = f4 * aa4 * uDetailScale;
-          float d1 = tnoise2(vObjPos * 35.0);
+          float d1 = tnoise2(vObjPos * 35.0) * g1;
           float d2 = tnoise2(vObjPos * 420.0) * g2 * uDetailScale;
           float d3 = tnoise2(vObjPos * 5200.0) * g3 * uDetailScale;
           float d4 = tnoise(vObjPos * 26000.0) * g4;
           float dm = 0.78 + 0.46 * (d1 * 0.42 + d2 * 0.31 + d3 * 0.19 + d4 * 0.08)
+                   + (1.0 - g1) * 0.21
                    + (1.0 - g2) * 0.075 + (1.0 - g3) * 0.05 + (1.0 - g4) * 0.02;
           diffuseColor.rgb *= mix(dm, 1.0, vWater);
           // 岸边泡沫：land→water 过渡区（vWater 0..1 内插）叠加白色浪沫（#21）
@@ -359,7 +410,11 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
         }`)
       .replace('#include <colorspace_fragment>',
         `#include <colorspace_fragment>
-        gl_FragColor.a *= uFade;`); // LOD 级淡入（#18）
+        // LOD 级淡入（#18）+ 高空海面淡出：地形海面用 PBR（roughness 0.12）在
+        // 掠射角产生菲涅尔白翳，而盘面海洋是紧凑耀斑模型——高空俯视同一片海
+        // 两者亮度/饱和度不同，地形瓦片边界会显出一块方片。海面在 0.6→2.5km
+        // 高度间淡出，交回盘面海洋；陆地不受影响（vWater=0）。
+        gl_FragColor.a *= uFade * mix(1.0, uWaterFade, vWater);`); // LOD 级淡入（#18）
   };
   return mat;
 }
@@ -497,6 +552,8 @@ export class TerrainPatchSet {
     this.levels = [];
     this.anchorDir = new THREE.Vector3(0, 1, 0);
     this.uTime = { value: 0 };
+    // 海面高空淡出（0=隐去地形海面，交回盘面海洋材质；陆地不受影响）
+    this.uWaterFade = { value: 1 };
     // 噪声原点：跟随玩家、每 2km 重新吸附（保证片元噪声参数始终小数精度充足）
     this.noiseOriginU = { value: new THREE.Vector3(1e9, 0, 0) };
     this._initialized = false; // 首次激活后标记：指导首帧由外向内构建各级
@@ -523,7 +580,7 @@ export class TerrainPatchSet {
       // 级原点相对几何（R9-2a 修闪烁）：每级独立原点 + 独立材质（粗级 polygonOffset 后推）
       const uPatchRel = { value: new THREE.Vector3() };
       const uFade = { value: 0 }; // 新建级从 0 淡入，避免 LOD 突然弹出（#18）
-      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 2, R);
+      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 2, R, this.uWaterFade);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.frustumCulled = false;
       mesh.receiveShadow = true; // 近场太阳阴影（岩石/地形自我投影）
@@ -539,6 +596,12 @@ export class TerrainPatchSet {
     // 岩石散布层
     this.rocks = new RockField(field);
     this.group.add(this.rocks.mesh);
+  }
+
+  /** 地形激活距离（距表面 km）：与 manager.update 的 wantId 判定同源，
+   * 最外级范围按此处的视地平推算，保证激活区间内可见表面全被地形覆盖 */
+  static actDist(R) {
+    return R < 100 ? Math.max(10, R * 0.8) : Math.max(500, R * 0.18);
   }
 
   /** DEM 新瓦片到达后标记脏：防抖合并——瓦片流式分批到达时旧逻辑每批都触发
@@ -605,6 +668,8 @@ export class TerrainPatchSet {
     if (initMode && this.levels.every(lv => lv.built)) {
       this._initialized = true;
     }
+    // 覆盖就绪：全部级构建完毕且淡入到不透明
+    this.readyCover = this._initialized && this.levels.every(lv => lv.uFade.value > 0.999);
   }
 
   build(lv, anchor, fadeMode = 'full') {
@@ -750,17 +815,23 @@ export class TerrainManager {
     return 2; // 远距离：粗分辨率（大尺度地形形状）
   }
 
+  /** 基底球可见性恢复（撤销可能的隐藏） */
+  _showBase(bodyId) {
+    const mesh = this.meshOf?.(bodyId);
+    if (mesh) mesh.material.visible = true;
+  }
+
   update(nearest, camLocalDir, timeSec = 0) {
     // 激活半径（#18 提前激活：确保外圈 LOD 在远处建好，接近时无弹出感）
     // 大天体：地球 1147km、火星 610km、月球 500km；小天体比例缩放
     let wantId = null;
     if (nearest && nearest.landable) {
-      const R = this.physOf(nearest.id).radiusKm;
-      const actDist = R < 100 ? Math.max(10, R * 0.8) : Math.max(500, R * 0.18);
+      const actDist = TerrainPatchSet.actDist(this.physOf(nearest.id).radiusKm);
       if (nearest.distSurface < actDist) wantId = nearest.id;
     }
 
     if (this.active && this.active.bodyId !== wantId) {
+      this._showBase(this.active.bodyId); // 恢复基底球
       this.active.patches.group.removeFromParent();
       this.active.patches.dispose();
       this.active = null;
@@ -775,6 +846,12 @@ export class TerrainManager {
     }
     if (this.active && camLocalDir) {
       this.active.patches.update(camLocalDir, timeSec);
+      // 海面高空淡出：0.6km 以下地形海面全权（波纹/泡沫/耀斑），2.5km 以上
+      // 完全交回盘面海洋，避免掠射菲涅尔白翳与盘面耀斑模型不一致显出瓦片方片
+      if (nearest) {
+        const wf = 1 - THREE.MathUtils.smoothstep(nearest.distSurface, 0.6, 2.5);
+        this.active.patches.uWaterFade.value = wf;
+      }
       // DEM 瓦片流式：按相机位置请求瓦片 + 检查新瓦片到达
       const dem = this.demSources.get(this.active.bodyId);
       if (dem && !dem.isOffline) {

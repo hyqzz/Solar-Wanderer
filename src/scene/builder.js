@@ -256,7 +256,11 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     group: sun.group, mesh: sun.mesh, posKm: new Float64Array(3),
   };
   // 太阳点光源（物理上太阳是光源本身；行星用自定义着色器，光源供地形 StandardMaterial 用）
-  const sunLight = new THREE.PointLight(0xfff2e0, 1, 0, 0);
+  // 太阳光基准色 = 纯白：行星盘面材质（planetMaterial）用的是无染色白光照，
+  // 且其配色是对标 NASA 影像标定的（影像本身按太阳白平衡）。地表若用暖白
+  // 0xfff2e0（旧值），同一处地面与盘面同色区会呈暖色调偏移（月球地表发米黄、
+  // 与灰盘面在交界处形成色块）。改为纯白后两侧一致，月面呈中性灰（阿波罗实拍）。
+  const sunLight = new THREE.PointLight(0xffffff, 1, 0, 0);
   sun.group.add(sunLight);
   // 近场太阳阴影装置：行走/超低空时把光照从点光源平滑移交到跟随玩家的
   // 平行光（地表尺度上阳光本就近似平行），由它投射岩石/地形自我阴影——
@@ -599,8 +603,11 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     // 看到的并非"10倍地球亮度的白炽世界"，而是略亮的暗灰荒原。内外太阳系统一
     // 用 0.55 幂压缩动态范围（旧版仅外太阳系压缩，水星地表 1/d² 全量 26× 被
     // ACES 削顶成白水泥地——地表审查发现）。
+    // 系数 π：StandardMaterial 的漫反射含 1/π 因子，而行星盘面材质（planetMaterial）
+    // 是 albedo·NdotL·uSunI 无该因子。取 2.5 时地表恒比盘面暗 ~20%，同一处
+    // 地面高度看与盘面同色区出现暗斑（月球 200km 的地形斑块）；取 π 后两侧一致。
     const li = 1 / (dAU * dAU);
-    sunLight.intensity = 2.5 * Math.pow(li, 0.55);
+    sunLight.intensity = Math.PI * Math.pow(li, 0.55);
     // 地表光照穿霾色滤：厚霾天体（金星/土卫六）的阳光被气溶胶滤成橙色并衰减
     // （Venera 橙琥珀原野 / Huygens 橙色漫射光实拍）；随高度指数恢复为自然阳光
     const gt = nearestE?.phys.atmosphere?.groundTint;
@@ -608,11 +615,11 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       const w = Math.exp(-Math.max(nearestSurf, 0) / (nearestE.phys.atmosphere.rayleighScaleKm * 3));
       sunLight.intensity *= 1 + ((nearestE.phys.atmosphere.groundDim ?? 1) - 1) * w;
       sunLight.color.setRGB(
-        1.0 + (gt[0] - 1.0) * w,       // 基准色 0xfff2e0 = (1, 0.949, 0.878)，按 w 混入滤镜色
-        0.949 + (gt[1] - 0.949) * w,
-        0.878 + (gt[2] - 0.878) * w);
+        1.0 + (gt[0] - 1.0) * w,       // 基准色纯白 = (1,1,1)，按 w 混入滤镜色
+        1.0 + (gt[1] - 1.0) * w,
+        1.0 + (gt[2] - 1.0) * w);
     } else {
-      sunLight.color.setHex(0xfff2e0);
+      sunLight.color.setHex(0xffffff);
     }
     // 近场阴影移交：可登陆天体表面 2.7km 以下，光照平滑从点光源切到平行光
     // 阴影装置（局部阳光本就近似平行）；0.3km 以下完全由装置接管。
@@ -647,11 +654,16 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     const img = tex?.image;
     if (img && (img.width || img.videoWidth)) {
       try {
+        // 按贴图原生分辨率采样（上限 2048×1024）：地形顶点色直接取自盘面同一张贴图。
+        // 降采样会污染海洋像素（sRGB 空间平均 → 偏亮），地球深海掩码
+        // om=(b-max(r,g·0.9))·6 随之变弱 → 地形海面偏红偏亮，高空看是可见方片接缝。
+        const w = Math.min(img.width || img.videoWidth || 1024, 2048);
+        const h = Math.max(1, Math.round(w / 2));
         const cv = document.createElement('canvas');
-        cv.width = 512; cv.height = 256;
+        cv.width = w; cv.height = h;
         const ctx = cv.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(img, 0, 0, 512, 256);
-        data = ctx.getImageData(0, 0, 512, 256);
+        ctx.drawImage(img, 0, 0, w, h);
+        data = ctx.getImageData(0, 0, w, h);
       } catch { /* 跨域等异常 → null */ }
     }
     mapDataCache.set(id, data);
