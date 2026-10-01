@@ -104,7 +104,8 @@ npm run fetch-textures # 重新下载贴图资产
 - **计算坐标系**：日心黄道 J2000，单位 km。
 - **→ Three.js 世界**：`(x, y, z)_ecl → (x, z, -y)_three`，黄道北极对应 +Y。
 - **体固系 → 世界**：同样映射；本初子午线指向本地 +X，北极指向 +Y。
-- 太阳点光源强度 = `2.5 / dAU²`（StandardMaterial）；自定义着色器内按 `1/d²` 缩放。
+- 太阳点光源强度 = `π × (1/dAU²)^0.55`（StandardMaterial，纯白；系数 π 抵消漫反射的
+  1/π，与盘面材质 `albedo·NdotL·uSunI` 同量级）；自定义着色器内按 `1/d²` 缩放。
 
 ## 尺度与精度
 
