@@ -814,6 +814,20 @@ function loop() {
       ) - e.phys.radiusKm;
       if (d < dNear) dNear = d;
     }
+    // 彗星/探测器不在上面的扫描里：焦点在彗星时近平面会按"最近行星"（可达 1e8 km）
+    // 算出 5e7 km，把 2.5e6 km 处的彗发整个裁掉——选中彗星只剩一个标签，天空空白。
+    // 彗发是 Sprite，有可观半尺寸（活跃时可达 ~2.8e6 km），一并扣除免裁。
+    for (const [, t] of registry) {
+      if (t.kind !== 'comet' && t.kind !== 'probe') continue;
+      // 彗发是 Sprite，半尺寸可达 ~2.8e6 km（活跃期），按它扣减才不会被裁
+      const half = t.kind === 'comet'
+        ? Math.max(t.phys?.radiusKm ?? 1, t.relObj?.children?.[0]?.scale?.x ?? 0)
+        : (t.phys?.radiusKm ?? 1);
+      const d = Math.hypot(
+        t.posKm[0] - ship.posKm[0], t.posKm[1] - ship.posKm[1], t.posKm[2] - ship.posKm[2]
+      ) - half;
+      if (d < dNear) dNear = d;
+    }
     const want = appMode === 'walk'
       ? 5e-7
       : THREE.MathUtils.clamp(Math.max(dNear, 0) * 0.3, 5e-7, 1e10);
