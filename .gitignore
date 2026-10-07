@@ -60,3 +60,4 @@ tools/.shot-*
 
 # ---- 本地审计产物 ----
 .audit-reports/
+.build/

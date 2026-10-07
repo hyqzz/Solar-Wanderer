@@ -876,3 +876,8 @@ html.touch .help-inner { touch-action: pan-y; }
     transition: none !important;
   }
 }
+
+/* 触屏设备：交互目标达到 44px 触控标准（Apple HIG / Material 建议值） */
+.touch .dir-item { padding: 11px 10px 11px 18px; font-size: 14px; }
+.touch .dir-item span { font-size: 12px; }
+.touch #search-box { height: 40px; font-size: 15px; }
