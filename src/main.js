@@ -1057,6 +1057,32 @@ function handleUIKeys() {
   }
   if (input.tapped('KeyL')) labels.setVisible(!labels.visible);
   if (input.tapped('KeyH')) hud.toggleHelp();
+  // Z：纯净/电影模式——一次性收掉全部叠加层（HUD/目录/准星/提示/罗盘/参照物），
+  // 只留宇宙本身。逐元素开关（L 标签、O 轨道、C 罗盘）做不到这件事，
+  // 而截图、录屏、演示、VR 都需要一个"没有任何界面"的画面。
+  if (input.tapped('KeyZ')) setCinematic(!cinematic);
+}
+
+let cinematic = false;
+let cinematicTimer = 0;
+function setCinematic(on) {
+  cinematic = on;
+  clearTimeout(cinematicTimer);
+  if (on) {
+    // 先让提示可读再收界面——否则用户不知道刚才发生了什么
+    hud.tip(t('tip.cinematicOn'));
+    cinematicTimer = setTimeout(() => document.body.classList.add('cinematic'), 1200);
+  } else {
+    document.body.classList.remove('cinematic');
+    hud.tip(t('tip.cinematicOff'));
+  }
+}
+
+// 直接以纯净模式启动（自动化截图/录屏用）：?clean=1
+if (typeof document !== 'undefined' && document.body
+    && new URLSearchParams(window.location.search).get('clean') === '1') {
+  cinematic = true;
+  document.body.classList.add('cinematic');
 }
 
 function updateTip(nearest) {

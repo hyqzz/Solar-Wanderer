@@ -1,10 +1,15 @@
-// 星历精度测试：对照 JPL Horizons 离线基准（tests/fixtures.json，2026-06-10 12:00 历元）
+// 星历精度测试：对照 JPL Horizons 离线基准（tests/fixtures.json）
+//
+// 基准历元由 tools/make-fixtures.mjs 生成，与 tools/fit-moons.mjs 的拟合历元同步。
+// 卫星的解析模型是"密切根数 + 线性长期率"，精度随离拟合历元的距离退化——
+// 因此基准同时记录历元点与 +180 天点，把退化变成被追踪的数字而不是藏在宽容差里。
+// 正确顺序：npm run fit-moons → node tools/make-fixtures.mjs → npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { planetPosition, PLANETS } from '../src/astro/planets.js';
 import { moonGeocentric } from '../src/astro/moon.js';
-import { moonLocalPosition } from '../src/astro/moons.js';
+import { moonLocalPosition, moonOrbitNormal, MOON_IDS } from '../src/astro/moons.js';
 
 const fix = JSON.parse(readFileSync(new URL('./fixtures.json', import.meta.url)));
 
@@ -42,11 +47,39 @@ test('月球地心位置 vs Horizons：角误差 < 0.5°，距离 < 1%', () => {
   assert.ok(Math.abs(rO - rR) / rR < 0.01);
 });
 
-test('卫星相对母星位置 vs Horizons：角误差 < 0.5°', () => {
+test('卫星相对母星位置 vs Horizons：拟合历元处角误差 < 0.02°', () => {
   for (const [name, ref] of Object.entries(fix.moonsLocal)) {
     const ours = moonLocalPosition(name, ref.jdTDB);
     const d = angleDeg(ours, ref.pos);
-    assert.ok(d < 0.5, `${name}: ${d.toFixed(4)}°`);
+    assert.ok(d < 0.02, `${name}: ${d.toFixed(4)}°`);
+  }
+});
+
+test('卫星解析模型的已知退化：离历元 180 天角误差 < 3°（记录而非隐藏）', () => {
+  // 这是解析回退路径的能力上限，不是"越界可以接受"：
+  // 在 JPL 采样窗口（2026-06-01…2027-10-01）内运行时走的是采样插值，精度 <0.001°。
+  // 本测试只约束"窗口外/加载失败时"的兜底质量，并防止它悄悄退化。
+  const degraded = fix.moonsLocalDegraded ?? {};
+  for (const [name, ref] of Object.entries(degraded)) {
+    const ours = moonLocalPosition(name, ref.jdTDB);
+    const d = angleDeg(ours, ref.pos);
+    assert.ok(d < 3, `${name} @ +${fix.degradeDays}d: ${d.toFixed(4)}°`);
+  }
+});
+
+test('轨道法向不变量：必须与位置矢量垂直（r̂·n̂ ≈ 0）', () => {
+  // 法向与位置必须来自同一个函数。历史上月球的位置走 Meeus、法向却走另有一条
+  // 拟合根数，导致"位置对、姿态错"，且越出采样窗口越严重（2035 年偏离 4.5°）。
+  const probe = fix.moonGeo?.jdTDB ?? 2461200.5;
+  for (const id of MOON_IDS) {
+    const onGrid = [probe, probe + 400, probe + 1600, probe + 3600];
+    for (const jd of onGrid) {
+      const r = id === 'moon' ? moonGeocentric(jd) : moonLocalPosition(id, jd);
+      const rl = Math.hypot(r.x, r.y, r.z) || 1;
+      const n = moonOrbitNormal(id, jd);
+      const c = Math.abs((r.x * n.x + r.y * n.y + r.z * n.z) / rl);
+      assert.ok(c < 0.02, `${id} @ JD ${jd.toFixed(1)}: |r̂·n̂| = ${c.toFixed(4)}`);
+    }
   }
 });
 

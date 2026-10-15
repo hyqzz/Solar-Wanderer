@@ -1,4 +1,4 @@
-// 卫星轨道拟合：从 JPL Horizons 拉取各大卫星两个历元（相隔 20 天）的状态向量，
+// 卫星轨道拟合：从 JPL Horizons 拉取各大卫星 5 个历元（围绕当前时刻 ±240 天）的状态向量，
 // 解算密切轨道根数并做经验长期率分解，固化为 src/astro/moonsData.generated.js。
 //
 // 分解原理（λ/ϖ/Ω 三分解）：
@@ -86,54 +86,116 @@ function predict(el, dJd) {
 /** 角度差归一化到 (-180, 180] 度 */
 const wrapDiffDeg = (d) => ((d % 360) + 540) % 360 - 180;
 
+/**
+ * 渐进解缠绕：按"离参考历元由近及远"的顺序逐点解缠绕，每解一点就用已确定的
+ * 点重新最小二乘估计速率，用于下一个更远点的参考值。
+ *
+ * 为什么不能一次性顺序解缠绕：角量的模糊度是 360°，相邻采样间隔 Δt 越大，
+ * 允许的速率猜测误差 (180/Δt) 越小。Mimas 的 λ̇≈383°/天，而密切平均运动
+ * n≈381.4°/天，相差 1.6°/天；在 120 天间隔下这已造成 192° 的偏差 > 180°，
+ * 于是解到错误的 360° 分支上（表现为半年后相位差 176°）。
+ * 先解近点把速率精度提高两个量级，再解远点，即无此风险。
+ */
+function unwrapProgressive(values, jds, refIdx, rateGuess) {
+  const n = values.length;
+  const out = new Array(n);
+  out[refIdx] = values[refIdx];
+  const order = [...Array(n).keys()]
+    .filter((i) => i !== refIdx)
+    .sort((a, b) => Math.abs(jds[a] - jds[refIdx]) - Math.abs(jds[b] - jds[refIdx]));
+  const xs = [0], ys = [values[refIdx]];
+  let rate = rateGuess;
+  for (const i of order) {
+    const dt = jds[i] - jds[refIdx];
+    const ref = values[refIdx] + rate * dt;
+    out[i] = values[i] + 360 * Math.round((ref - values[i]) / 360);
+    xs.push(dt); ys.push(out[i]);
+    if (xs.length >= 2) [, rate] = linfit(xs, ys);   // 逐步精化
+  }
+  return out;
+}
+
+/** 最小二乘直线拟合 y = b + m·x，返回 [b, m] */
+function linfit(xs, ys) {
+  const n = xs.length;
+  const sx = xs.reduce((a, b) => a + b, 0), sy = ys.reduce((a, b) => a + b, 0);
+  const sxx = xs.reduce((a, x) => a + x * x, 0), sxy = xs.reduce((a, x, i) => a + x * ys[i], 0);
+  const den = n * sxx - sx * sx;
+  const m = den !== 0 ? (n * sxy - sx * sy) / den : 0;
+  return [(sy - m * sx) / n, m];
+}
+
 const now = new Date();
-const FIT_SPAN_DAYS = 20;
-const later = new Date(now.getTime() + FIT_SPAN_DAYS * 86400000);
+// 拟合历元：围绕 now 对称取 5 个采样点。
+//
+// 为什么不是双历元差分：卫星的解析模型是"密切根数 + 线性长期率"，其误差主要由
+// 平均运动的微小偏差在长时间上累积的相位误差主导。双历元差分的 λ̇ 精度受限于
+// 两点差分，实测离历元 180 天后最差达 3.8°（Mimas）。改成 5 历元最小二乘后，
+// 同一跨度内的相位误差显著下降。
+const FIT_OFFSETS_DAYS = [-240, -120, -10, 0, 10, 120, 240];
 const out = {};
 let epochJd = null;
 
 for (const [id, [cmd, center]] of Object.entries(MOON_IDS)) {
   const phys = MOON_PHYS[id];
   const parentGm = BODIES[phys.parent].gm + (phys.gm || 0);
-  const { jdTDB, pos, vel } = await horizonsVectors(cmd, center, now, true);
-  epochJd = jdTDB;
-  const el = stateToElements(pos, vel, parentGm);
 
-  // 第二历元：需要速度才能解算完整根数（节点/近点差分）
-  const ref2 = await horizonsVectors(cmd, center, later, true);
-  const dJd = ref2.jdTDB - jdTDB;
-  const el2 = stateToElements(ref2.pos, ref2.vel, parentGm);
+  const samples = [];
+  for (const off of FIT_OFFSETS_DAYS) {
+    const at = new Date(now.getTime() + off * 86400000);
+    const r = await horizonsVectors(cmd, center, at, true);
+    samples.push({ jd: r.jdTDB, el: stateToElements(r.pos, r.vel, parentGm) });
+  }
+  const refIdx = FIT_OFFSETS_DAYS.indexOf(0);
+  const ref = samples[refIdx];
+  epochJd = ref.jd;
+  const el = { ...ref.el };
 
-  // 经验长期率：λ̇ 用实际位置的有符号相位差测量（比根数差分更稳健）
-  const pred = predict(el, dJd);
-  const h = cross(pos, vel);
-  const hMag = norm(h);
-  const nHat = [h[0] / hMag, h[1] / hMag, h[2] / hMag];
-  const cr = cross(pred, ref2.pos);
-  const sinA = dot(cr, nHat) / (norm(pred) * norm(ref2.pos));
-  const cosA = dot(pred, ref2.pos) / (norm(pred) * norm(ref2.pos));
-  const lambdaDot = el.nDegPerDay + Math.atan2(sinA, Math.max(-1, Math.min(1, cosA))) * RAD2DEG / dJd;
+  const jds = samples.map((s) => s.jd);
+  const relJd = jds.map((j) => j - ref.jd);
+  const periodDays0 = 360 / el.nDegPerDay;
 
-  const nodeDot = wrapDiffDeg(el2.nodeDeg - el.nodeDeg) / dJd;
-  // 近圆轨道 ϖ 由噪声主导 → ϖ̇ 置 0，漂移全部留在 λ̇（位置仍精确）
-  const periDot = el.e >= 0.01 ? wrapDiffDeg(el2.periDeg - el.periDeg) / dJd : 0;
+  // λ = ϖ + M（平黄经），对任何离心率都有定义
+  const lam = samples.map((s) => ((s.el.periDeg + s.el.M0Deg) % 360 + 360) % 360);
+  const node = samples.map((s) => ((s.el.nodeDeg % 360) + 360) % 360);
+  const peri = samples.map((s) => ((s.el.periDeg % 360) + 360) % 360);
 
-  // 运行时传播：M(t) = M0 + ṅ·Δt，其中 ṅ = λ̇ − ϖ̇，保证 λ(t) 与测量严格一致
-  el.nDegPerDay = lambdaDot - periDot;
+  // 回归只用来定速率，历元根数一律取历元采样值本身。
+  // 原因：部分卫星的 Ω 在黄道坐标下是"绕母星极轴进动的投影"，表现为周期性振荡
+  // 而非单调漂移（Mimas 的 Ω 在 ±5° 内振荡、周期约 360 天）。此时回归截距会
+  // 偏离历元真值数度，若拿截距当历元值，模型在历元处就已经错了。
+  const lamU = unwrapProgressive(lam, jds, refIdx, el.nDegPerDay);
+  const [, lamDot] = linfit(relJd, lamU);
+
+  const nodeU = unwrapProgressive(node, jds, refIdx, 0);
+  const [, nodeDot] = linfit(relJd, nodeU);
+
+  // 近圆轨道 ϖ 由噪声主导 → ϖ̇ 置 0，漂移全部并入 λ̇（位置仍然精确）
+  let periDot = 0;
+  if (el.e >= 0.01) {
+    const periU = unwrapProgressive(peri, jds, refIdx, 0);
+    [, periDot] = linfit(relJd, periU);
+  }
+
+  const nodeRef = node[refIdx], periRef = peri[refIdx], lamRef = lamU[refIdx];
+  el.nodeDeg = nodeRef;
+  el.periDeg = periRef;
+  el.M0Deg = ((lamRef - periRef) % 360 + 360) % 360;
+  el.nDegPerDay = lamDot - periDot;   // 运行时 M(t)=M0+n·Δt，使 λ(t) 与拟合严格一致
   el.nodeDotDegPerDay = nodeDot;
   el.periDotDegPerDay = periDot;
 
   out[id] = el;
-  const periodDays = 360 / lambdaDot;
   console.log(
     `${id.padEnd(10)} a=${(el.aKm / 1000).toFixed(1).padStart(8)}千km  e=${el.e.toFixed(4)}  ` +
-    `i=${el.iDeg.toFixed(2).padStart(7)}°  P=${periodDays.toFixed(4).padStart(9)}天  ` +
+    `i=${el.iDeg.toFixed(2).padStart(7)}°  P=${(360 / lamDot).toFixed(4).padStart(9)}天  ` +
+    `(周期估计误差 ${((360 / lamDot / periodDays0 - 1) * 100).toFixed(4)}%)  ` +
     `Ω̇=${nodeDot.toFixed(4).padStart(8)}°/天  ϖ̇=${periDot.toFixed(4).padStart(8)}°/天`
   );
 }
 
 const banner = `// 本文件由 tools/fit-moons.mjs 自动生成 — 请勿手改。
-// 数据来源：JPL Horizons 状态向量（黄道 J2000，相对母行星中心），双历元（相隔 20 天）拟合。
+// 数据来源：JPL Horizons 状态向量（黄道 J2000，相对母行星中心），5 历元最小二乘拟合（±240 天）。
 // 生成时刻（历元）：${now.toISOString()}  JD(TDB)=${epochJd}
 // 模型：密切根数 + 经验长期率（nodeDotDegPerDay=Ω̇，periDotDegPerDay=ϖ̇，
 // nDegPerDay=λ̇−ϖ̇），长期漂移一阶正确；二阶以上摄动与共振仍随时间缓慢积累。

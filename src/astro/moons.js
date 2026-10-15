@@ -9,6 +9,8 @@
 import { elementsToEcliptic, KM_PER_AU } from './kepler.js';
 import { MOON_ELEMENTS, MOON_EPOCH_JD } from './moonsData.generated.js';
 import { MOON_PHYS } from './bodies.js';
+import { sampledPosition, sampledState } from './sampledEphemeris.js';
+import { moonGeocentric } from './moon.js';
 
 export const MOON_IDS = Object.keys(MOON_ELEMENTS);
 
@@ -29,6 +31,8 @@ export function moonSecularRates(id) {
 
 /** 卫星相对母行星位置（km，黄道 J2000；含 J2 长期进动） */
 export function moonLocalPosition(id, jdTT) {
+  const sampled = sampledPosition(id, jdTT);
+  if (sampled) return sampled;
   const el = MOON_ELEMENTS[id];
   const dt = jdTT - MOON_EPOCH_JD;
   const r = moonSecularRates(id);
@@ -45,8 +49,40 @@ export function moonLocalPosition(id, jdTT) {
   });
 }
 
-/** 卫星轨道法向（黄道 J2000 单位矢量），用于潮汐锁定姿态；传入 jdTT 时含 J2 节点进动 */
+/** 中心差分求轨道法向：n ∝ r × v，r 取两侧对称点，保证与位置函数同源 */
+function normalFromPosition(posFn, jdTT, hDays) {
+  const a = posFn(jdTT - hDays), b = posFn(jdTT + hDays);
+  const vx = (b.x - a.x) / (2 * hDays), vy = (b.y - a.y) / (2 * hDays), vz = (b.z - a.z) / (2 * hDays);
+  const x = a.y * vz - a.z * vy, y = a.z * vx - a.x * vz, z = a.x * vy - a.y * vx;
+  const r = Math.hypot(x, y, z);
+  return r > 0 ? { x: x / r, y: y / r, z: z / r } : null;
+}
+
+/** 月球轨道周期的 1/40，用于差分步长（周期 27.32 天） */
+const MOON_NORMAL_STEP_DAYS = 27.32 / 40;
+
+/**
+ * 卫星轨道法向（黄道 J2000 单位矢量），用于潮汐锁定姿态。
+ *
+ * 不变量：法向必须与同一函数给出的位置矢量垂直。月球是唯一例外——
+ * 它的位置来自 moonGeocentric（Meeus/采样），而本表里另有一条从 Horizons
+ * 拟合的根数（tools/fit-moons.mjs 对所有天体统一用 20 天基线，不足月球
+ * 27.32 天的周期，拟合退化：nDegPerDay 偏 +11.5%，交点退行率偏小 160 倍）。
+ * 直接采用那条根数会造成"位置对、姿态错"，且越出 JPL 采样窗口越严重
+ * （2035 年法向与位置偏离 4.5°）。因此月球法向一律由它自己的位置函数数值求得。
+ */
 export function moonOrbitNormal(id, jdTT) {
+  const s = jdTT != null ? sampledState(id, jdTT) : null;
+  if (s) {
+    const x = s.y * s.vz - s.z * s.vy, y = s.z * s.vx - s.x * s.vz, z = s.x * s.vy - s.y * s.vx;
+    const r = Math.hypot(x, y, z);
+    if (r > 0) return { x: x / r, y: y / r, z: z / r };
+  }
+  if (id === 'moon' && jdTT != null) {
+    const n = normalFromPosition(moonGeocentric, jdTT, MOON_NORMAL_STEP_DAYS);
+    if (n) return n;
+  }
+  // 其余卫星的位置与法向同源于本表根数，天然自洽
   const el = MOON_ELEMENTS[id];
   const i = (el.iDeg * Math.PI) / 180;
   const nodeDeg = jdTT != null

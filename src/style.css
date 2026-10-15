@@ -63,7 +63,9 @@ html, body {
   position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
   background: rgba(20, 30, 10, 0.7); border: 1px solid rgba(180, 220, 120, 0.4);
   border-radius: 6px; padding: 6px 16px; font-size: 14px; color: #d8f0b0;
-  pointer-events: none; white-space: nowrap; max-width: 90vw;
+  pointer-events: none; max-width: min(90vw, 880px); text-align: center;
+  /* 导览旁白可达 300 字：必须换行，否则会被 body{overflow:hidden} 直接裁掉 */
+  white-space: normal; overflow-wrap: break-word; line-height: 1.5;
 }
 #crosshair {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -867,6 +869,28 @@ html.touch .help-inner { touch-action: pan-y; }
 
 /* ── 汉堡菜单：宽度适中 ── */
 .touch #tc-menu { min-width: 160px; max-width: 220px; }
+
+/* ── 电影/纯净模式（Z 键，或 ?clean=1）────────────────────────────────
+   一次性隐藏全部叠加层，留下"只有宇宙"的画面：截图、录屏、演示、VR 都需要。
+   与逐元素开关（L 标签 / O 轨道 / C 罗盘）不同，这里连 HUD、目录、准星、
+   提示条、比例参照一起收掉，且不改变任何渲染参数。 */
+body.cinematic #hud,
+body.cinematic #labels,
+body.cinematic #crosshair,
+body.cinematic #directory,
+body.cinematic .compass-widget,
+body.cinematic #tour-bar,
+body.cinematic .scaleref-overlay,
+body.cinematic #tc-menu,
+body.cinematic #tc-target,
+body.cinematic .tc-panel,
+body.cinematic #tc-joystick {
+  display: none !important;
+}
+/* 进入/退出时给一个极短淡出，避免画面"啪"地跳变 */
+#hud, #labels, #directory, .compass-widget { transition: opacity 0.18s ease; }
+body.cinematic #hud, body.cinematic #labels,
+body.cinematic #directory, body.cinematic .compass-widget { opacity: 0; }
 
 /* 可访问性：运动敏感用户减少启动屏动画 */
 @media (prefers-reduced-motion: reduce) {

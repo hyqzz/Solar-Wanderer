@@ -85,6 +85,8 @@ const D = {
   'tip.quality': { zh: '已自动降低画质以保证流畅运行', en: 'Quality lowered automatically for smooth performance', es: 'Calidad reducida automáticamente para un rendimiento fluido', ja: '快適動作のため画質を自動的に下げました', fr: 'Qualité réduite automatiquement pour des performances fluides', de: 'Qualität automatisch gesenkt für flüssige Leistung', ru: 'Качество автоматически снижено для плавной работы' },
   'tip.tnoOrbitsOn': { zh: '海外天体轨道线：开', en: 'Trans-Neptunian orbits: ON', es: 'Órbitas transneptunianas: ON', ja: '海王星以遠軌道線：ON', fr: 'Orbites transneptuniennes : ON', de: 'Transneptunische Orbits: AN', ru: 'Орбиты транснептуновых объектов: ВКЛ' },
   'tip.tnoOrbitsOff': { zh: '海外天体轨道线：关', en: 'Trans-Neptunian orbits: OFF', es: 'Órbitas transneptunianas: OFF', ja: '海王星以遠軌道線：OFF', fr: 'Orbites transneptuniennes : OFF', de: 'Transneptunische Orbits: AUS', ru: 'Орбиты транснептуновых объектов: ВЫКЛ' },
+  'tip.cinematicOn': { zh: '🎬 纯净模式：已隐藏全部界面（再按 Z 恢复）', en: '🎬 Clean mode: all overlays hidden (press Z again to restore)', es: '🎬 Modo limpio: interfaz oculta (pulsa Z para volver)', ja: '🎬 クリーンモード：UI を全て非表示（Z で復帰）', fr: '🎬 Mode épuré : interface masquée (Z pour revenir)', de: '🎬 Sauberer Modus: alle Overlays aus (Z zum Zurückholen)', ru: '🎬 Чистый режим: интерфейс скрыт (Z — вернуть)' },
+  'tip.cinematicOff': { zh: '界面已恢复', en: 'Overlays restored', es: 'Interfaz restaurada', ja: 'UI を復帰しました', fr: 'Interface restaurée', de: 'Overlays wieder an', ru: 'Интерфейс восстановлен' },
   'tip.pendingFocus': {
     zh: '🎯 已选择目标：{name}（滚动鼠标或 PageUp/Down 平滑接近/远离）',
     en: '🎯 Target set: {name} (scroll or PageUp/Down to approach/recede)',
