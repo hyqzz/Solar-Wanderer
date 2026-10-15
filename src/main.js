@@ -371,7 +371,11 @@ async function init() {
   // 键盘快捷键：C 指南针、M 音效、Ctrl+B 保存书签、Ctrl+Shift+B 回到最近书签、Y 人体比例剪影（行走模式）
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyC' && !e.repeat) { e.preventDefault(); compass?.toggle(); }
-    if (e.code === 'KeyM' && !e.repeat) { e.preventDefault(); audioEngine?.toggle(); }
+    if (e.code === 'KeyM' && !e.repeat) {
+      e.preventDefault();
+      const on = audioEngine?.toggle();
+      hud.tip(t(on ? 'tip.audioOn' : 'tip.audioOff'));
+    }
     if (e.code === 'KeyY' && !e.repeat && appMode === 'walk') {
       e.preventDefault();
       const on = scaleRef?.toggleHuman();
@@ -750,7 +754,9 @@ function loop() {
         terrainMgr.baseReady(nearest.id)))
       && !orbitCam.flight) {
       // 落地冲击：由接近速度决定强度（0.004–0.03 rad，约 0.23°–1.7°）
+      const landStrength = Math.min(1, ship.vel.length() / 0.05);   // 50 m/s 记满
       cameraFeel.impulse(Math.min(0.03, 0.004 + ship.vel.length() * 0.0016), 24);
+      audioEngine?.playLandingImpact?.(landStrength);
       ship.enterWalk(env); // 视向严格连续（yaw+pitch 自当前相机反解）
       appMode = 'walk';
       // 移动端：无指针锁定，行走使用单指拖拽环视
@@ -841,7 +847,7 @@ function loop() {
   try {
   hud.updateTime(simClock);
   const flight = orbitCam.flight;
-  hud.updateNav({
+  hud.updateNav({ audioOn: audioEngine?.enabled,
     mode: appMode,
     flight: flight ? { toName: bodyName(registry.get(flight.toId)), t: flight.t } : null,
     speed: ship.vel.length(),

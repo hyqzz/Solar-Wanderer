@@ -79,11 +79,15 @@ export class HUD {
     if (tcTimeEl) tcTimeEl.textContent = local;
   }
 
-  updateNav({ mode, flight, speed, speedSetting, focusName, nearest, gravity }) {
+  updateNav({ mode, flight, speed, speedSetting, focusName, nearest, gravity, audioOn }) {
     const modeTxt = flight ? t('nav.flight') :
       mode === 'orbit' ? t('nav.orbit') :
       mode === 'walk' ? t('nav.walk') : t('nav.fly');
     const rows = [`<div class="big">${modeTxt}</div>`];
+    // 音效状态：默认静音是刻意的（太空本应近乎无声），但必须让用户看得见怎么开
+    if (audioOn !== undefined) {
+      rows.push(`<div class="dim">${t(audioOn ? 'hud.audioOn' : 'hud.audioOff')}</div>`);
+    }
     if (flight) {
       rows.push(`<div class="accent">${t('hud.flightTo', { name: flight.toName, p: Math.round(flight.t * 100) })}</div>`);
     } else if (mode === 'orbit') {

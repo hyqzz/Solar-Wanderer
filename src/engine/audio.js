@@ -51,6 +51,8 @@ export class AudioEngine {
     // ── 持续音效层（init 时创建，通过 gain 控制开关）──
     this._vacuum = null;    // { source, filter, gain } 太空射电嘶声
     this._atmo = null;      // { source, filter, gain } 大气层进入风声
+    this._engine = null;    // { source, filter, gain } 引擎/推进器轰鸣
+    this._reentry = null;   // { source, filter, gain } 再入大气层的宽带轰鸣
 
     // ── 调度计时器 ──
     this._stepTimer = 0;    // 脚步累加时间
@@ -102,6 +104,16 @@ export class AudioEngine {
     // 大气层进入风声：粉红噪声 + 带通滤波（风声摩擦感）
     this._atmo = this._createNoiseLayer(this._pinkBuf, 'bandpass', 500, 0);
     this._atmo.gain.connect(this._bus);
+
+    // 引擎/推进器：经箭体结构传导的低频轰鸣。
+    // 真空中没有介质传声，但航天器内部的声是经结构传导的——舱内听得到、舱外听不到。
+    // 这里按"人在舱内"处理，这个区分本身也是科普点。
+    this._engine = this._createNoiseLayer(this._pinkBuf, 'lowpass', 90, 0);
+    this._engine.gain.connect(this._bus);
+
+    // 再入：高速穿过大气时的宽带轰鸣（激波与等离子体鞘的声学表现）
+    this._reentry = this._createNoiseLayer(this._whiteBuf, 'bandpass', 620, 0);
+    this._reentry.gain.connect(this._bus);
   }
 
   /**
@@ -224,6 +236,29 @@ export class AudioEngine {
     }
     this._atmo.gain.gain.setTargetAtTime(atmoTarget, now, 0.15);
 
+    // ── 引擎/推进器（fly + 舱内）──
+    // 增益按速度对数增长：静止/低速几乎无感，高速巡航时成为持续底噪。
+    let engineTarget = 0;
+    if (this._mode === 'fly' && !submerged) {
+      const vKmS = Math.max(0, this._state.speed ?? 0);
+      const vNorm = Math.min(1, Math.log10(1 + vKmS * 1000) / 4);  // 1 m/s→0，10 km/s→1
+      engineTarget = 0.015 + vNorm * 0.055;
+      this._engine.filter.frequency.setTargetAtTime(70 + vNorm * 130, now, 0.25);
+    }
+    this._engine.gain.gain.setTargetAtTime(engineTarget, now, 0.12);
+
+    // ── 再入轰鸣（大气内 + 高速）──
+    // 强度 ∝ 大气密度 × 速度²，与气动加热的物理量级一致（动压 q = ½ρv²）。
+    let reentryTarget = 0;
+    if (this._env.inAtmosphere && !submerged && this._mode !== 'walk') {
+      const n = this._env.nearest;
+      const dens = n ? Math.max(0, Math.min(1, 1 - n.distSurface / Math.max(n.radiusKm * 0.3, 0.001))) : 0;
+      const vFrac = Math.min(1, Math.max(0, (this._state.speed ?? 0) / 8));  // 8 km/s ≈ 近地轨道速度
+      reentryTarget = dens * vFrac * vFrac * 0.22;
+      this._reentry.filter.frequency.setTargetAtTime(420 + vFrac * 900, now, 0.3);
+    }
+    this._reentry.gain.gain.setTargetAtTime(reentryTarget, now, 0.2);
+
     // ── 脚步声（walk + 行走中 + 未潜水）──
     if (this._mode === 'walk' && this._state.walking && !submerged) {
       this._stepTimer += dt;
@@ -291,6 +326,30 @@ export class AudioEngine {
    * 播放一次气泡声：正弦波频率上扫 + 短促包络。
    * 模拟气泡从深处上升时的音调变化。
    */
+  /**
+   * 着陆冲击：低通滤过的宽带噪声加极快衰减包络，像一声闷响。
+   * 强度随接近速度增长；与 cameraFeel.impulse 由同一次着陆事件触发。
+   */
+  playLandingImpact(strength = 0.5) {
+    if (!this.ctx || !this._enabled) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this._whiteBuf;
+    src.loop = false;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 180 + strength * 220;
+    filter.Q.value = 0.9;
+    const g = ctx.createGain();
+    const peak = Math.min(0.5, 0.12 + strength * 0.38);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(peak, now + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+    src.connect(filter); filter.connect(g); g.connect(this._bus);
+    src.start(now);
+    src.stop(now + 0.36);
+  }
+
   _playBubble() {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;

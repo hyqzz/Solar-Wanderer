@@ -190,3 +190,27 @@ test('地面反照率只给有固体表面或云顶的天体', () => {
     assert.equal(g, 0, `${id} 没有固体表面，不应有地面反弹（实际 ${g}）`);
   }
 });
+
+// ── 批次 10：音频层 ─────────────────────────────────────────────────────────
+
+test('音频引擎含引擎、再入与着陆冲击三层', () => {
+  const src = read('src/engine/audio.js');
+  assert.ok(/this\._engine = this\._createNoiseLayer\(this\._pinkBuf, 'lowpass', 90, 0\)/.test(src),
+    '缺少引擎/推进器层');
+  assert.ok(/this\._reentry = this\._createNoiseLayer\(this\._whiteBuf, 'bandpass', 620, 0\)/.test(src),
+    '缺少再入层');
+  assert.ok(/playLandingImpact\(strength = 0\.5\)/.test(src), '缺少着陆冲击音');
+  // 再入强度 ∝ 密度 × 速度²（与动压 q = ½ρv² 同量级）
+  assert.ok(/reentryTarget = dens \* vFrac \* vFrac \* 0\.22/.test(src),
+    '再入强度未按动压量级（密度×速度²）建模');
+});
+
+test('音效状态在 HUD 上可见（默认静音但必须能发现怎么开）', () => {
+  const hud = read('src/ui/hud.js');
+  const i18n = read('src/ui/i18n.js');
+  const main = read('src/main.js');
+  assert.ok(/audioOn/.test(hud), 'HUD 未显示音效状态');
+  assert.ok(/'hud\.audioOn'/.test(i18n) && /'hud\.audioOff'/.test(i18n), '缺少音效状态文案');
+  assert.ok(/audioOn: audioEngine\?\.enabled/.test(main), '未把状态传给 HUD');
+  assert.ok(/tip\.audioOn/.test(main), '切换音效时没有反馈提示');
+});

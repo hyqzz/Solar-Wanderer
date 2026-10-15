@@ -231,6 +231,10 @@ const D = {
     ru: 'Поворот одним пальцем · щипок для масштаба · двойное касание метки для полёта',
   },
   'start.star': { zh: 'Star on GitHub', en: 'Star on GitHub', es: 'Star en GitHub', ja: 'GitHubでスター', fr: 'Star sur GitHub', de: 'Auf GitHub starren', ru: 'Звезда на GitHub' },
+  'hud.audioOn': { zh: '🔊 音效开（M 关闭）', en: '🔊 Audio on (M to mute)', es: '🔊 Audio activado (M para silenciar)', ja: '🔊 音效オン（M でオフ）', fr: '🔊 Son activé (M pour couper)', de: '🔊 Ton an (M zum Stummschalten)', ru: '🔊 Звук вкл (M — выключить)' },
+  'hud.audioOff': { zh: '🔇 音效关（M 开启）', en: '🔇 Audio off (M to enable)', es: '🔇 Audio desactivado (M para activar)', ja: '🔇 音效オフ（M でオン）', fr: '🔇 Son coupé (M pour activer)', de: '🔇 Ton aus (M zum Einschalten)', ru: '🔇 Звук выкл (M — включить)' },
+  'tip.audioOn': { zh: '🔊 音效已开启：引擎、再入、脚步与真空底噪', en: '🔊 Audio on: engines, reentry, footsteps, vacuum hiss', es: '🔊 Audio activado', ja: '🔊 音效をオンにしました', fr: '🔊 Son activé', de: '🔊 Ton eingeschaltet', ru: '🔊 Звук включён' },
+  'tip.audioOff': { zh: '🔇 音效已关闭', en: '🔇 Audio off', es: '🔇 Audio desactivado', ja: '🔇 音效をオフにしました', fr: '🔇 Son coupé', de: '🔇 Ton ausgeschaltet', ru: '🔇 Звук выключен' },
   'help.toggle': { zh: '操作说明（H 关闭）', en: 'Controls (H to close)', es: 'Controles (H para cerrar)', ja: '操作説明（H で閉じる）', fr: 'Contrôles (H pour fermer)', de: 'Steuerung (H zum Schließen)', ru: 'Управление (H для закрытия)' },
 
   // ── 触摸操作面板 ─────────────────────────────────────────────────────
