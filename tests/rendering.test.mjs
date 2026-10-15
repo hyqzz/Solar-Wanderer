@@ -187,6 +187,22 @@ test('云密度是连续幂律而非阈值截断（阈值化会压出硬边白�
   assert.ok(/1\.0 - exp\(-cloudTau\(cl\) \* 1\.9\)/.test(src), '缺少 Beer–Lambert 不透明度');
 });
 
+test('云层经纬度在体固系里算（否则云挂在惯性系不随自转）', () => {
+  const src = read('src/scene/planetMaterial.js');
+  const builder = read('src/scene/builder.js');
+  // 云壳是球，绕球心旋转把球映到自身，片元的 vPosW 分布不随自转改变——
+  // 直接用世界坐标求经纬度，云就挂在惯性系里，而且 atan 的分支割线落在
+  // 世界系一条固定的圈上，表现为横穿盘面的缝（位置随相机变，极难归因）。
+  assert.ok(/uniform mat3 uBodyInv;/.test(src), '缺少体固系逆旋转 uniform');
+  assert.ok(/vec3 rel = uBodyInv \* \(q - uCenter\);/.test(src), 'latLonOf 未转到体固系');
+  assert.ok(/uBodyInv: \{ value: new THREE\.Matrix3\(\) \}/.test(src), 'uniform 未初始化');
+  assert.ok(/u\.uBodyInv\.value\.setFromMatrix4\(/.test(builder), 'builder 未写入 uBodyInv');
+  assert.ok(/makeRotationFromQuaternion\(_bodyQ\.copy\(e\.mesh\.quaternion\)\.invert\(\)\)/.test(builder),
+    'uBodyInv 不是 mesh.quaternion 的逆');
+  // 足迹用的方向向量也必须在同一坐标系里，否则 east/north 会算错
+  assert.ok(/vec3 relE = uBodyInv \* \(vPosW - uCenter\);/.test(src), '足迹未用体固系方向');
+});
+
 test('云贴图采样用自算足迹（反经线处的隐式导数会爆掉，取到最粗 mip）', () => {
   const src = read('src/scene/planetMaterial.js');
   // latLonOf 的 atan 在反经线有分支割线，uv.x 从 1 跳到 0，

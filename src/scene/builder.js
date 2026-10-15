@@ -519,6 +519,8 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   const _q = new THREE.Quaternion();
   const _sunDir = new THREE.Vector3();
   const _pole = new THREE.Vector3(); // Issue #36：自转轴世界方向（计算日下点纬度）
+  const _bodyQ = new THREE.Quaternion();          // 云层体固系逆旋转（见 uBodyInv 说明）
+  const _bodyM4 = new THREE.Matrix4();
 
   // 光速（km/天）：光行时视位置修正用
   const C_KM_PER_DAY = 299792.458 * 86400;
@@ -637,12 +639,19 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
         }
       }
       if (e.cloudMat) {
-        e.cloudMat.userData.uniforms.uCenter.value.copy(e.group.position);
+        const u = e.cloudMat.userData.uniforms;
+        u.uCenter.value.copy(e.group.position);
         // 相机在云壳内还是外，决定保留哪一面（见 createCloudMaterial 的说明）
-        e.cloudMat.userData.uniforms.uCameraInside.value =
-          e.group.position.length() < e.cloudMat.userData.uniforms.uRTop.value ? 1 : 0;
-        e.cloudMat.userData.uniforms.uSunDir.value.copy(_sunDir);
-        e.cloudMat.userData.uniforms.uSunI.value = sunI;
+        u.uCameraInside.value = e.group.position.length() < u.uRTop.value ? 1 : 0;
+        u.uSunDir.value.copy(_sunDir);
+        u.uSunI.value = sunI;
+        // 体固系逆旋转：云层的经纬度必须在这个坐标系里算。
+        // 云壳是**球**，绕球心旋转把球映到自身，片元的 vPosW 分布根本不随自转改变——
+        // 直接用世界坐标求经纬度，云就挂在惯性系里不跟着地表转，而且 atan 的分支
+        // 割线也是世界系里一条固定的圈（画面上表现为一条横穿盘面的缝，
+        // 位置还随相机变，极难归因）。
+        u.uBodyInv.value.setFromMatrix4(
+          _bodyM4.makeRotationFromQuaternion(_bodyQ.copy(e.mesh.quaternion).invert()));
       }
       if (e.atmoMesh) {
         const u = e.atmoMesh.material.userData.uniforms;

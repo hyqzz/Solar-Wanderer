@@ -478,6 +478,9 @@ export function createCloudMaterial(cloudTex, opts = {}) {
     uSteps: { value: QUALITY.cloudN },
     uLightSteps: { value: QUALITY.cloudNL },
     uCameraInside: { value: 0 },
+    // 体固系逆旋转（世界 → 体固）。云层的经纬度必须在这个坐标系里算，理由见
+    // latLonOf 的说明；由 builder 每帧从 mesh.quaternion 写入。
+    uBodyInv: { value: new THREE.Matrix3() },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,
@@ -518,6 +521,7 @@ export function createCloudMaterial(cloudTex, opts = {}) {
       uniform int uSteps;        // 实际步进数，编译期上限之内按距离自适应
       uniform int uLightSteps;
       uniform float uCameraInside;  // 相机是否在云壳内部（决定保留哪一面）
+      uniform mat3 uBodyInv;        // 世界 → 体固（云层经纬度的坐标系）
       varying vec2 vUv;
       varying vec3 vNormalW;
       varying vec3 vPosW;
@@ -532,19 +536,25 @@ export function createCloudMaterial(cloudTex, opts = {}) {
         return vec2(-b - h, -b + h);
       }
 
-      // 世界坐标 → 该天体体固系的等距圆柱 UV
+      // 世界坐标 → 该天体**体固系**的等距圆柱 UV
       //
-      // 两个分量都必须与 Three.js SphereGeometry 的 uv 属性一致，否则云层会相对
+      // 必须先转到体固系：云壳是球，绕球心旋转把球映到自身，片元的 vPosW 分布
+      // 根本不随自转改变。直接用世界坐标求经纬度会有两个后果——
+      //   ① 云挂在惯性系里不跟着地表转（时间加速跑一会儿就看出来）；
+      //   ② atan 的分支割线落在世界系里一条固定的圈上，画面上是一条横穿盘面的缝，
+      //      位置随相机变，且既不像轨道线也不像贴图缝，极难归因。
+      // 转进体固系后割线正好落在反经线上，与地表贴图的接缝重合。
+      //
+      // 两个分量还必须与 Three.js SphereGeometry 的 uv 属性一致，否则云层相对
       // 地表贴图错位。SphereGeometry 的顶点是
       //     x = −r·cos(2πu)·sin(θ),  z = r·sin(2πu)·sin(θ)
       // 于是 atan2(z, x) = π − 2πu，即
       //     u_几何 = 0.5 − atan2(z,x)/2π        （**不是** + 0.5）
-      // 写成 +0.5 会让云图相对地表东西**镜像**——云层与大陆对不上，
-      // 而且地表云影（用几何 uv）与可见云也镜像错位。u 轴差 1−u 这一条
-      // 用 SphereGeometry 的 uv 属性逐顶点比对即可复现，见 tests/rendering.test.mjs。
+      // 写成 +0.5 会让云图相对地表东西**镜像**。u 轴差 1−u 这一条用
+      // SphereGeometry 的 uv 属性逐顶点比对即可复现，见 tests/rendering.test.mjs。
       // v 轴：uv.y = 1 在北极，所以是 0.5 + asin(y)/π 而不是减。
       vec2 latLonOf(vec3 q) {
-        vec3 rel = q - uCenter;
+        vec3 rel = uBodyInv * (q - uCenter);
         float rl = max(length(rel), 0.001);
         return vec2(0.5 - atan(rel.z, rel.x) / 6.2831853,
                     0.5 + asin(clamp(rel.y / rl, -1.0, 1.0)) / 3.14159265);
@@ -612,6 +622,20 @@ ${CLOUD_GLSL}
         vec3 ro = vec3(0.0);            // 浮动原点：相机恒在世界原点
         vec3 L = normalize(uSunDir);
 
+        // 云贴图的采样足迹：两条路径共用，且必须在**任何 discard 之前**算。
+        //
+        // 两条硬约束，各踩过一次：
+        //  · 不能放在步进循环里——循环里有 continue/break，非均匀控制流下 dFdx 未定义。
+        //  · 不能放在 discard 之后——discard 会让同一像素四边形内**剩余**片元的导数
+        //    变成未定义值；而且若用解析入射点，射线打空的片元会拿到哨兵值（1.0），
+        //    与邻居差上千公里，四边形内的导数直接爆掉 → 取到最粗 mip → 云壳边缘
+        //    出现一条亮带。改用**片元自身的世界位置**：它处处连续，片元又本就在壳面上。
+        vec3 relE = uBodyInv * (vPosW - uCenter);
+        vec3 cEast, cNorth; float cRl, cCos;
+        cloudBasis(relE, cEast, cNorth, cRl, cCos);
+        vec2 gX = cloudFootprint(relE, cEast, cNorth, cRl, cCos, true);
+        vec2 gY = cloudFootprint(relE, cEast, cNorth, cRl, cCos, false);
+
         // 云壳的面剔除：相机在壳外要保留正面（近半球，在行星之前，深度测试能通过），
         // 在壳内（地表、低空）则要保留背面——壳外的正面此时朝后，会被整体剔除，
         // 那正是"从地面看不到云"的原因。只用 FrontSide 或只用 BackSide 都只能覆盖一半。
@@ -625,14 +649,6 @@ ${CLOUD_GLSL}
 
         float dayF = smoothstep(-0.06, 0.12, dot(n, L));
         vec3 nightTint = mix(vec3(0.010, 0.013, 0.020), vec3(0.004), dayF);
-
-        // 云贴图的采样足迹：在壳的入射点处算一次，两条路径共用。
-        // 必须在这里算——步进循环里有 continue/break，非均匀控制流下 dFdx 未定义。
-        vec3 relE = ro + rd * tEnter - uCenter;
-        vec3 cEast, cNorth; float cRl, cCos;
-        cloudBasis(relE, cEast, cNorth, cRl, cCos);
-        vec2 gX = cloudFootprint(relE, cEast, cNorth, cRl, cCos, true);
-        vec2 gY = cloudFootprint(relE, cEast, cNorth, cRl, cCos, false);
 
         // ── 轻量路径：单次采样 ───────────────────────────────────────
         // Low / 移动端。SwiftShader 软件渲染下实测（地球充满画面，p50）：
