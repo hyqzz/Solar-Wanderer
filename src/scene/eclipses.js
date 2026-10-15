@@ -18,6 +18,19 @@ const _v3 = new THREE.Vector3();
  * 日食阴影系统：管理场景中所有活跃的阴影锥。
  * 每帧根据星历位置更新阴影锥几何，在接收体表面渲染半影。
  */
+/** 把当前有效的日食遮挡体写入接收体材质，供其片元着色器做逐片元遮蔽。
+ * 放在模块级而不是类里：它不需要实例状态，写成类方法反而会掩盖这一点。 */
+function pushOccluder(receiver, occ, camPosKm, sunDistKm) {
+  const u = receiver?.mat?.userData?.uniforms;
+  if (!u?.uEclOn) return;
+  if (!occ) { u.uEclOn.value = 0; return; }
+  u.uEclOn.value = 1;
+  // 世界系（相机相对 = 绝对位置 − 相机位置；片元里的 vPosW 就是这一系）
+  u.uEclPos.value.set(occ.posKm[0] - camPosKm[0], occ.posKm[1] - camPosKm[1], occ.posKm[2] - camPosKm[2]);
+  u.uEclR.value = occ.phys.radiusKm;
+  u.uSunDistKm.value = sunDistKm;
+}
+
 export class EclipseSystem {
   constructor(scene, world) {
     this.scene = scene;
@@ -41,12 +54,21 @@ export class EclipseSystem {
     const sunPos = sun.posKm;
     let activeCount = 0;
 
+    // 日食遮蔽：每帧先清除再按需设置。不清除的话食结束后阴影会永久留在表面上。
+    // 注意这一步**不受** distCam 门控——锥体网格只在近处才值得画，但"月球在地球上
+    // 投下的阴影"从远处（例如地月系之外）照样看得见，而且逐片元遮蔽本来就便宜。
+    // 遮蔽比例由着色器按角半径/角分离算，未对齐时自然趋于 0，无需在这里判条件。
+    for (const id of ['earth', 'moon']) pushOccluder(bodies.get(id), null, camPosKm, 1);
+    const distTo = (a) => Math.hypot(a.posKm[0], a.posKm[1], a.posKm[2]);
+
     // ── 日食：月球→地球 ──
     const moon = bodies.get('moon');
     const earth = bodies.get('earth');
     if (moon && earth) {
       const distCam = _v1.set(camPosKm[0] - earth.posKm[0], camPosKm[1] - earth.posKm[1], camPosKm[2] - earth.posKm[2]).length();
       // 只在地球附近 50 万 km 内渲染日食半影
+      // 月球在地球表面的遮蔽（日食）
+      pushOccluder(earth, moon, camPosKm, distTo(earth));
       if (distCam < 5e5) {
         if (this._updateCone(activeCount, 'solar', 'sun', 'moon', 'earth',
           sunPos, moon.posKm, moon.phys.radiusKm, earth.posKm, earth.phys.radiusKm, bodies)) activeCount++;
@@ -56,6 +78,8 @@ export class EclipseSystem {
     // ── 月食：地球→月球 ──
     if (moon && earth) {
       const distCam = _v1.set(camPosKm[0] - moon.posKm[0], camPosKm[1] - moon.posKm[1], camPosKm[2] - moon.posKm[2]).length();
+      // 地球在月球表面的遮蔽（月食）
+      pushOccluder(moon, earth, camPosKm, distTo(moon));
       if (distCam < 5e5) {
         if (this._updateCone(activeCount, 'lunar', 'sun', 'earth', 'moon',
           sunPos, earth.posKm, earth.phys.radiusKm, moon.posKm, moon.phys.radiusKm, bodies)) activeCount++;

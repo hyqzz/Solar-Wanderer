@@ -88,6 +88,11 @@ export function createPlanetMaterial({
     uNaturalTintMix: { value: BODY_GRADE[bodyId]?.tintMix ?? 0 },
     uVeil: { value: BODY_GRADE[bodyId]?.veil ?? 0.0 },
     uVeilColor: { value: new THREE.Vector3(...(BODY_GRADE[bodyId]?.veilColor ?? [0, 0, 0])) },
+    // 日食：遮挡体位置与半径（世界系，相机相对），以及本体的日心距
+    uEclOn: { value: 0 },
+    uEclPos: { value: new THREE.Vector3() },
+    uEclR: { value: 1 },
+    uSunDistKm: { value: 1.496e8 },
     // 无气天体：Hapke 风化层 BRDF（见 src/astro/bodies.js HAPKE_PARAMS）
     uHapke: { value: hp ? 1 : 0 },
     uW: { value: hp?.w ?? 0.25 },
@@ -146,6 +151,11 @@ export function createPlanetMaterial({
       uniform float uNaturalTintMix;
       uniform float uVeil;
       uniform vec3 uVeilColor;
+      uniform int uEclOn;
+      uniform vec3 uEclPos;
+      uniform float uEclR;
+      uniform float uSunDistKm;
+      const float SUN_RADIUS_KM = 695700.0;
       uniform int uHapke;
       uniform float uW, uB0, uHh, uHg;
       varying vec2 vUv;
@@ -340,7 +350,23 @@ export function createPlanetMaterial({
                   * ((1.0 + B) * P + H0 * H1 - 1.0);
           shade = clamp(r * 3.14159265 / max(uW, 1e-3), 0.0, 4.0);
         }
-        vec3 col = albedo * shade * uSunI * ringSh * cloudShadow;
+        // === 日食遮蔽（逐片元）===
+        // 原实现只在场景里插一个黑色锥体网格：接收体表面本身不变暗，
+        // 于是"日全食时地面还是亮的"——这是与真实相差最远的一处。
+        // 这里按真实的可见性判据算：从该片元看，遮挡体与太阳的**角半径**谁大、
+        // 两者中心的**角分离**多少，决定遮蔽比例（贝利珠/日冕环等更细的效应仍未建模）。
+        float eclSh = 1.0;
+        if (uEclOn == 1) {
+          vec3 toOcc = uEclPos - vPosW;
+          float dOcc = max(length(toOcc), 1.0);
+          float aOcc = asin(clamp(uEclR / dOcc, 0.0, 1.0));
+          float aSun = asin(clamp(SUN_RADIUS_KM / max(uSunDistKm, 1.0), 0.0, 1.0));
+          float sep = acos(clamp(dot(toOcc / dOcc, normalize(uSunDir)), -1.0, 1.0));
+          // 两圆盘重叠：sep < aSun-aOcc 为全遮，sep > aSun+aOcc 为无遮
+          float cover = 1.0 - smoothstep(aSun - aOcc, aSun + aOcc, sep);
+          eclSh = 1.0 - cover;
+        }
+        vec3 col = albedo * shade * uSunI * ringSh * cloudShadow * eclSh;
         // 气巨临边昏暗（厚大气斜视光程长 → 边缘变暗，旅行者/卡西尼实拍特征）
         if (uDetailMode == 2) {
           float muv = max(dot(n, normalize(-vPosW)), 0.0);

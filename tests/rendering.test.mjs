@@ -323,3 +323,25 @@ test('月球走 IAU 自转模型而非硬潮汐锁定（天平动的前提）', 
   assert.ok(/if \(!e\.isMoon \|\| id === 'moon'\)/.test(builder),
     '月球仍走硬潮汐锁定——天平动不会出现，可见面会永远是 50%');
 });
+
+// ── 日食阴影 ────────────────────────────────────────────────────────────────
+
+test('日食遮蔽在接收体着色器内逐片元计算（而非只插一个黑锥网格）', () => {
+  const src = read('src/scene/planetMaterial.js');
+  assert.ok(/uniform int uEclOn;/.test(src) && /uniform vec3 uEclPos;/.test(src), '缺少日食 uniform');
+  assert.ok(/float aOcc = asin\(clamp\(uEclR \/ dOcc/.test(src), '缺少遮挡体角半径');
+  assert.ok(/float aSun = asin\(clamp\(SUN_RADIUS_KM \/ max\(uSunDistKm/.test(src), '缺少太阳角半径');
+  assert.ok(/float cover = 1\.0 - smoothstep\(aSun - aOcc, aSun \+ aOcc, sep\)/.test(src),
+    '缺少两圆盘重叠的遮蔽判据');
+  assert.ok(/uSunI \* ringSh \* cloudShadow \* eclSh/.test(src), '遮蔽未进入最终着色');
+  // 除零保护：片元与遮挡体重合时不能出 NaN
+  assert.ok(/max\(length\(toOcc\), 1\.0\)/.test(src), '缺少与遮挡体重合时的除零保护');
+});
+
+test('日食遮挡体既在地球侧设置（日食）也在月球侧设置（月食），且每帧先清除', () => {
+  const src = read('src/scene/eclipses.js');
+  assert.ok(/pushOccluder\(earth, moon, camPosKm, distTo\(earth\)\)/.test(src), '缺少日食遮挡体');
+  assert.ok(/pushOccluder\(moon, earth, camPosKm, distTo\(moon\)\)/.test(src), '缺少月食遮挡体');
+  assert.ok(/pushOccluder\(bodies\.get\(id\), null, camPosKm, 1\)/.test(src),
+    '缺少每帧清除——食结束后阴影会永久留在表面上');
+});
