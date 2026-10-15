@@ -510,6 +510,7 @@ function setupLabels() {
 }
 
 function select(id) {
+  ephemerisLoader.prefetch(id, simClock.jdTT);
   selectedId = id;
 }
 
@@ -655,11 +656,17 @@ function loop() {
   nearestCache = nearest;
   const env = makeEnv(nearest);
 
-  // 视点驱动高清贴图插队（每秒）：用户正在环绕/靠近/选中的天体优先升级到全分辨率
-  if (builder?.boostTextures && performance.now() - loop._lastTexBoost > 1000) {
+  // 视点驱动高清贴图插队（每秒）：用户正在环绕/靠近/选中的天体优先升级到全分辨率，
+  // 并按当前仿真时刻预取星历分片。
+  //
+  // 注意 _lastTexBoost 必须初始化：未初始化时 performance.now() - undefined 是 NaN，
+  // 而 NaN > 1000 恒为 false，这个块会一次都不执行——贴图升级与星历分片预取
+  // 会整条链路静默失效（跨年跳转后再也不会补载那一片）。
+  if (builder?.boostTextures && performance.now() - (loop._lastTexBoost ?? 0) > 1000) {
     loop._lastTexBoost = performance.now();
     const files = [];
     for (const id of [orbitCam.focusId, nearest?.id, selectedId]) {
+      ephemerisLoader.prefetch(id, simClock.jdTT);
       if (id) for (const f of texturesOfBody(id)) if (!files.includes(f)) files.push(f);
     }
     if (files.length) builder.boostTextures(files);

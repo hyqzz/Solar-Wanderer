@@ -19,9 +19,12 @@
     "fetch-small-bodies": "node tools/fetch-small-bodies.mjs",
     "fetch-vsop87": "node tools/fetch-vsop87.mjs",
     "fit-tnos": "node tools/fit-tnos.mjs",
+    "fetch-ephemeris": "node tools/fetch-ephemeris.mjs",
+    "verify-release": "node tools/verify-release-ephemeris.mjs",
     "fetch-dem": "node tools/fetch-dem.mjs",
     "make-previews": "node tools/make-preview-textures.mjs",
-    "verify": "node tools/verify-ephemeris.mjs"
+    "verify": "node tools/verify-ephemeris.mjs",
+    "make-fixtures": "node tools/make-fixtures.mjs"
   },
   "dependencies": {
     "three": "^0.165.0"

@@ -159,12 +159,17 @@ No install. No account. Just open and go.
 
 ## 📊 Accuracy
 
-| Body | vs NASA JPL Horizons |
-|------|----------------------|
-| Planets (9) | 0.0007° – 0.074° |
-| Moon | 0.12° (truncated ELP) |
-| Moons (21) | 0° at epoch · ≤ 0.22° after 10 days |
-| Earth rotation | Sub-second meridian · 23.4° summer solstice · 1 sidereal day |
+| Model | Validation and coverage |
+|-------|-------------------------|
+| Sampled JPL states (65 targets) | 2025-01-01 through 2035-01-01 TDB, sharded by year; off-grid comparisons across the whole window pass <0.001° and <10 km |
+| Planet fallback | VSOP87 / analytic models; use `npm run verify` for live comparison |
+| Moon fallback | Complete Meeus periodic terms; checked separately when sampled states are unavailable |
+| Satellite fallback | Empirical fitted elements from a 7-epoch least-squares fit; ~0.003° at the fit epoch, degrading to ~2° within 180 days (tracked by tests, not hidden) |
+| Rotation | IAU models; independent of the sampled orbital states |
+
+Sample interpolation differences are not absolute physical uncertainties. States load progressively, one year-shard at a time, so a 10-year window costs roughly the same per body as the previous 16-month window; outside the shard that is loaded, or during resource failures, the application uses approximate models, identified per target in the HUD. Refresh with `npm run fetch-ephemeris` (resumable; cached shards are reused) and validate with `npm run verify-release` before extending the interval.
+
+The renderer does not yet reproduce every surface at photographic detail. Global DEM tiles are coarse, unobserved regions use procedural assumptions, and clouds / solar and comet activity are not current observation reconstructions. [Release evidence and limitations](RELEASE_READINESS.md) distinguish integrated-GPU Low, discrete-GPU High, and hardware that has not been tested.
 
 ---
 

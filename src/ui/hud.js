@@ -6,6 +6,7 @@ import { orbitalPeriodYears } from '../astro/planets.js';
 import { factsFor } from './eduFacts.js';
 import { t, bodyName, LANG } from './i18n.js';
 import { DESC_EN } from './contentEn.js';
+import { ephemerisCovers } from '../astro/sampledEphemeris.js';
 
 const WARP_LADDER = [1, 10, 60, 600, 3600, 21600, 86400, 604800, 2592000, 31557600, 315576000];
 
@@ -201,6 +202,10 @@ export function targetInfo(id, registry, dist, dSun = null) {
     radiusKm: e.phys?.radiusKm > 1 ? e.phys.radiusKm : null,
     desc: LANG === 'en' ? (DESC_EN[id] ?? descZh) : descZh,
   };
+  if (jdTT != null && ['planet','moon','tno','comet','probe'].includes(e.kind)) {
+    // 逐时刻判断而非用覆盖区间的并集：分片可能非连续装载，并集会掩盖缺口
+    info.ephemeris = t(ephemerisCovers(id, jdTT) ? 'tgt.ephemMeasured' : 'tgt.ephemApprox');
+  }
   if (e.phys?.gm && e.phys?.radiusKm) info.gravity = surfaceGravity(e.phys);
   if (e.kind === 'planet') {
     const y = orbitalPeriodYears(id);
