@@ -401,7 +401,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
 
     // 云层（地球；金星云已作为主贴图）
     if (cloudTex) {
-      const cmat = createCloudMaterial(cloudTex);
+      const cmat = createCloudMaterial(cloudTex, { radiusKm: phys.radiusKm });
       const cmesh = new THREE.Mesh(sphereGeo(phys.radiusKm * 1.0035, true), cmat);
       cmesh.renderOrder = 10;
       mesh.add(cmesh);
@@ -629,6 +629,10 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
         }
       }
       if (e.cloudMat) {
+        e.cloudMat.userData.uniforms.uCenter.value.copy(e.group.position);
+        // 相机在云壳内还是外，决定保留哪一面（见 createCloudMaterial 的说明）
+        e.cloudMat.userData.uniforms.uCameraInside.value =
+          e.group.position.length() < e.cloudMat.userData.uniforms.uRTop.value ? 1 : 0;
         e.cloudMat.userData.uniforms.uSunDir.value.copy(_sunDir);
         e.cloudMat.userData.uniforms.uSunI.value = sunI;
       }

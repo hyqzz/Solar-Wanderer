@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { HAPKE_PARAMS } from '../astro/bodies.js';
+import { QUALITY } from '../engine/quality.js';
 
 // 1×1 占位纹理：避免未启用分支的 sampler 绑定空值
 const DUMMY_TEX = new THREE.DataTexture(new Uint8Array([128, 128, 128, 128]), 1, 1);
@@ -390,25 +391,47 @@ export function createPlanetMaterial({
 /** 云层材质（半透明球壳，受同一太阳方向照明）
  *  Issue #26：程序化云层动画——缓慢旋转（与地球自转有微小差异）+ 噪声扰动 UV。
  *  网络失败时 builder 不创建云层网格（回退到静态无云地球），此函数仅在贴图可用时调用。 */
-export function createCloudMaterial(cloudTex) {
+export function createCloudMaterial(cloudTex, opts = {}) {
+  const R = opts.radiusKm ?? 6371;
+  // 云层垂直范围：云底 1.5 km 到云顶 22 km（真实地球云顶约 12–16 km，深对流可到 20 km）。
+  // 壳体网格放在外边界上，步进区间由着色器解析求交得到，与光栅化在哪个面无关。
+  const baseR = R * (opts.baseRatio ?? 1.0002);
+  const topR = R * (opts.topRatio ?? 1.0035);
   const uniforms = {
     uMap: { value: cloudTex },
     uSunDir: { value: new THREE.Vector3(1, 0, 0) },
     uSunI: { value: 1.0 },
     uTime: { value: 0 }, // 秒，驱动云层旋转与扰动
+    uCenter: { value: new THREE.Vector3() }, // 行星中心（相机相对，km），每帧更新
+    uRBase: { value: baseR },
+    uRTop: { value: topR },
+    uThicknessKm: { value: topR - baseR },
+    // 体积云只在 High 档开启（见着色器内的说明）
+    uVolumetric: { value: (opts.volumetric ?? (QUALITY.tier === 'high' && QUALITY.detail)) ? 1 : 0 },
+    uSteps: { value: QUALITY.cloudN },
+    uLightSteps: { value: QUALITY.cloudNL },
+    uCameraInside: { value: 0 },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,
     transparent: true,
     depthWrite: false,
+    // 体积步进累加出来的是预乘颜色（每步都乘了自身 alpha 与已累积透射率），
+    // 声明为预乘混合，否则会被再乘一次 alpha 而整体发暗。
+    premultipliedAlpha: true,
+    // DoubleSide + 着色器内按 uCameraInside 丢弃多余的那一面：
+    // 从外部看保留正面，从内部看保留背面，两种视角都正确且不重复混合。
+    side: THREE.DoubleSide,
     vertexShader: /* glsl */ `
       #include <common>
       #include <logdepthbuf_pars_vertex>
       varying vec2 vUv;
       varying vec3 vNormalW;
+      varying vec3 vPosW;
       void main() {
         vUv = uv;
         vNormalW = normalize(mat3(modelMatrix) * normal);
+        vPosW = (modelMatrix * vec4(position, 1.0)).xyz;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         #include <logdepthbuf_vertex>
       }
@@ -420,8 +443,38 @@ export function createCloudMaterial(cloudTex) {
       uniform vec3 uSunDir;
       uniform float uSunI;
       uniform float uTime;
+      uniform vec3 uCenter;
+      uniform float uRBase;
+      uniform float uRTop;
+      uniform float uThicknessKm;
+      uniform int uVolumetric;   // 0 = 轻量单次采样（Low / 移动端）
+      uniform int uSteps;        // 实际步进数，编译期上限之内按距离自适应
+      uniform int uLightSteps;
+      uniform float uCameraInside;  // 相机是否在云壳内部（决定保留哪一面）
       varying vec2 vUv;
       varying vec3 vNormalW;
+      varying vec3 vPosW;
+
+      // 射线与球求交 → (近交点, 远交点)；未命中返回 (1,-1)
+      vec2 raySphere(vec3 ro, vec3 rd, vec3 c, float r) {
+        vec3 oc = ro - c;
+        float b = dot(oc, rd);
+        float h = b * b - (dot(oc, oc) - r * r);
+        if (h < 0.0) return vec2(1.0, -1.0);
+        h = sqrt(h);
+        return vec2(-b - h, -b + h);
+      }
+
+      // 世界坐标 → 该天体体固系的等距圆柱 UV
+      vec2 latLonOf(vec3 q) {
+        vec3 rel = q - uCenter;
+        float rl = max(length(rel), 0.001);
+        // u = atan2(z,-x)/2π ≡ atan2(z,x)/2π + 0.5（mod 1）；
+        // v 必须与 Three.js SphereGeometry 的 uv 一致：uv.y = 1 在北极，
+        // 所以是 0.5 + asin(y)/π 而不是减——写反了会把云图上下翻转采样。
+        return vec2(atan(rel.z, rel.x) / 6.2831853 + 0.5,
+                    0.5 + asin(clamp(rel.y / rl, -1.0, 1.0)) / 3.14159265);
+      }
 
       // 与行星材质相同的 value-noise，保证云层扰动与地表阴影一致
       float phash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -434,27 +487,100 @@ export function createCloudMaterial(cloudTex) {
           f.z);
       }
 
+      /**
+       * 云密度：贴图给出水平覆盖，垂直方向用经验廓线。
+       * 廓线底部渐入、上部渐出、云顶最锐——掠射时才会看到"云顶"这条边，
+       * 而不是原来那种上下一样厚的平板。
+       */
+      float cloudDensity(vec2 uv, float hFrac) {
+        // 云层旋转：略快于地球自转（大气超旋转，金星效应的微弱版本）
+        float disturb = pnoise(vec3(uv * 8.0, uTime * 0.008));
+        vec2 cUV = vec2(uv.x + uTime * 0.00002, uv.y) + vec2(disturb * 0.008, disturb * 0.004);
+        vec3 cl = texture2D(uMap, cUV).rgb;
+        // 阈值化：去除贴图背景灰造成的全球薄纱（真实地球约六成云量且有成片晴空）
+        float cover = clamp((dot(cl, vec3(0.34)) - 0.10) * 1.8, 0.0, 1.0);
+        float prof = smoothstep(0.0, 0.18, hFrac) * (1.0 - smoothstep(0.55, 1.0, hFrac));
+        return cover * prof;
+      }
+
       void main() {
         #include <logdepthbuf_fragment>
         vec3 n = normalize(vNormalW);
-        float ndl = dot(n, uSunDir);
-        // 云层旋转：略快于地球自转（大气超旋转，金星效应的微弱版本）
-        float cloudAngle = uTime * 0.00002;
-        vec2 cUV = vec2(vUv.x + cloudAngle, vUv.y);
-        // 程序化扰动：噪声偏移 UV，产生有机云层演化（非刚体旋转）
-        float disturb = pnoise(vec3(vUv * 8.0, uTime * 0.008));
-        cUV += vec2(disturb * 0.008, disturb * 0.004);
-        vec3 cl = texture2D(uMap, cUV).rgb;
-        // 阈值化 alpha（与行星材质云影公式保持一致）：去除贴图背景灰造成的全球薄纱，
-        // 真实地球约六成云量且存在大片深蓝晴空海域
-        float alpha = clamp((dot(cl, vec3(0.34)) - 0.10) * 1.8, 0.0, 1.0);
-        // 夜面云层减薄（real：城市灯光从云隙透出；原实现夜面云为近纯黑板，盖住城市灯光）
-        float dayF = smoothstep(-0.06, 0.12, ndl);
-        alpha *= mix(0.42, 1.0, dayF);
-        // 夜面云色：微弱气辉蓝灰（非纯黑），白天照常白亮
-        vec3 nightTint = vec3(0.010, 0.013, 0.020);
-        vec3 col = vec3(1.0) * max(ndl, 0.0) * uSunI + mix(nightTint, vec3(0.004), dayF);
-        gl_FragColor = vec4(col, alpha);
+        vec3 rd = normalize(vPosW);
+        vec3 ro = vec3(0.0);            // 浮动原点：相机恒在世界原点
+        vec3 L = normalize(uSunDir);
+
+        // 云壳的面剔除：相机在壳外要保留正面（近半球，在行星之前，深度测试能通过），
+        // 在壳内（地表、低空）则要保留背面——壳外的正面此时朝后，会被整体剔除，
+        // 那正是"从地面看不到云"的原因。只用 FrontSide 或只用 BackSide 都只能覆盖一半。
+        // 步进区间一律由解析求交得到，与光栅化在哪个面无关。
+        if (uCameraInside > 0.5) { if (gl_FrontFacing) discard; }
+        else { if (!gl_FrontFacing) discard; }
+
+        vec2 tRt = raySphere(ro, rd, uCenter, uRTop);
+        float tEnter = max(tRt.x, 0.0);
+        if (tRt.y <= tEnter) discard;
+
+        float dayF = smoothstep(-0.06, 0.12, dot(n, L));
+        vec3 nightTint = mix(vec3(0.010, 0.013, 0.020), vec3(0.004), dayF);
+
+        // ── 轻量路径：单次采样 ───────────────────────────────────────
+        // Low / 移动端。体积步进在"全屏地球且贴近"时实测多花约 18% 帧时间，
+        // 集显会从 45 FPS 掉到 38——所以默认只在 High 档开启。
+        // 两条路径都输出**预乘**颜色，与材质的 premultipliedAlpha 一致。
+        if (uVolumetric == 0) {
+          float d = cloudDensity(latLonOf(ro + rd * tEnter), 0.5);
+          // 夜面云层减薄（城市灯光从云隙透出）
+          float alpha = clamp(d, 0.0, 1.0) * mix(0.42, 1.0, dayF);
+          vec3 col = vec3(max(dot(n, L), 0.0)) * uSunI + nightTint;
+          gl_FragColor = vec4(col * alpha, alpha);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          return;
+        }
+
+        // ── 体积路径：薄壳内有限步长光线步进 ─────────────────────────
+        // 壳厚约 22 km（云底 1.5 km）。只有掠射时路径才显著变长——那正是
+        // "云有厚度"最容易看出来的地方：临边的云顶轮廓与逆光银边。
+        vec2 tRb = raySphere(ro, rd, uCenter, uRBase);
+        float t1 = min(tRt.y, (tRb.x > 0.0 ? tRb.x : tRt.y));
+        if (t1 <= tEnter) discard;
+        float span = t1 - tEnter;
+
+        const int N = ${QUALITY.cloudN};
+        const int NL = ${QUALITY.cloudNL};
+        float ds = span / float(N);
+        vec3 acc = vec3(0.0);
+        float T = 1.0;
+        for (int i = 0; i < N; i++) {
+          if (i >= uSteps) break;
+          vec3 pp = ro + rd * (tEnter + (float(i) + 0.5) * ds);
+          vec3 rel = pp - uCenter;
+          float rl = length(rel);
+          float hFrac = clamp((rl - uRBase) / max(uThicknessKm, 0.001), 0.0, 1.0);
+          float d = cloudDensity(latLonOf(pp), hFrac);
+          if (d <= 0.002) continue;
+          // 自阴影：沿太阳方向短程步进累计云内光程（云被自身上方遮挡而变暗）
+          float shadow = 0.0;
+          for (int j = 1; j <= NL; j++) {
+            if (j > uLightSteps) break;
+            vec3 q = pp + L * (float(j) * ds);
+            float ql = max(length(q - uCenter), 0.001);
+            float qh = clamp((ql - uRBase) / max(uThicknessKm, 0.001), 0.0, 1.0);
+            shadow += cloudDensity(latLonOf(q), qh);
+          }
+          float sunT = exp(-shadow * 1.7);
+          // 前向散射银边：逆光时云缘发亮（真实云最标志性的特征之一）
+          float silver = pow(clamp(dot(rd, L), 0.0, 1.0), 8.0) * 1.6;
+          float ndl = dot(normalize(rel), L);
+          vec3 lit = (vec3(max(ndl, 0.0)) * sunT + vec3(silver * sunT * 0.3)) * uSunI;
+          float a = 1.0 - exp(-d * ds * 0.55);
+          acc += lit * a * T;
+          T *= 1.0 - a;
+          if (T < 0.01) break;
+        }
+        acc += nightTint * (1.0 - T);
+        gl_FragColor = vec4(acc, 1.0 - T);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }

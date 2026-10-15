@@ -2,12 +2,14 @@
 // Physical scale, DEM and astronomy are identical; only rendering work differs.
 const HIGH = {
   tier: 'high', label: 'High', pixelRatio: 1.5, atmoN: 20, atmoNL: 8,
+  cloudN: 10, cloudNL: 4,
   terrainGrid: 64, anisotropy: 8, segHi: [96, 64], segLo: [48, 32],
   detail: true, textureSize: 8192, textureConcurrency: 3, shadowSize: 2048,
   rockCount: 640, targetFps: 60,
 };
 const LOW = {
   tier: 'low', label: 'Low', pixelRatio: 1, atmoN: 12, atmoNL: 4,
+  cloudN: 5, cloudNL: 2,
   terrainGrid: 40, anisotropy: 4, segHi: [64, 42], segLo: [40, 28],
   detail: false, textureSize: 4096, textureConcurrency: 2, shadowSize: 1024,
   rockCount: 240, targetFps: 45,
@@ -26,7 +28,7 @@ export function qualityProfile(name, mobile = false, force = null) {
   const hardware = classifyGpu(name);
   const high = !mobile && (force === 'high' || (!['low', 'lite'].includes(force) && hardware === 'discrete'));
   const profile = { ...(high ? HIGH : LOW), gpuName: name || '(不可识别)', hardware, renderScale: 1 };
-  if (mobile) Object.assign(profile, { atmoN: 8, atmoNL: 3, terrainGrid: 32,
+  if (mobile) Object.assign(profile, { atmoN: 8, atmoNL: 3, cloudN: 3, cloudNL: 1, terrainGrid: 32,
     segHi: [48, 32], segLo: [32, 22], textureSize: 2048, rockCount: 160, targetFps: 40 });
   return profile;
 }
