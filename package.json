@@ -24,7 +24,9 @@
     "fetch-dem": "node tools/fetch-dem.mjs",
     "make-previews": "node tools/make-preview-textures.mjs",
     "verify": "node tools/verify-ephemeris.mjs",
-    "make-fixtures": "node tools/make-fixtures.mjs"
+    "make-fixtures": "node tools/make-fixtures.mjs",
+    "fetch-moon-textures": "node tools/fetch-moon-textures.mjs",
+    "rig": "node tools/rig/frontier.mjs"
   },
   "dependencies": {
     "three": "^0.165.0"
