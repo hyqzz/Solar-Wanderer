@@ -205,9 +205,18 @@ export function createAtmosphere(phys, auroraMode = 0) {
             // 磁纬度（近似为地理纬度：用自转轴方向 dot）
             float magLat = dot(normalize(srel), uAxis);
             float poleProx = abs(magLat);
-            // 极光卵：极区边缘的环形带（poleProx ~0.85-0.96）
-            float oval = smoothstep(0.80, 0.90, poleProx)
-                       * (1.0 - smoothstep(0.96, 1.0, poleProx));
+            // 极光卵：极区边缘的**窄**环带。真实极光卵很窄——地球约 3–6° 宽、
+            // 中心在磁纬 67° 附近（poleProx≈0.92），木星/土星更窄且更靠极
+            // （余纬约 15–16°，poleProx≈0.96）。
+            // 旧实现是 poleProx 0.80–0.96 的一整圈，折合 26° 宽的极冠，
+            // 画出来是一大块紫斑而不是一条卵——这是土星近景最扎眼的伪影。
+            float ovalC, ovalW, aGain;
+            if (uAuroraMode == 1)      { ovalC = 0.920; ovalW = 0.035; aGain = 1.00; } // 地球
+            else if (uAuroraMode == 2) { ovalC = 0.955; ovalW = 0.018; aGain = 0.22; } // 木星 H3+（可见光下确实拍得到，但要长曝光）
+            else if (uAuroraMode == 3) { ovalC = 0.950; ovalW = 0.016; aGain = 0.035; } // 土星 H3+ 纯紫外/红外，可见光下几乎不该有
+            else                       { ovalC = 0.900; ovalW = 0.040; aGain = 0.22; } // 海卫一 N2
+            float oval = smoothstep(ovalC - ovalW, ovalC, poleProx)
+                       * (1.0 - smoothstep(ovalC, ovalC + ovalW, poleProx));
             // 帘幕：体固坐标按半径归一 → 波长约 Rg/45 的竖直光带（地球 ~140km，
             // 木星 ~1550km）+ 时间扰动。旧版 srel*5.0 以 km 为尺度，波长 ~1km
             // 远低于步进采样率 → 混叠平均成均匀绿雾，无帘幕结构。
@@ -216,11 +225,15 @@ export function createAtmosphere(phys, auroraMode = 0) {
             float auroraInt = altF * oval
                             * (0.12 + 0.88 * smoothstep(0.28, 0.92, curtain1))
                             * (0.55 + 0.45 * curtain2);
-            auroraInt *= uSolarActivity * uAuroraStrength;
-            // 白昼面不可见：极光是微弱发射光，被日光散射完全淹没（真实地球/土星极光
-            // 均只在夜面可见；土星 H3+ 极光更是紫外/红外辐射，白昼面渲染成紫斑伪影）。
-            // 本采样点被行星遮挡阳光（夜面）→ 全强度；日照面 → 4% 残余（接近不可见）
-            if (!shadowed) auroraInt *= 0.04;
+            auroraInt *= uSolarActivity * uAuroraStrength * aGain;
+            // 只在夜面可见。极光是微弱发射光，被日光散射完全淹没：
+            //  · 地球极光肉眼只在夜间可见（航天员在轨看到的也是夜弧）；
+            //  · 木星/土星的 H3+ 极光是**紫外/红外**辐射，可见光下本就不该出现，
+            //    哈勃那些"极光照片"是紫外合成图。
+            // 旧实现给白昼面留 4% 残余——单看很弱，但它是沿视线**逐采样点累加**的，
+            // 十几个采样点叠起来就成了土星北极那块显眼的紫斑。现直接归零：
+            // 晨昏线处本来也就是极光的天然边界，硬边在这里是对的。
+            if (!shadowed) auroraInt = 0.0;
             // 极光颜色（不同天体不同激发粒子）：
             //  地球=OI 557.7nm 绿；木星=H3+ 蓝紫；土星=H3+ 粉紫；海卫一=弱 N2 红
             vec3 aColor;

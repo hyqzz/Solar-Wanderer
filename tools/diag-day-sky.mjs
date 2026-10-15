@@ -67,7 +67,20 @@ for (const id of ['mars', 'earth', 'moon']) {
     g.select(bid);
     oc.focusId = bid; oc.flight = null; oc.panOffset.set(0, 0, 0);
     oc.lat = m.lat * 0.5; oc.lon = m.lon; oc.tilt = 0; oc.heading = 0;
-    oc.dist = oc.distTarget = m.R + 0.002;
+    oc.dist = oc.distTarget = g.terrainMgr.heightAt(bid ?? 'earth', new (Object.getPrototypeOf(g.camera.position).constructor)(Math.cos(m.lat)*Math.cos(-m.lon), Math.sin(m.lat), Math.cos(m.lat)*Math.sin(-m.lon))) + 0.002;
+  }, ss, id);
+  // DEM 基础层未就绪时不会自动登陆（地表还在噪声→真实高程切换中），先等它
+  for (let i = 0; i < 60; i++) {
+    if (await p.evaluate((bid) => window.__game.terrainMgr.baseReady(bid), id)) break;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  // 再按真实高程精降一次
+  await p.evaluate((m, bid) => {
+    const g = window.__game, oc = g.orbitCam;
+    if (g.getMode() !== 'orbit' || oc.focusId !== bid) return;
+    const V = Object.getPrototypeOf(g.camera.position).constructor;
+    const dir = new V(Math.cos(m.lat * 0.5) * Math.cos(-m.lon), Math.sin(m.lat * 0.5), Math.cos(m.lat * 0.5) * Math.sin(-m.lon));
+    oc.dist = oc.distTarget = g.terrainMgr.heightAt(bid, dir) + 0.002;
   }, ss, id);
   let ok = false;
   for (let i = 0; i < 60; i++) {

@@ -56,7 +56,7 @@ await p.evaluate((m) => {
   g.select('earth');
   oc.focusId = 'earth'; oc.flight = null; oc.panOffset.set(0, 0, 0);
   oc.lat = m.lat; oc.lon = m.lon; oc.tilt = 0; oc.heading = 0;
-  oc.dist = oc.distTarget = 6371 + 0.002;
+  oc.dist = oc.distTarget = g.terrainMgr.heightAt('earth', new (Object.getPrototypeOf(g.camera.position).constructor)(Math.cos(m.lat)*Math.cos(-m.lon), Math.sin(m.lat), Math.cos(m.lat)*Math.sin(-m.lon))) + 0.002;
 }, midnight);
 for (let i = 0; i < 60; i++) {
   if ((await p.evaluate(() => window.__game.getMode())) === 'walk') break;

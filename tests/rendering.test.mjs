@@ -259,6 +259,26 @@ test('大气含地面反照率反弹项（低空天光提亮的主因）', () =>
   assert.ok(/if \(uGroundAlbedo > 0\.0\)/.test(src), '缺少零值短路（气巨没有地面）');
 });
 
+test('极光只在夜面、卵带窄、气巨强度低（否则土星北极是一大块紫斑）', () => {
+  const src = read('src/scene/atmosphere.js');
+  // 白昼面必须完全归零。旧实现留 4% 残余——单看很弱，但它是沿视线逐采样点累加的，
+  // 十几个采样点叠起来就是土星北极那块显眼的紫斑。
+  assert.ok(/if \(!shadowed\) auroraInt = 0\.0;/.test(src), '白昼面极光未归零');
+  assert.ok(!/if \(!shadowed\) auroraInt \*= 0\.04;/.test(src), '4% 白昼泄漏仍在');
+  // 卵带要窄：真实极光卵 3–6° 宽（地球），气巨更窄；旧版是 26° 宽的极冠
+  assert.ok(/float ovalC, ovalW, aGain;/.test(src), '缺少逐天体卵带参数');
+  assert.ok(/smoothstep\(ovalC - ovalW, ovalC, poleProx\)/.test(src), '卵带未按参数收窄');
+  assert.ok(!/smoothstep\(0\.80, 0\.90, poleProx\)/.test(src), '旧的 26° 宽极冠仍在');
+  // 气巨强度：土星 H3+ 是紫外/红外，可见光下几乎不该有
+  const gain = (mode) => {
+    const m = new RegExp(`uAuroraMode == ${mode}\\)[^}]*aGain = ([0-9.]+)`).exec(src);
+    return m ? Number(m[1]) : NaN;
+  };
+  assert.ok(gain(1) > 0.8, '地球极光是真实可见现象，不该被压低');
+  assert.ok(gain(3) < 0.1, `土星极光强度 ${gain(3)} 过高（可见光下几乎不该有）`);
+  assert.ok(gain(2) < gain(1), '木星极光应弱于地球');
+});
+
 test('地面反照率反弹按"地面是否受照"加权（否则夜空被照亮）', () => {
   const src = read('src/scene/atmosphere.js');
   // 这一项原本完全没有昼夜判定，于是反日点上空仍被 uSunI × groundAlbedo 照亮。
