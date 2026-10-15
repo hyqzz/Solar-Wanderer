@@ -23,6 +23,8 @@ export const BODIES = {
     rotation: 'iau', landable: true,
     surface: { ampKm: 3, roughness: 0.45, craters: 0.2, palette: 'venus' },
     atmosphere: {
+      // 金星可见的"地面"就是硫酸云顶，反照率约 0.7
+      groundAlbedo: 0.7,
       // 太空视角：multiplier 从 6 降到 1.5，使云层贴图不被散射光淹没，终结线可见
       heightKm: 90, rayleighScaleKm: 15.9, mieScaleKm: 5,
       // Rayleigh 橙色偏向：CO₂ + H₂SO₄ 云层优先吸收蓝光（Venera 着陆器实拍：橙琥珀色天空）
@@ -96,7 +98,6 @@ export const BODIES = {
     radiusKm: 69911, gm: 1.26686534e8, oblateness: 0.06487,
     rotation: 'iau', landable: false,
     atmosphere: {
-      groundAlbedo: 0.7,
       heightKm: 350, rayleighScaleKm: 27, mieScaleKm: 27,
       rayleigh: [4e-7, 3.5e-7, 2.5e-7], mie: 3e-7, mieG: 0.7, multiplier: 0.8,
     },
