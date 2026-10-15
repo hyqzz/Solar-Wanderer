@@ -14,6 +14,47 @@ import { QUALITY } from '../engine/quality.js';
 const DUMMY_TEX = new THREE.DataTexture(new Uint8Array([128, 128, 128, 128]), 1, 1);
 DUMMY_TEX.needsUpdate = true;
 
+/**
+ * 云贴图 → 光学厚度的共享映射。
+ *
+ * 行星着色器（地表云影）与云层着色器都要做这一步，此前是两处各写一份**逐字相同**的
+ * 阈值公式——一旦改一边就会"阴影与可见云错位"，所以抽到这里只写一次。
+ *
+ * 为什么不能阈值化：旧版 `clamp((lum − 0.10) × 1.8, 0, 1)` 在 lum > 0.65 就饱和到 1。
+ * 云贴图里大片中间调因此被压成**硬边不透明白斑**（地球近景一眼可见的假），
+ * 而真实云即使星下点也很少完全不透明，边缘更是连续渐变的。
+ * 改成幂律：光学厚度随亮度平滑增长、永不硬截断，细节全部保留。
+ * 系数经覆盖比例校准——真实地球瞬时云量约六成，含大量薄云与大片晴空。
+ */
+const CLOUD_GLSL = /* glsl */ `
+  float cloudTau(vec3 cl) {
+    float lum = clamp(dot(cl, vec3(0.34)), 0.0, 1.0);
+    // 幂律 1.45 让中间调拉开层次（薄云仍可见），0.06 基线保证晴空区也有极淡卷云
+    return pow(lum, 1.45) * 1.25 + lum * 0.06;
+  }
+  // 星下点垂直光程下的不透明度（Beer–Lambert：永不饱和，薄云保持半透明）
+  float cloudAlpha(vec3 cl) { return 1.0 - exp(-cloudTau(cl) * 1.9); }
+
+  /**
+   * 云的动画采样 UV（自转偏移 + 扰动）。
+   *
+   * 扰动噪声必须按 **3D 方向**采样，不能按 uv：uv.x 在反经线处 1→0 跳变，
+   * 噪声在那一圈上断裂，画面上是一条贯穿盘面的点状缝——地球近景一眼可见，
+   * 而它既不是轨道线也不是贴图缝，很难归因。方向向量跨反经线连续，
+   * 且极点附近不退化（uv 噪声在极点会被压缩成同心条纹）。
+   */
+  vec2 cloudUV(vec2 uv, float t) {
+    // uv 是 SphereGeometry 口径（见 latLonOf）：u 增大 = 经度**减小**，
+    // 所以经度是 (0.5 − u)·2π，与 v 的 (v − 0.5)·π 不是同一个式子。
+    vec2 ang = vec2((0.5 - uv.x) * 6.2831853, (uv.y - 0.5) * 3.14159265);
+    vec3 dir = vec3(cos(ang.y) * cos(ang.x), sin(ang.y), cos(ang.y) * sin(ang.x));
+    float d = pnoise(dir * 8.0 + vec3(0.0, 0.0, t * 0.008));
+    // 自转偏移取负号：u 轴是反的，云要**东移**（相对地表超旋转）就得减 u。
+    // 写成加号会让云向西倒着飘——一帧看不出来，时间加速跑一会儿就明显了。
+    return uv + vec2(-t * 0.00002 + d * 0.008, d * 0.004);
+  }
+`;
+
 // 天体 ID（着色器内 int 分支选择）：与 bodies.js 的 key 对应。
 // 用 int 而非 string——GLSL ES 1.0 不支持字符串比较，且 int 分支开销极低。
 const BODY_EARTH = 3, BODY_MARS = 4, BODY_JUPITER = 5, BODY_SATURN = 6, BODY_TRITON = 100;
@@ -172,6 +213,7 @@ export function createPlanetMaterial({
           mix(mix(phash(i + vec3(0,0,1)), phash(i + vec3(1,0,1)), f.x), mix(phash(i + vec3(0,1,1)), phash(i + vec3(1,1,1)), f.x), f.y),
           f.z);
       }
+${CLOUD_GLSL}
 
       // 角度差归一化到 [-π, π]（用于大红斑经度比较，跨 0/2π 边界正确）
       float angleDiff(float a, float b) {
@@ -295,15 +337,10 @@ export function createPlanetMaterial({
         // 在白昼面（day>0）按云层不透明度衰减直射光，产生软阴影。夜面无阴影（无直射光）。
         float cloudShadow = 1.0;
         if (uBodyId == 3 && uHasClouds == 1 && uDetailMode > 0) {
-          // 与 createCloudMaterial 中相同的 UV 动画（旋转 + 扰动），保证阴影与可见云对齐
-          float cloudAngle = uTime * 0.00002; // 云层略快于地球自转（大气超旋转）
-          vec2 cUV = vec2(vUv.x + cloudAngle, vUv.y);
-          float disturb = pnoise(vec3(vUv * 8.0, uTime * 0.008));
-          cUV += vec2(disturb * 0.008, disturb * 0.004);
-          vec3 cloudCol = texture2D(uCloudTex, cUV).rgb;
-          // 阈值化云 alpha：贴图背景灰会在全盘面罩上薄白纱，真实地球有大片晴空区
-          float cloudAlpha = clamp((dot(cloudCol, vec3(0.34)) - 0.10) * 1.8, 0.0, 1.0);
-          cloudShadow = 1.0 - cloudAlpha * 0.32 * day;
+          // 与云层着色器同一 UV 动画（自转偏移 + 扰动），保证阴影与可见云对齐
+          vec3 cloudCol = texture2D(uCloudTex, cloudUV(vUv, uTime)).rgb;
+          // 与云层着色器同一映射（见 CLOUD_GLSL），否则阴影会与可见云错位
+          cloudShadow = 1.0 - cloudAlpha(cloudCol) * 0.32 * day;
         }
         // 环投影：沿太阳方向与环平面求交，落在环半径内则按环光学深度遮挡直射光
         float ringSh = 1.0;
@@ -496,13 +533,20 @@ export function createCloudMaterial(cloudTex, opts = {}) {
       }
 
       // 世界坐标 → 该天体体固系的等距圆柱 UV
+      //
+      // 两个分量都必须与 Three.js SphereGeometry 的 uv 属性一致，否则云层会相对
+      // 地表贴图错位。SphereGeometry 的顶点是
+      //     x = −r·cos(2πu)·sin(θ),  z = r·sin(2πu)·sin(θ)
+      // 于是 atan2(z, x) = π − 2πu，即
+      //     u_几何 = 0.5 − atan2(z,x)/2π        （**不是** + 0.5）
+      // 写成 +0.5 会让云图相对地表东西**镜像**——云层与大陆对不上，
+      // 而且地表云影（用几何 uv）与可见云也镜像错位。u 轴差 1−u 这一条
+      // 用 SphereGeometry 的 uv 属性逐顶点比对即可复现，见 tests/rendering.test.mjs。
+      // v 轴：uv.y = 1 在北极，所以是 0.5 + asin(y)/π 而不是减。
       vec2 latLonOf(vec3 q) {
         vec3 rel = q - uCenter;
         float rl = max(length(rel), 0.001);
-        // u = atan2(z,-x)/2π ≡ atan2(z,x)/2π + 0.5（mod 1）；
-        // v 必须与 Three.js SphereGeometry 的 uv 一致：uv.y = 1 在北极，
-        // 所以是 0.5 + asin(y)/π 而不是减——写反了会把云图上下翻转采样。
-        return vec2(atan(rel.z, rel.x) / 6.2831853 + 0.5,
+        return vec2(0.5 - atan(rel.z, rel.x) / 6.2831853,
                     0.5 + asin(clamp(rel.y / rl, -1.0, 1.0)) / 3.14159265);
       }
 
@@ -516,21 +560,49 @@ export function createCloudMaterial(cloudTex, opts = {}) {
           mix(mix(phash(i + vec3(0,0,1)), phash(i + vec3(1,0,1)), f.x), mix(phash(i + vec3(0,1,1)), phash(i + vec3(1,1,1)), f.x), f.y),
           f.z);
       }
+${CLOUD_GLSL}
 
       /**
        * 云密度：贴图给出水平覆盖，垂直方向用经验廓线。
        * 廓线底部渐入、上部渐出、云顶最锐——掠射时才会看到"云顶"这条边，
        * 而不是原来那种上下一样厚的平板。
        */
-      float cloudDensity(vec2 uv, float hFrac) {
-        // 云层旋转：略快于地球自转（大气超旋转，金星效应的微弱版本）
-        float disturb = pnoise(vec3(uv * 8.0, uTime * 0.008));
-        vec2 cUV = vec2(uv.x + uTime * 0.00002, uv.y) + vec2(disturb * 0.008, disturb * 0.004);
-        vec3 cl = texture2D(uMap, cUV).rgb;
-        // 阈值化：去除贴图背景灰造成的全球薄纱（真实地球约六成云量且有成片晴空）
-        float cover = clamp((dot(cl, vec3(0.34)) - 0.10) * 1.8, 0.0, 1.0);
+      /**
+       * 球面点的经/纬切向基。用于自己算云贴图的采样足迹。
+       */
+      void cloudBasis(vec3 rel, out vec3 east, out vec3 north, out float rl, out float cosLat) {
+        rl = max(length(rel), 0.001);
+        vec3 nn = rel / rl;
+        cosLat = max(length(nn.xz), 0.02);      // 极点附近钳住，避免足迹发散
+        vec2 h = nn.xz / cosLat;
+        east = vec3(-h.y, 0.0, h.x);
+        north = cross(nn, east);
+      }
+
+      /**
+       * 云贴图的采样足迹（每像素的 uv 变化量）。
+       *
+       * 为什么不能靠隐式导数：latLonOf 用 atan(z, x)，在反经线上有分支割线，
+       * uv.x 从 1 跳到 0。dFdx(uv.x) 因此在那一列像素上爆成巨值，GPU 取到最粗的
+       * mip，反经线上就出现一条颜色突变的缝；又因为割线只穿过少数像素四边形，
+       * 缝表现为**等距点阵**——地球近景一眼可见，且既不像轨道线也不像贴图缝，
+       * 极难归因（实测：关云层即消失，但贴图本身 0 条异常列、反经线接缝与相邻列
+       * 差异同量级；关掉 mipmap 也消失——三条线索合起来才指向 LOD 尖峰）。
+       *
+       * 改用球面上的连续量（相对球心的位置向量）算足迹：它跨反经线连续，
+       * 导数不会爆。梯度一律在**均匀控制流**下算好再传进去——步进循环里有
+       * continue/break，在非均匀控制流里调 dFdx 是未定义行为。
+       */
+      vec2 cloudFootprint(vec3 rel, vec3 east, vec3 north, float rl, float cosLat, bool dxAxis) {
+        vec3 d = dxAxis ? dFdx(rel) : dFdy(rel);
+        return vec2(dot(d, east) / (6.2831853 * rl * cosLat),
+                    dot(d, north) / (3.14159265 * rl));
+      }
+
+      float cloudDensity(vec2 uv, float hFrac, vec2 gx, vec2 gy) {
+        vec3 cl = textureGrad(uMap, cloudUV(uv, uTime), gx, gy).rgb;
         float prof = smoothstep(0.0, 0.18, hFrac) * (1.0 - smoothstep(0.55, 1.0, hFrac));
-        return cover * prof;
+        return cloudTau(cl) * prof;
       }
 
       void main() {
@@ -554,6 +626,14 @@ export function createCloudMaterial(cloudTex, opts = {}) {
         float dayF = smoothstep(-0.06, 0.12, dot(n, L));
         vec3 nightTint = mix(vec3(0.010, 0.013, 0.020), vec3(0.004), dayF);
 
+        // 云贴图的采样足迹：在壳的入射点处算一次，两条路径共用。
+        // 必须在这里算——步进循环里有 continue/break，非均匀控制流下 dFdx 未定义。
+        vec3 relE = ro + rd * tEnter - uCenter;
+        vec3 cEast, cNorth; float cRl, cCos;
+        cloudBasis(relE, cEast, cNorth, cRl, cCos);
+        vec2 gX = cloudFootprint(relE, cEast, cNorth, cRl, cCos, true);
+        vec2 gY = cloudFootprint(relE, cEast, cNorth, cRl, cCos, false);
+
         // ── 轻量路径：单次采样 ───────────────────────────────────────
         // Low / 移动端。SwiftShader 软件渲染下实测（地球充满画面，p50）：
         //   云层关闭 92.4 ms ｜ 轻量 99.3 ms（+7%）｜ 体积 126.6 ms（+37%）
@@ -562,9 +642,12 @@ export function createCloudMaterial(cloudTex, opts = {}) {
         // 但两条路径之间的比例关系可用。
         // 两条路径都输出**预乘**颜色，与材质的 premultipliedAlpha 一致。
         if (uVolumetric == 0) {
-          float d = cloudDensity(latLonOf(ro + rd * tEnter), 0.5);
-          // 夜面云层减薄（城市灯光从云隙透出）
-          float alpha = clamp(d, 0.0, 1.0) * mix(0.42, 1.0, dayF);
+          // 单次采样走的是整层垂直光程，所以这里要的是**整层不透明度**，
+          // 而不是某一高度上的密度——用 cloudAlpha（Beer–Lambert）而非 cloudDensity。
+          // 旧版把 hFrac=0.5 处的密度直接当 alpha 用，等于只看了半层，
+          // 又叠加阈值截断，于是云要么全透要么全白，没有中间态。
+          vec2 luv = cloudUV(latLonOf(ro + rd * tEnter), uTime);
+          float alpha = cloudAlpha(textureGrad(uMap, luv, gX, gY).rgb) * mix(0.42, 1.0, dayF);
           vec3 col = vec3(max(dot(n, L), 0.0)) * uSunI + nightTint;
           gl_FragColor = vec4(col * alpha, alpha);
           #include <tonemapping_fragment>
@@ -591,7 +674,7 @@ export function createCloudMaterial(cloudTex, opts = {}) {
           vec3 rel = pp - uCenter;
           float rl = length(rel);
           float hFrac = clamp((rl - uRBase) / max(uThicknessKm, 0.001), 0.0, 1.0);
-          float d = cloudDensity(latLonOf(pp), hFrac);
+          float d = cloudDensity(latLonOf(pp), hFrac, gX, gY);
           if (d <= 0.002) continue;
           // 自阴影：沿太阳方向短程步进累计云内光程（云被自身上方遮挡而变暗）
           float shadow = 0.0;
@@ -600,7 +683,7 @@ export function createCloudMaterial(cloudTex, opts = {}) {
             vec3 q = pp + L * (float(j) * ds);
             float ql = max(length(q - uCenter), 0.001);
             float qh = clamp((ql - uRBase) / max(uThicknessKm, 0.001), 0.0, 1.0);
-            shadow += cloudDensity(latLonOf(q), qh);
+            shadow += cloudDensity(latLonOf(q), qh, gX, gY);
           }
           float sunT = exp(-shadow * 1.7);
           // 前向散射银边：逆光时云缘发亮（真实云最标志性的特征之一）

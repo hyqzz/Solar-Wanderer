@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { SphereGeometry } from 'three';
 import { DEM_SOURCES, levelExceedsSource } from '../src/scene/demTiles.js';
 import { BODIES } from '../src/astro/bodies.js';
 
@@ -138,6 +139,66 @@ test('云层 UV 与 Three.js 球面 uv 一致（v 轴不得写反）', () => {
   assert.ok(/0\.5 \+ asin\(clamp\(rel\.y \/ rl, -1\.0, 1\.0\)\) \/ 3\.14159265/.test(src),
     'latLonOf 的 v 轴方向不对');
   assert.ok(!/0\.5 - asin\(clamp\(rel\.y \/ rl/.test(src), 'v 轴仍为翻转写法');
+});
+
+test('latLonOf 的 u 轴与 SphereGeometry 的 uv 属性逐顶点一致（不是镜像）', () => {
+  // 这条是照着 SphereGeometry 的顶点公式验的，不靠注释自证：
+  //   x = −r·cos(2πu)·sin θ,  z = r·sin(2πu)·sin θ  ⇒  u_几何 = 0.5 − atan2(z,x)/2π
+  // 曾经写成 +0.5，于是云图相对地表东西镜像、云影又与可见云镜像错位。
+  const g = new SphereGeometry(1, 12, 8);
+  const pos = g.attributes.position, uv = g.attributes.uv;
+  const latLonU = (x, y, z) => 0.5 - Math.atan2(z, x) / (2 * Math.PI);
+  const latLonV = (x, y, z) => 0.5 + Math.asin(y / Math.hypot(x, y, z)) / Math.PI;
+  const src = read('src/scene/planetMaterial.js');
+  assert.ok(/0\.5 - atan\(rel\.z, rel\.x\) \/ 6\.2831853/.test(src), 'latLonOf 的 u 轴不是几何口径');
+  assert.ok(!/atan\(rel\.z, rel\.x\) \/ 6\.2831853 \+ 0\.5/.test(src), 'u 轴仍为镜像写法');
+  let maxDU = 0, maxDV = 0, poles = 0;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (Math.hypot(x, z) < 1e-6) { poles++; continue; }   // 极点处经度退化，跳过
+    maxDU = Math.max(maxDU, Math.abs(latLonU(x, y, z) - uv.getX(i)));
+    maxDV = Math.max(maxDV, Math.abs(latLonV(x, y, z) - uv.getY(i)));
+  }
+  assert.ok(poles > 0, '取样里应当包含极点，否则这个测试没覆盖到退化情形');
+  // 容差取 1e-6：顶点位置是 Float32，反三角再算回来有 ~1e-8 的舍入；
+  // 而这里要抓的错误（镜像）是 0.5 量级，两者差着七个数量级，不会混淆。
+  assert.ok(maxDU < 1e-6, `u 轴最大偏差 ${maxDU}（0.5 量级即镜像）`);
+  assert.ok(maxDV < 1e-6, `v 轴最大偏差 ${maxDV}`);
+});
+
+test('云层与地表云影共用同一套 UV 与不透明度映射', () => {
+  const src = read('src/scene/planetMaterial.js');
+  // 阴影若用几何 uv、可见云用另一套，云影就会落在没有云的地方
+  assert.ok(/texture2D\(uCloudTex, cloudUV\(vUv, uTime\)\)/.test(src), '地表云影未走 cloudUV');
+  assert.ok(/cloudUV\(latLonOf\(ro \+ rd \* tEnter\), uTime\)/.test(src), '云层未走 cloudUV');
+  assert.ok(!/pnoise\(vec3\(vUv \* 8\.0/.test(src), '云影仍在用自己的一套扰动');
+  // 自转偏移方向：u 轴是反的，云要东移必须减 u
+  assert.ok(/\-t \* 0\.00002/.test(src), '云的自转偏移方向未随 u 轴翻转，云会向西倒着飘');
+});
+
+test('云密度是连续幂律而非阈值截断（阈值化会压出硬边白斑）', () => {
+  const src = read('src/scene/planetMaterial.js');
+  assert.ok(/float cloudTau\(vec3 cl\)/.test(src), '缺少共享的云光学厚度映射');
+  assert.ok(/pow\(lum, 1\.45\) \* 1\.25 \+ lum \* 0\.06/.test(src), '缺少幂律映射');
+  // 旧写法在 lum>0.65 处饱和到 1，把贴图的大片中间调压成硬边不透明白斑
+  assert.ok(!/dot\(cl, vec3\(0\.34\)\) - 0\.10\) \* 1\.8/.test(src), '阈值化映射仍在');
+  assert.ok(!/dot\(cloudCol, vec3\(0\.34\)\) - 0\.10\) \* 1\.8/.test(src), '云影仍用阈值化映射');
+  // Beer–Lambert 形式：永不饱和，薄云保持半透明
+  assert.ok(/1\.0 - exp\(-cloudTau\(cl\) \* 1\.9\)/.test(src), '缺少 Beer–Lambert 不透明度');
+});
+
+test('云贴图采样用自算足迹（反经线处的隐式导数会爆掉，取到最粗 mip）', () => {
+  const src = read('src/scene/planetMaterial.js');
+  // latLonOf 的 atan 在反经线有分支割线，uv.x 从 1 跳到 0，
+  // 隐式 dFdx(uv.x) 在那一列像素上爆成巨值 → 最粗 mip → 一条点状缝（近景可见）
+  assert.ok(/textureGrad\(uMap, cloudUV\(uv, uTime\), gx, gy\)/.test(src), '云层未用自算足迹');
+  assert.ok(/textureGrad\(uMap, luv, gX, gY\)/.test(src), '轻量路径未用自算足迹');
+  assert.ok(/vec2 cloudFootprint\(/.test(src), '缺少足迹函数');
+  // 足迹必须由球面连续量（相对球心的位置）算，且只在均匀控制流里算一次——
+  // 步进循环里有 continue/break，非均匀控制流下调 dFdx 是未定义行为
+  assert.ok(/dFdx\(rel\)/.test(src) && /dFdy\(rel\)/.test(src), '足迹未基于球面连续量');
+  const beforeLoop = src.slice(src.indexOf('vec2 gX = cloudFootprint'), src.indexOf('if (uVolumetric == 0)'));
+  assert.ok(beforeLoop.length > 0 && !/for \(/.test(beforeLoop), '足迹应在步进循环之前算好');
 });
 
 test('体积云只在 High 档开启（代价实测 +27%，集显会被拖垮）', () => {
