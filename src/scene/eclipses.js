@@ -31,6 +31,10 @@ function pushOccluder(receiver, occ, camPosKm, sunDistKm) {
   u.uSunDistKm.value = sunDistKm;
 }
 
+/** 参与逐片元遮蔽的接收体：本体 + 会被影子扫过的卫星。
+ *  木星影子扫过木卫、土星影子扫过土卫都是真实且可查的现象（Io 走进木星影子里会消失）。 */
+const ECLIPSE_RECEIVERS = ['earth', 'moon', 'io', 'europa', 'ganymede', 'callisto', 'titan'];
+
 export class EclipseSystem {
   constructor(scene, world) {
     this.scene = scene;
@@ -58,7 +62,7 @@ export class EclipseSystem {
     // 注意这一步**不受** distCam 门控——锥体网格只在近处才值得画，但"月球在地球上
     // 投下的阴影"从远处（例如地月系之外）照样看得见，而且逐片元遮蔽本来就便宜。
     // 遮蔽比例由着色器按角半径/角分离算，未对齐时自然趋于 0，无需在这里判条件。
-    for (const id of ['earth', 'moon']) pushOccluder(bodies.get(id), null, camPosKm, 1);
+    for (const id of ECLIPSE_RECEIVERS) pushOccluder(bodies.get(id), null, camPosKm, 1);
     const distTo = (a) => Math.hypot(a.posKm[0], a.posKm[1], a.posKm[2]);
 
     // ── 日食：月球→地球 ──
@@ -94,6 +98,8 @@ export class EclipseSystem {
         for (const moonId of ['io', 'europa', 'ganymede', 'callisto']) {
           const m = bodies.get(moonId);
           if (!m) continue;
+          // 木星在卫星表面的遮蔽（卫星走进木星影子里就不再被照亮）
+          pushOccluder(m, jupiter, camPosKm, distTo(m));
           if (this._updateCone(activeCount, 'jovian', 'sun', 'jupiter', moonId,
             sunPos, jupiter.posKm, jupiter.phys.radiusKm, m.posKm, m.phys.radiusKm, bodies)) activeCount++;
           if (activeCount >= this.maxCones) break;
@@ -107,6 +113,7 @@ export class EclipseSystem {
     if (saturn && titan) {
       const distCamS = _v1.set(camPosKm[0] - saturn.posKm[0], camPosKm[1] - saturn.posKm[1], camPosKm[2] - saturn.posKm[2]).length();
       if (distCamS < 3e6) {
+        pushOccluder(titan, saturn, camPosKm, distTo(titan));
         if (this._updateCone(activeCount, 'jovian', 'sun', 'saturn', 'titan',
           sunPos, saturn.posKm, saturn.phys.radiusKm, titan.posKm, titan.phys.radiusKm, bodies)) activeCount++;
       }

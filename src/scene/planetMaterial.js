@@ -362,8 +362,12 @@ export function createPlanetMaterial({
           float aOcc = asin(clamp(uEclR / dOcc, 0.0, 1.0));
           float aSun = asin(clamp(SUN_RADIUS_KM / max(uSunDistKm, 1.0), 0.0, 1.0));
           float sep = acos(clamp(dot(toOcc / dOcc, normalize(uSunDir)), -1.0, 1.0));
-          // 两圆盘重叠：sep < aSun-aOcc 为全遮，sep > aSun+aOcc 为无遮
-          float cover = 1.0 - smoothstep(aSun - aOcc, aSun + aOcc, sep);
+          // 两圆盘重叠比例。下界必须是 |aOcc−aSun| 而不是 aSun−aOcc：
+          // 当遮挡体角半径远大于太阳时（木星遮木卫：9.6° vs 0.05°），
+          // 正对时 sep=0 会落在 aSun−aOcc 与 aSun+aOcc 的正中，只给出 50% —— 
+          // 而物理上此时太阳被完全挡住，应当是全遮。
+          float lo = abs(aOcc - aSun), hi = aOcc + aSun;
+          float cover = 1.0 - smoothstep(lo, hi, sep);
           eclSh = 1.0 - cover;
         }
         vec3 col = albedo * shade * uSunI * ringSh * cloudShadow * eclSh;

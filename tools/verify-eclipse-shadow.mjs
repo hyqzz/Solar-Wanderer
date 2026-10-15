@@ -26,7 +26,7 @@ function obscuration(jd, surfEcl) {
   const sep = Math.acos(Math.max(-1, Math.min(1, nOcc[0] * nSun[0] + nOcc[1] * nSun[1] + nOcc[2] * nSun[2])));
   const s = (x) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
   // 与着色器同源：cover = 1 − smoothstep(aSun−aOcc, aSun+aOcc, sep)
-  const lo = aSun - aOcc, hi = aSun + aOcc;
+  const lo = Math.abs(aOcc - aSun), hi = aOcc + aSun;
   return 1 - s(hi > lo ? (sep - lo) / (hi - lo) : (sep <= lo ? 0 : 1));
 }
 
