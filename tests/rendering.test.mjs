@@ -214,3 +214,66 @@ test('音效状态在 HUD 上可见（默认静音但必须能发现怎么开）
   assert.ok(/audioOn: audioEngine\?\.enabled/.test(main), '未把状态传给 HUD');
   assert.ok(/tip\.audioOn/.test(main), '切换音效时没有反馈提示');
 });
+
+// ── 批次 11：背景星场的统计真实性 ────────────────────────────────────────────
+
+/** 与 starfield.js 中采样逻辑逐项对应的镜像实现 */
+function sampleStarField(count, seed) {
+  let s = seed;
+  const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const ngp = { x: 0.5, y: 0.78, z: 0.38 };   // 任意单位向量即可，只验证分布形状
+  const n = Math.hypot(ngp.x, ngp.y, ngp.z);
+  ngp.x /= n; ngp.y /= n; ngp.z /= n;
+  const B0 = 12 * Math.PI / 180;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    let dx = 1, dy = 0, dz = 0;
+    for (let k = 0; k < 24; k++) {
+      const z = rnd() * 2 - 1, phi = rnd() * Math.PI * 2, r = Math.sqrt(1 - z * z);
+      const px = r * Math.cos(phi), pz = r * Math.sin(phi);
+      const sinB = Math.abs(px * ngp.x + z * ngp.y + pz * ngp.z);
+      const b = Math.asin(Math.min(1, sinB));
+      if (rnd() < (0.35 + Math.exp(-b / B0)) / 1.35) { dx = px; dy = z; dz = pz; break; }
+    }
+    const u = rnd();
+    const I = Math.min(1, Math.max(0.12, 0.12 * Math.pow(1 - u * 0.999, -2 / 3)));
+    out.push({ x: dx, y: dy, z: dz, I });
+  }
+  return out;
+}
+
+test('背景星向银道面集中（银河之所以是一条带）', () => {
+  const stars = sampleStarField(20000, 12345);
+  const ngp = { x: 0.5, y: 0.78, z: 0.38 };
+  const n = Math.hypot(ngp.x, ngp.y, ngp.z);
+  ngp.x /= n; ngp.y /= n; ngp.z /= n;
+  let near = 0, far = 0;
+  for (const st of stars) {
+    const sinB = Math.abs(st.x * ngp.x + st.y * ngp.y + st.z * ngp.z);
+    if (sinB < Math.sin(12 * Math.PI / 180)) near++;          // |b| < 12°
+    if (sinB > Math.sin(60 * Math.PI / 180)) far++;           // |b| > 60°
+  }
+  // 球面均匀时 |b|<12° 占 1−cos12° ≈ 2.2%，|b|>60° 占 cos60° = 50%
+  const nearFrac = near / stars.length, farFrac = far / stars.length;
+  assert.ok(nearFrac > 0.08, `银道面附近占比仅 ${(nearFrac * 100).toFixed(1)}%，集中不足`);
+  assert.ok(farFrac < 0.32, `高银纬占比 ${(farFrac * 100).toFixed(1)}%，仍接近球面均匀`);
+  assert.ok(nearFrac / farFrac > 0.5, '银道面与高银纬的密度比过低');
+});
+
+test('背景星流量服从幂律（少数很亮 + 大量很暗）', () => {
+  const stars = sampleStarField(20000, 999);
+  const bright = stars.filter((s) => s.I > 0.6).length / stars.length;
+  const dim = stars.filter((s) => s.I < 0.2).length / stars.length;
+  assert.ok(dim > 0.4, `暗星占比 ${(dim * 100).toFixed(1)}% 过低，层次不足`);
+  assert.ok(bright > 0.02 && bright < 0.25,
+    `亮星占比 ${(bright * 100).toFixed(1)}% 不在合理区间（真实天空亮星是少数）`);
+  assert.ok(dim / Math.max(bright, 1e-6) > 4, '亮暗层次比不足');
+});
+
+test('星场源码确实按银极方向做密度集中、按幂律抽流量', () => {
+  const src = read('src/scene/starfield.js');
+  assert.ok(/ngpWorld = raDecToWorld\(192\.8595 \* DEG, 27\.1284 \* DEG/.test(src),
+    '缺少银极方向（NGP）');
+  assert.ok(/0\.35 \+ Math\.exp\(-b \/ B0\)/.test(src), '缺少银道面密度函数');
+  assert.ok(/Math\.pow\(1 - u \* 0\.999, -2 \/ 3\)/.test(src), '缺少幂律流量抽样');
+});

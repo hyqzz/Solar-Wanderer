@@ -183,7 +183,12 @@ export function createStarfield(milkywayTex) {
     group.add(mesh);
   }
 
-  // 程序化恒星：两层（普通 + 亮星），等概率球面分布，颜色按黑体近似
+  // 程序化恒星：两层（普通 + 亮星）。
+  // 分布不是球面均匀的——真实星空的背景星强集中于银道面附近（|b| 小），
+  // 这正是"银河"之所以是一条带的成因；8K 贴图只给了亮度，密度得由分布本身给出。
+  // 数目按星等的真实累积计数 N(≤m) ∝ 10^(0.6m) 抽样，即流量服从指数 1.5 的幂律，
+  // 于是"少数很亮 + 大量很暗"的自然层次才会出现，而不是一团差不多亮的点。
+  const ngpWorld = raDecToWorld(192.8595 * DEG, 27.1284 * DEG, new THREE.Vector3()).normalize();
   const pointCanvas = document.createElement('canvas');
   pointCanvas.width = pointCanvas.height = 32;
   const pointCtx = pointCanvas.getContext('2d');
@@ -199,13 +204,22 @@ export function createStarfield(milkywayTex) {
     const colArr = new Float32Array(count * 3);
     let s = count * 7 + 13;
     const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const B0 = 12 * Math.PI / 180;   // 银道面密度集中的角尺度
     for (let i = 0; i < count; i++) {
-      const z = rnd() * 2 - 1;
-      const phi = rnd() * Math.PI * 2;
-      const r = Math.sqrt(1 - z * z);
-      posArr[i * 3] = SKY_R * 0.98 * r * Math.cos(phi);
-      posArr[i * 3 + 1] = SKY_R * 0.98 * z;
-      posArr[i * 3 + 2] = SKY_R * 0.98 * r * Math.sin(phi);
+      // 拒绝采样：以 0.35 + exp(-|b|/B0) 为密度（归一化上界 1.35）
+      let dx = 1, dy = 0, dz = 0;
+      for (let k = 0; k < 24; k++) {
+        const z = rnd() * 2 - 1;
+        const phi = rnd() * Math.PI * 2;
+        const r = Math.sqrt(1 - z * z);
+        const px = r * Math.cos(phi), pz = r * Math.sin(phi);
+        const sinB = Math.abs(px * ngpWorld.x + z * ngpWorld.y + pz * ngpWorld.z);
+        const b = Math.asin(Math.min(1, sinB));
+        if (rnd() < (0.35 + Math.exp(-b / B0)) / 1.35) { dx = px; dy = z; dz = pz; break; }
+      }
+      posArr[i * 3] = SKY_R * 0.98 * dx;
+      posArr[i * 3 + 1] = SKY_R * 0.98 * dy;
+      posArr[i * 3 + 2] = SKY_R * 0.98 * dz;
       // 黑体色温分布
       const t = rnd();
       let cr, cg, cb;
@@ -213,7 +227,10 @@ export function createStarfield(milkywayTex) {
       else if (t < 0.4) { cr = 0.9; cg = 0.93; cb = 1.0; }   // 白 A/F
       else if (t < 0.75) { cr = 1.0; cg = 0.93; cb = 0.78; } // 黄 G/K
       else { cr = 1.0; cg = 0.74; cb = 0.55; }               // 橙红 M
-      const I = baseI * (0.25 + 0.75 * Math.pow(rnd(), 2.2));
+      // 幂律流量分布：N(>L) ∝ L^-1.5（等价于 N(≤m) ∝ 10^0.6m）。
+      // u 均匀 → L = Lmin·(1-u)^(-2/3)；截到 [0.12, 1] 以免出现不合理的超亮背景星。
+      const u = rnd();
+      const I = baseI * Math.min(1, Math.max(0.12, 0.12 * Math.pow(1 - u * 0.999, -2 / 3)));
       colArr[i * 3] = cr * I; colArr[i * 3 + 1] = cg * I; colArr[i * 3 + 2] = cb * I;
     }
     const geo = new THREE.BufferGeometry();
