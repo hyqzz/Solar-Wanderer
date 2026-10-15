@@ -1546,3 +1546,17 @@ function copyShareUrl() {
 }
 
 } // Graphics-dependent application setup.
+
+// ── Service Worker：离线与重复访问加速（见 public/sw.js）───────────────
+// 只在 https 或 localhost、且同源部署时注册；file:// 打开（教师工具包建议的
+// "拷到 U 盘双击 index.html"）没有 serviceWorker，会自然跳过。
+// 注册失败不抛错——它只是加速手段，不能影响应用本身。
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator
+    && (location.protocol === 'https:' || location.hostname === 'localhost'
+        || location.hostname === '127.0.0.1')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch((e) => {
+      console.info('[sw] 注册失败（不影响使用）', e?.message ?? e);
+    });
+  });
+}

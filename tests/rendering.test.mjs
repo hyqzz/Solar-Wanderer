@@ -386,3 +386,18 @@ test('prefers-reduced-motion 在 CSS 与 JS 两侧都生效', () => {
   const feel = read('src/engine/cameraFeel.js');
   assert.ok(/if \(prefersReducedMotion\(\)\) \{/.test(feel), '相机语言未受 reduced-motion 影响');
 });
+
+// ── 批次 12：离线能力 ───────────────────────────────────────────────────────
+
+test('Service Worker 存在且在应用里注册（PWA 清单此前是空壳）', () => {
+  const sw = read('public/sw.js');
+  assert.ok(/self\.addEventListener\('fetch'/.test(sw), 'SW 未拦截 fetch');
+  assert.ok(/req\.mode === 'navigate'/.test(sw), '缺少导航请求的网络优先策略');
+  assert.ok(/caches\.match\(req\)/.test(sw), '缺少缓存优先的静态资源策略');
+  assert.ok(/trimCache\(ASSETS, MAX_ASSETS\)/.test(sw), '缺少条目上限——缓存会无界增长');
+  assert.ok(/self\.skipWaiting\(\)/.test(sw), '缺少 skipWaiting');
+  const main = read('src/main.js');
+  assert.ok(/serviceWorker\.register\('sw\.js'\)/.test(main), '应用未注册 SW');
+  // file:// 打开（教师工具包建议的 U 盘用法）没有 serviceWorker，必须能跳过
+  assert.ok(/location\.protocol === 'https:'/.test(main), '注册未做协议判断');
+});
