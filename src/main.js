@@ -11,6 +11,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 import { SimClock } from './astro/time.js';
 import { surfaceGravity } from './astro/bodies.js';
@@ -89,13 +90,26 @@ const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(
     samples: QUALITY.tier === 'high' ? Math.min(4, renderer.capabilities.maxSamples) : 0 }
 ));
 composer.addPass(new RenderPass(scene, camera));
-// 注：不启用 UnrealBloomPass 式全屏泛光（非物理后期）；日冕等真实结构直接建模
+// === 物理泛光 ===
+// 此前以"非物理后期"为由完全禁用泛光——但泛光本身是物理的（眼内/镜头内的光散射），
+// 问题只在于阈值：全屏低阈值泛光会把整个画面糊成一团（那才是非物理）。
+// 这里把阈值设在 HDR 线性亮度上：场景中只有太阳（×14）、日冕、镜面高光与
+// 亮冰巨的掠过边缘能越过它，其余天体（线性亮度 ~1–5）不受影响。
+// 人眼/相机的光晕是紧贴高光的一小圈，所以 radius 取小值。
+const bloomPass = (QUALITY.tier === 'high' || QUALITY.tier === 'low')
+  ? new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight),
+      QUALITY.tier === 'high' ? 0.22 : 0.16,   // strength：再强就会洗掉日面细节与临边昏暗
+      QUALITY.tier === 'high' ? 0.14 : 0.12,   // radius：紧贴高光的小圈
+      1.05)                                     // threshold（HDR 线性亮度）
+  : null;
+if (bloomPass) composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
 const fxaaPass = QUALITY.tier === 'low' ? new ShaderPass(FXAAShader) : null;
 if (fxaaPass) composer.addPass(fxaaPass);
 composer.setPixelRatio(renderer.getPixelRatio());
 function syncRenderResolution() {
   composer.setPixelRatio(renderer.getPixelRatio());
+  if (bloomPass) bloomPass.setSize(window.innerWidth, window.innerHeight);
   if (fxaaPass) fxaaPass.uniforms.resolution.value.set(
     1 / (window.innerWidth * renderer.getPixelRatio()),
     1 / (window.innerHeight * renderer.getPixelRatio()));
