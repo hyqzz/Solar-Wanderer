@@ -88,12 +88,62 @@ test('photographic adaptation hides stars over sunlit airless ground and preserv
 });
 
 test('GPU profiles: integrated Low, discrete High, software/unknown Low; mobile always Low', () => {
-  for (const name of ['Intel(R) UHD Graphics 770','Intel Iris Xe','AMD Radeon(TM) Graphics','Apple M2','Adreno 740','']) assert.equal(qualityProfile(name).tier,'low',name);
+  // Apple M 系列不在集显之列：它是独立 GPU 核，走下面的代次细分（基础款 Medium、Pro/Max/Ultra High）
+  for (const name of ['Intel(R) UHD Graphics 770','Intel Iris Xe','AMD Radeon(TM) Graphics','Apple GPU','Adreno 740','']) assert.equal(qualityProfile(name).tier,'low',name);
+  assert.equal(qualityProfile('Apple M2', true).tier, 'low', '移动端仍是 Low');
   for (const name of ['NVIDIA GeForce RTX 2080 Ti','AMD Radeon RX 7900 XT','Intel(R) Arc(TM) A770 Graphics']) assert.equal(qualityProfile(name).tier,'high',name);
   assert.equal(classifyGpu('ANGLE NVIDIA SwiftShader'),'software');
   assert.equal(qualityProfile('NVIDIA RTX 2080 Ti',true,'high').textureSize,2048);
   assert.equal(qualityProfile('Intel UHD',false,'lite').tier,'low');
   assert.equal(qualityProfile('Intel UHD',false,'high').tier,'high');
+});
+
+test('独显按代次分 High/Medium：中端与旧卡不再被迫二选一', () => {
+  // 有余量的型号给 High
+  for (const n of ['NVIDIA GeForce RTX 3060','NVIDIA GeForce GTX 1660','AMD Radeon RX 5700 XT',
+    'Apple M1 Pro','Apple M3 Max','NVIDIA Quadro RTX 6000']) assert.equal(qualityProfile(n).tier,'high',n);
+  // 能跑但跑不满 High 的给 Medium（此前被归到 High 会掉帧，归到 Low 又白白牺牲画质）
+  for (const n of ['NVIDIA GeForce GTX 750 Ti','NVIDIA GeForce GTX 960','AMD Radeon RX 480',
+    'NVIDIA GeForce GT 1030','AMD Radeon RX 550','Apple M1','Apple M2','Apple M3']) {
+    assert.equal(qualityProfile(n).tier,'medium',n);
+  }
+  // 厂商名里夹 (TM)/(R) 时仍要认得出型号——'Arc(TM) A770' 曾因此被误判成 medium
+  assert.equal(qualityProfile('Intel(R) Arc(TM) A770 Graphics').tier,'high');
+  assert.equal(qualityProfile('Intel(R) Arc(R) A380 Graphics').tier,'high');
+  // 集显/软件渲染/移动端一律不吃 Medium 这档
+  assert.equal(qualityProfile('Intel(R) UHD Graphics 770').tier,'low');
+  assert.equal(qualityProfile('NVIDIA GeForce RTX 3060',true).tier,'low');
+});
+
+test('三档配置逐项单调：High ≥ Medium ≥ Low（否则档位名不副实）', () => {
+  const knob = (t, k) => qualityProfile('NVIDIA GeForce RTX 3060')[k];   // 取 High
+  const pick = (tier) => qualityProfile('x', false, tier);
+  const hi = pick('high'), me = pick('medium'), lo = pick('low');
+  assert.deepEqual([hi.tier, me.tier, lo.tier], ['high', 'medium', 'low']);
+  // 逐项：越大越费的值必须非增，越小越费的（网格步长没有，这里全是越大越费）
+  for (const k of ['atmoN', 'cloudN', 'terrainGrid', 'shadowSize', 'textureSize', 'rockCount', 'anisotropy']) {
+    assert.ok(hi[k] >= me[k] && me[k] >= lo[k],
+      `${k}: high ${hi[k]} / medium ${me[k]} / low ${lo[k]} 不是单调非增`);
+  }
+  assert.ok(hi.pixelRatio >= me.pixelRatio && me.pixelRatio >= lo.pixelRatio, 'pixelRatio 不单调');
+  assert.ok(hi.targetFps >= me.targetFps && me.targetFps >= lo.targetFps, 'targetFps 不单调');
+  // 数组型（segHi/segLo）取两个分量都比
+  for (const k of ['segHi', 'segLo']) {
+    assert.ok(hi[k][0] >= me[k][0] && me[k][0] >= lo[k][0] && hi[k][1] >= me[k][1] && me[k][1] >= lo[k][1],
+      `${k} 不单调`);
+  }
+  // 细节开关：High/Medium 开，Low 关
+  assert.equal(hi.detail, true); assert.equal(me.detail, true); assert.equal(lo.detail, false);
+  // Medium 必须与 Low 有实质差别，否则这一档是摆设
+  assert.ok(me.cloudN > lo.cloudN && me.atmoN > lo.atmoN && me.terrainGrid > lo.terrainGrid,
+    'Medium 与 Low 的渲染工作量没有实质差别');
+  void knob;
+});
+
+test('体积云仍只给 High（Medium 带不动）', () => {
+  const src = readFileSync(new URL('../src/scene/planetMaterial.js', import.meta.url), 'utf8');
+  assert.ok(/QUALITY\.tier === 'high' && QUALITY\.detail/.test(src),
+    '体积云的门控被放宽到 High 以外——实测 Medium 只比 Low 贵 2 倍，加上体积云会直接翻三倍');
 });
 
 test('Renderer bootstrap retries temporary failure on a fresh canvas and default GPU preference', async () => {

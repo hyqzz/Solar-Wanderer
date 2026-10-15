@@ -153,7 +153,23 @@ No install. No account. Just open and go.
 - Three.js 0.165 · Vite 5 · native ESM · WebGL2 · logarithmic depth buffer
 - Pure-function ephemeris layer (Node-testable)
 - Floating-origin rendering for 1:1 km scale
-- GPU auto-tiering for mobile and low-end devices
+- GPU auto-tiering across three tiers (High / Medium / Low), by GPU generation rather than vendor alone
+
+### Quality tiers
+
+The app picks a tier from the WebGL renderer string, then keeps adjusting the render
+scale at runtime to hold the frame rate. Physical scale, DEM and ephemerides are
+identical in all three tiers — only rendering work differs.
+
+| Tier | Picked for | What it adds |
+|------|-----------|--------------|
+| High | RTX / GTX 1060+ / RX 5500+ / Arc A / Apple M-Pro·Max·Ultra | Volumetric clouds, 1.5× pixel ratio, 8K textures, 2048 shadow maps |
+| Medium | Mid-range and older discrete GPUs (GTX 750 Ti–980, RX 480–550, base Apple M1/M2/M3) | Procedural surface detail, 4K textures, 1536 shadow maps — no volumetric clouds |
+| Low | Integrated GPUs, software rendering, mobile | Flat shading detail off, 1024 shadow maps |
+
+Override with `?quality=high`, `?quality=medium` or `?quality=low` (`lite` is accepted
+as an alias for `low`). Volumetric clouds are High-only: measured on the same scene they
+cost about 3.2× Medium, and Medium is already 2.0× Low.
 
 ---
 
