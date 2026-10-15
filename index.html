@@ -2,7 +2,9 @@
 <html lang="zh-CN" data-base="./">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <!-- 不禁用缩放：WCAG 1.4.4 要求文本可放大。画布上的手势由 CSS touch-action:none 独占，
+       受影响；界面元素与文本仍可双指缩放。 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
   <!-- 首页根據瀏覽器語言即時切換顯示語言（/en 固定英文不變）：中文環境顯示中文標題，其余顯示英文標題 -->
   <script>
@@ -199,7 +201,7 @@
   <div id="hud">
     <div id="hud-nav" class="panel"></div>
     <div id="hud-target" class="panel"></div>
-    <div id="hud-tip"></div>
+    <div id="hud-tip" role="status" aria-live="polite"></div>
     <div id="hud-bgload" style="display:none"></div>
     <div id="crosshair">+</div>
   </div>

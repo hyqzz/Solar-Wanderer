@@ -349,3 +349,40 @@ test('日食遮挡体既在地球侧设置（日食）也在月球侧设置（�
   assert.ok(/pushOccluder\(bodies\.get\(id\), null, camPosKm, 1\)/.test(src),
     '缺少每帧清除——食结束后阴影会永久留在表面上');
 });
+
+// ── 批次 12：可访问性 ───────────────────────────────────────────────────────
+
+test('缩放未被禁用（WCAG 1.4.4）', () => {
+  for (const f of ['index.html', 'en/index.html']) {
+    const html = read(f);
+    const vp = /<meta name="viewport" content="([^"]+)"/.exec(html)?.[1] ?? '';
+    assert.ok(vp, `${f} 缺少 viewport`);
+    assert.ok(!/user-scalable\s*=\s*no/.test(vp), `${f} 仍禁用缩放`);
+    assert.ok(!/maximum-scale\s*=\s*1\b/.test(vp), `${f} 仍把最大缩放锁在 1`);
+  }
+});
+
+test('焦点样式与 aria-live 播报区存在', () => {
+  const css = read('src/style.css');
+  assert.ok(/:focus-visible\s*\{/.test(css), '缺少 :focus-visible——纯键盘用户看不到焦点在哪');
+  assert.ok(/\.sr-only\s*\{/.test(css), '缺少屏幕阅读器专用文本类');
+  for (const f of ['index.html', 'en/index.html']) {
+    assert.ok(/aria-live="polite"/.test(read(f)), `${f} 的提示条缺少 aria-live`);
+  }
+});
+
+test('prefers-reduced-motion 在 CSS 与 JS 两侧都生效', () => {
+  const css = read('src/style.css');
+  assert.ok(/animation-duration: 0\.001ms !important/.test(css),
+    'CSS 只关了启动页动画——界面过渡仍会动');
+  const cfg = read('src/config.js');
+  assert.ok(/export function prefersReducedMotion/.test(cfg), '缺少共享查询');
+  // JS 驱动的相机动画 CSS 管不到，必须在 JS 里判
+  const cam = read('src/engine/orbitCamera.js');
+  assert.ok(/if \(prefersReducedMotion\(\)\) dur = 0\.01;/.test(cam),
+    '飞行动画未受 reduced-motion 影响');
+  assert.ok(/const damp = prefersReducedMotion\(\) \? 0 : /.test(cam),
+    '拖拽惯性未受 reduced-motion 影响');
+  const feel = read('src/engine/cameraFeel.js');
+  assert.ok(/if \(prefersReducedMotion\(\)\) \{/.test(feel), '相机语言未受 reduced-motion 影响');
+});

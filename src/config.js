@@ -89,3 +89,21 @@ export function formatDist(km) {
   if (km >= 1) return Math.round(km).toLocaleString() + ' km';
   return Math.round(km * 1000) + ' m';
 }
+
+/**
+ * 用户是否要求减少动效（prefers-reduced-motion）。
+ * CSS 已经关掉了界面过渡，但相机的飞行动画、拖拽惯性与步态起伏是 JS 驱动的，
+ * 必须在这里单独判断——否则"减少动效"只对启动屏生效，这是最常见的漏做。
+ * 结果缓存并监听变化，避免每帧 matchMedia。
+ */
+let _reducedMotion = null;
+export function prefersReducedMotion() {
+  if (_reducedMotion !== null) return _reducedMotion;
+  if (typeof window === 'undefined' || !window.matchMedia) return (_reducedMotion = false);
+  const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+  _reducedMotion = mq.matches;
+  const on = () => { _reducedMotion = mq.matches; };
+  if (mq.addEventListener) mq.addEventListener('change', on);
+  else mq.addListener?.(on);
+  return _reducedMotion;
+}

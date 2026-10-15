@@ -10,6 +10,7 @@
 // 所有量都以"人眼可察觉但不至于晕"为界：位移以角秒到角分计，绝不叠加到视点上
 // （否则会破坏浮动原点的精度与着陆判定的距离）。
 import * as THREE from 'three';
+import { prefersReducedMotion } from '../config.js';
 
 const DEG = Math.PI / 180;
 
@@ -41,6 +42,13 @@ export function createCameraFeel() {
      * @returns {{ quaternion, fovBiasDeg }} 叠加到相机上的姿态偏移与 FOV 偏移
      */
     update(dt, s) {
+      // 减少动效：步态起伏、冲击抖动、FOV 语言全部归零。
+      // 这些正是"动效"，对前庭敏感的用户是主要不适来源。
+      if (prefersReducedMotion()) {
+        impulse.amp = 0; bobAmp = 0; fovBias = 0;
+        q.identity();
+        return { quaternion: q, fovBiasDeg: 0 };
+      }
       time += dt;
       const mode = s.mode ?? 'orbit';
 

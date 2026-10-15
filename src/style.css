@@ -870,6 +870,20 @@ html.touch .help-inner { touch-action: pan-y; }
 /* ── 汉堡菜单：宽度适中 ── */
 .touch #tc-menu { min-width: 160px; max-width: 220px; }
 
+/* ── 可访问性 ─────────────────────────────────────────────────────── */
+/* 键盘焦点：此前全仓库没有任何 :focus-visible，纯键盘用户完全看不到焦点在哪。
+   用 outline 而不是 box-shadow，避免与已有的 backdrop-filter 叠层冲突。 */
+:focus-visible {
+  outline: 2px solid #7fd4ff;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+/* 屏幕阅读器专用文本（视觉上不占位，但会被朗读） */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
 /* 常驻错误角标：默认隐藏，出现运行时异常才显示（见 hud.setErrorCount） */
 #hud-err {
   position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
@@ -906,5 +920,13 @@ body.cinematic #directory, body.cinematic .compass-widget { opacity: 0; }
   .start-card, #start-btn {
     animation: none !important;
     transition: none !important;
+  }
+  /* 全局：除启动页动画外，界面过渡与提示条淡入也一并取消。
+     相机本身的飞行动画与惯性由 JS 侧读同一个媒体查询关闭（见 main.js 与
+     orbitCamera 的 reducedMotion），CSS 管不到。 */
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

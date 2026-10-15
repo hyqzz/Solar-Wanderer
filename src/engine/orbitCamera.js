@@ -5,6 +5,7 @@
 //   到达时停于目标日照面上空，目标居中
 
 import * as THREE from 'three';
+import { prefersReducedMotion } from '../config.js';
 import { IS_MOBILE } from './quality.js';
 
 const DEG = Math.PI / 180;
@@ -391,7 +392,10 @@ export class OrbitCamera {
     _v2.set(-to.posKm[0], -to.posKm[1], -to.posKm[2]).normalize(); // 目标处指向太阳
     const dir1 = _v2.clone().addScaledVector(new THREE.Vector3(0, 1, 0), 0.45).normalize();
     // 时长：距离对数缩放（同星球微调 ~2s，跨日球层 ~7s）
-    const dur = THREE.MathUtils.clamp(1.6 + Math.log10(Math.max(sep + h0, 10) / 1e4) * 0.55, 1.8, 7);
+    let dur = THREE.MathUtils.clamp(1.6 + Math.log10(Math.max(sep + h0, 10) / 1e4) * 0.55, 1.8, 7);
+    // 减少动效：把飞行压成瞬间到位，而不是"飞得慢一点"——
+    // 用户要的是不要这段动画，不是要看一段更慢的动画。
+    if (prefersReducedMotion()) dur = 0.01;
     // 墙钟驱动（GE 行为：固定真实时长，低帧率下跳帧前进）
     this.flight = { toId, fromId: fromIdOverride ?? this.focusId, t: 0, dur, h0, h1, dir0, dir1, start: performance.now() };
   }
@@ -517,7 +521,8 @@ export class OrbitCamera {
     this.lon += this.vLon * dt;
     this.lat += this.vLat * dt;
     this.poleNormalize();
-    const damp = Math.exp(-dt * (drag.active ? 0 : 4.5));
+    // 减少动效：拖拽松手后不留惯性（惯性本身就是"动效"）
+    const damp = prefersReducedMotion() ? 0 : Math.exp(-dt * (drag.active ? 0 : 4.5));
     this.vLon *= damp;
     this.vLat *= damp;
 
