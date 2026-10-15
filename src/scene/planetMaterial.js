@@ -7,6 +7,7 @@
 //   按行星视半径淡入：远观与 R5 审查版一致，贴近时低清贴图不再糊。
 
 import * as THREE from 'three';
+import { HAPKE_PARAMS } from '../astro/bodies.js';
 
 // 1×1 占位纹理：避免未启用分支的 sampler 绑定空值
 const DUMMY_TEX = new THREE.DataTexture(new Uint8Array([128, 128, 128, 128]), 1, 1);
@@ -29,12 +30,14 @@ const BODY_ID_MAP = {
 //   卡西尼可见光影像为无表面特征的橙色圆盘；降到霾层高度以下才逐渐显露出表面）
 const BODY_GRADE = {
   mercury: { grade: [0.40, 0.38, 0.36] },          // 真实反照率 0.09，暗灰微棕（MESSENGER）
-  earth:   { grade: [0.84, 0.92, 1.02], sat: 1.50 }, // 深蓝海洋 + 陆地饱和（Blue Marble）
-  jupiter: { sat: 1.12 },                          // 条带对比（贴图偏淡）
+  earth:   { grade: [1, 1, 1], sat: 1 },
+  jupiter: { sat: 1 },
   uranus:  { grade: [1.50, 1.65, 1.70] },          // 淡青（旅行者 2 号观感）
-  neptune: { grade: [2.20, 2.50, 2.80] },          // 亮天蓝（旅行者 2 号观感；30 AU 暗适应后仍偏暗）
-  pluto:   { grade: [1.10, 0.92, 0.72], sat: 1.65 }, // 暖桃棕（新视野号增强色；贴图偏灰）
-  triton:  { grade: [1.08, 1.00, 0.95], sat: 1.45 }, // 粉白氮冰（旅行者 2 号）
+  // Oxford/Irwin 2024: Neptune is pale green-blue, not enhanced Voyager blue.
+  // Approximate display correction of this legacy map; not spectral calibration.
+  neptune: { grade: [2.50, 2.50, 2.50], tint: [0.86, 1.02, 1.09], tintMix: 0.94 },
+  pluto:   { grade: [1, 1, 1], sat: 1 },
+  triton:  { grade: [1.08, 1.00, 0.95], sat: 1 },
   callisto: { grade: [0.90, 0.90, 0.92] },         // 压暗压冷，突出亮坑
   titan:   { veil: 0.94, veilColor: [0.92, 0.45, 0.14] }, // 不透明橙色霾（卡西尼自然色：柔和卡其橙盘）
 };
@@ -51,6 +54,8 @@ export function createPlanetMaterial({
   bodyId = null, cloudTex = null, // bodyId 驱动天体特定效果；cloudTex 用于地球云层投影
 }) {
   // ringShadow: { tex|null, innerKm, outerKm } —— 环对行星本体的投影（卡西尼实拍标志性特征）
+  // 无气天体走 Hapke 风化层 BRDF；表里没有的天体（有大气）保持 Lambert。
+  const hp = HAPKE_PARAMS[bodyId] ?? null;
   const uniforms = {
     uMap: { value: map },
     uNight: { value: nightMap ?? DUMMY_TEX },
@@ -78,8 +83,16 @@ export function createPlanetMaterial({
     // 逐天体色彩分级（BODY_GRADE 表；缺省 = 无修正）
     uGrade: { value: new THREE.Vector3(...(BODY_GRADE[bodyId]?.grade ?? [1, 1, 1])) },
     uSat: { value: BODY_GRADE[bodyId]?.sat ?? 1.0 },
+    uNaturalTint: { value: new THREE.Vector3(...(BODY_GRADE[bodyId]?.tint ?? [1, 1, 1])) },
+    uNaturalTintMix: { value: BODY_GRADE[bodyId]?.tintMix ?? 0 },
     uVeil: { value: BODY_GRADE[bodyId]?.veil ?? 0.0 },
     uVeilColor: { value: new THREE.Vector3(...(BODY_GRADE[bodyId]?.veilColor ?? [0, 0, 0])) },
+    // 无气天体：Hapke 风化层 BRDF（见 src/astro/bodies.js HAPKE_PARAMS）
+    uHapke: { value: hp ? 1 : 0 },
+    uW: { value: hp?.w ?? 0.25 },
+    uB0: { value: hp?.B0 ?? 1.0 },
+    uHh: { value: hp?.h ?? 0.06 },
+    uHg: { value: hp?.g ?? -0.3 },
   };
 
   const mat = new THREE.ShaderMaterial({
@@ -128,8 +141,12 @@ export function createPlanetMaterial({
       uniform int uHasClouds;
       uniform vec3 uGrade;
       uniform float uSat;
+      uniform vec3 uNaturalTint;
+      uniform float uNaturalTintMix;
       uniform float uVeil;
       uniform vec3 uVeilColor;
+      uniform int uHapke;
+      uniform float uW, uB0, uHh, uHg;
       varying vec2 vUv;
       varying vec3 vNormalW;
       varying vec3 vPosW;
@@ -237,6 +254,7 @@ export function createPlanetMaterial({
         }
         // 逐天体色彩分级（对标探测器实测影像；BODY_GRADE 表）
         albedo *= uGrade;
+        albedo = mix(albedo, dot(albedo, vec3(0.2126, 0.7152, 0.0722)) * uNaturalTint, uNaturalTintMix);
         albedo = mix(vec3(dot(albedo, vec3(0.3333))), albedo, uSat);
         // 地球深海蓝：开阔大洋水体反照率极低（~0.03-0.06，吸收红绿光），
         // 贴图海洋像素偏亮偏青；按蓝色掩码压暗并加深蓝移（Blue Marble/阿波罗实拍观感）
@@ -293,7 +311,35 @@ export function createPlanetMaterial({
             }
           }
         }
-        vec3 col = albedo * max(ndl, 0.0) * uSunI * ringSh * cloudShadow;
+        // === 无气天体：Hapke 风化层 BRDF 取代 Lambert ===
+        // 真实月面在相位角趋近 0° 时亮度陡增（满月比线性外推亮 40%+），这是裸眼与
+        // 实拍照片里最显著的月面特征，Lambert 完全给不出。采用 Hapke(1981/1986) 常用简化式：
+        //   r = (w/4π)·[μ0/(μ0+μ)]·[(1+B(α))·P(α) + H(μ0)H(μ) − 1]
+        //   B(α) = B0/(1+tan(α/2)/h)          冲日项
+        //   P(α) = Henyey-Greenstein（负 g = 后向散射）
+        //   H(x) = (1+2x)/(1+2x√(1−w))        Chandrasekhar 近似
+        // r 里已含 cos(入射角)，故此处不再另乘 ndl；按 r·π/w 归一到同反照率的
+        // Lambert，使既有亮度体系（uSunI / 曝光 / 逐天体分级）无需重标定。
+        float shade = max(ndl, 0.0);
+        if (uHapke == 1) {
+          vec3 V = normalize(cameraPosition - vPosW);
+          vec3 L = normalize(uSunDir);
+          float mu0 = max(dot(n, L), 0.0);
+          float mu  = max(dot(n, V), 0.0);
+          float ca  = clamp(dot(L, V), -1.0, 1.0);
+          float alpha = acos(ca);
+          float B = uB0 / (1.0 + tan(alpha * 0.5) / max(uHh, 1e-4));
+          float gg = uHg;
+          float denom = 1.0 + gg * gg + 2.0 * gg * ca;
+          float P = (1.0 - gg * gg) / pow(max(denom, 1e-4), 1.5);
+          float sq = sqrt(max(1.0 - uW, 1e-4));
+          float H0 = (1.0 + 2.0 * mu0) / (1.0 + 2.0 * mu0 * sq);
+          float H1 = (1.0 + 2.0 * mu)  / (1.0 + 2.0 * mu  * sq);
+          float r = (uW / 12.566370614) * (mu0 / max(mu0 + mu, 1e-4))
+                  * ((1.0 + B) * P + H0 * H1 - 1.0);
+          shade = clamp(r * 3.14159265 / max(uW, 1e-3), 0.0, 4.0);
+        }
+        vec3 col = albedo * shade * uSunI * ringSh * cloudShadow;
         // 气巨临边昏暗（厚大气斜视光程长 → 边缘变暗，旅行者/卡西尼实拍特征）
         if (uDetailMode == 2) {
           float muv = max(dot(n, normalize(-vPosW)), 0.0);
