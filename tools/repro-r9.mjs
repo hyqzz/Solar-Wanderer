@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { OrbitCamera } from '../src/engine/orbitCamera.js';
 import { Ship } from '../src/engine/ship.js';
-import { HeightField } from '../src/scene/terrain.js';
+import { HeightField, TerrainPatchSet } from '../src/scene/terrain.js';
 import { readFileSync } from 'node:fs';
 
 let pass = 0, fail = 0;
@@ -109,14 +109,14 @@ console.log('\n[R9-1b] 平移后滚轮接近：目标深度在天体间交替不
   check('确实显著接近了太阳', dSun() < AU * 0.5, `剩余 = ${(dSun() / AU).toFixed(3)} AU`);
 }
 
-console.log('\n[R9-1c] 远离上限：持续缩出不得超过日球层全景距离（~260 AU）');
+console.log('\n[R9-1c] R11 范围：允许探索 10 万 AU 奥尔特云，并限制最大距离');
 {
   const env = { get: () => ({ posKm: new Float64Array(3), radiusKm: R_E, quat: IDENTITY_Q }) };
   const cam = new OrbitCamera();
   cam.init(env, 'earth', 4);
   for (let i = 0; i < 2000; i++) cam.update(0.05, mkInput({ wheel: 1 }), env);
   const maxAU = cam.dist / AU;
-  check('缩出极限 ≤ 260 AU（日球层顶 121 AU 完整入画）', maxAU <= 260,
+  check('可达 10 万 AU 且不超过 1.5e13 km 上限', maxAU >= 100000 && cam.dist <= 1.5e13 * (1 + 1e-10),
     `实际可达 = ${maxAU.toFixed(0)} AU`);
 }
 
@@ -135,10 +135,14 @@ console.log('\n[R9-2a] 地形顶点 Float32 精度：体本地坐标在行星半
   check('锚点相对坐标量化误差 < 0.1 mm（修复路径有效）', errRel * 1e6 < 0.1,
     `相对坐标误差 = ${(errRel * 1e6).toFixed(4)} mm`);
   // 检查 terrain.js 是否已实现锚点相对几何（静态检查）
-  const src = readFileSync(new URL('../src/scene/terrain.js', import.meta.url), 'utf8');
+  const field = new HeightField('precision', { radiusKm: R_E, surface: { ampKm: 0, roughness: 0, craters: 0, palette: 'gray' } });
+  const patches = new TerrainPatchSet(field), level = patches.levels[0];
+  patches.build(level, new THREE.Vector3(1, 0, 0), 'none');
+  const vertex = new THREE.Vector3().fromBufferAttribute(level.geo.attributes.position, 0);
   check('terrain.js 已实现级原点相对几何（uPatchRel + origin）',
-    /uPatchRel/.test(src) && /lv\.origin/.test(src) && /- lv\.origin\.x/.test(src),
+    level.origin.length() > 6000 && vertex.length() < 0.1 && Math.abs(vertex.add(level.origin).length() - R_E) < 1e-7,
     '当前顶点仍为天体本地绝对坐标（模 ≈ R → fp32 量化 0.5 m → 闪烁）');
+  patches.dispose();
 }
 
 console.log('\n[R9-2c-1] 火卫一不规则形状：HeightField 应表达三轴椭球（27×22×18 km）');

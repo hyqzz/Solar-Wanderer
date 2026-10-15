@@ -9,7 +9,7 @@
 //   - 瓦片金字塔：层级 0-8（每层 2^level × 2^level 瓦片，等距圆柱投影）
 //   - LRU 缓存：桌面 64 瓦片，移动端 32（内存预算，避免 OOM）
 //   - 按相机距离优先级加载（近处高分辨率优先）
-//   - 离线回退：首次网络失败后永久回退到程序化噪声地形（避免重试风暴）
+//   - 离线回退：首次网络失败后保留有效缓存，失败瓦片冷却 30 秒后重试
 //   - 同步采样接口：height() 从缓存同步读取，未命中时返回 null 由调用方回退
 //
 // 与现有地形的融合策略（谱融合，天然无缝）：
@@ -27,6 +27,7 @@
 
 import { IS_MOBILE } from '../engine/quality.js';
 import { asset } from '../config.js';
+import { resourceQueue, whenIdle } from '../engine/resourceQueue.js';
 
 /**
  * DEM 数据源配置（可配置，支持扩展）。
@@ -108,13 +109,15 @@ class LRUTileCache {
     return v;
   }
 
+  peek(level, x, y) { return this.map.get(`${level}/${x}/${y}`); }
+
   set(level, x, y, tile) {
     const key = `${level}/${x}/${y}`;
     if (this.map.has(key)) {
       this.map.delete(key);
     } else if (this.map.size >= this.max) {
       // 淘汰最久未用（首项）
-      const oldest = this.map.keys().next().value;
+      const oldest = [...this.map.keys()].find(k => k !== '0/0/0');
       if (oldest !== undefined) this.map.delete(oldest);
     }
     this.map.set(key, tile);
@@ -143,8 +146,11 @@ export class DEMTileSource {
     this.cache = new LRUTileCache(options.maxCache ?? (IS_MOBILE ? 32 : 64));
     this.loading = new Map(); // key → Promise，去重进行中的请求
     this._priority = 0;
-    this._offline = false; // 首次网络失败后置 true，永久回退（避免重试风暴）
+    this._offline = false;
+    this._failures = new Map();
+    this._controllers = new Set();
     this._dirty = false; // 新瓦片到达标记，驱动地形重建
+    this.revision = 0;
     this._disposed = false;
     // 移动端 lite 画质：降低 DEM 分辨率（省带宽/内存）
     const maxLvl = this.config?.maxLevel ?? 0;
@@ -175,7 +181,7 @@ export class DEMTileSource {
    * @returns {Promise<{level,x,y,data:Float32Array,size:number}|null>}
    */
   async getTile(level, x, y) {
-    if (!this.config || this._offline || this._disposed) return null;
+    if (!this.config || this._disposed) return null;
     level = Math.min(level, this.config.maxLevel);
     const n = 2 ** level;
     x = ((x % n) + n) % n; // 经度环绕
@@ -188,13 +194,18 @@ export class DEMTileSource {
     // 去重：同一瓦片的并发请求合并为单个 fetch
     if (this.loading.has(key)) return this.loading.get(key);
 
-    const promise = this._fetchTile(level, x, y);
+    if ((this._failures.get(key) ?? 0) > Date.now()) return null;
+    const promise = resourceQueue.run(`dem:${this.bodyId}/${key}`,
+      () => this._fetchTile(level, x, y), 100 + this._priority + (level === 0 ? 10 : 0));
     this.loading.set(key, promise);
     try {
       const tile = await promise;
       if (tile && !this._disposed) {
         this.cache.set(level, x, y, tile);
+        this._offline = false;
+        this._failures.delete(key);
         this._dirty = true; // 标记地形需重建以拾取新数据
+        this.revision++;
       }
       return tile;
     } finally {
@@ -208,20 +219,28 @@ export class DEMTileSource {
       .replace('{z}', level)
       .replace('{x}', x)
       .replace('{y}', y));
+    if (this._disposed) return null;
+    const ctl = new AbortController();
+    this._controllers.add(ctl);
+    const timer = setTimeout(() => ctl.abort(), 12000);
     try {
-      const res = await fetch(url, { mode: 'cors' });
+      const res = await fetch(url, { mode: 'cors', signal: ctl.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
+      await whenIdle();
       const data = await this._decodeTile(blob);
       if (!data) throw new Error('解码失败');
       return { level, x, y, data, size: this.config.tileSize };
     } catch (e) {
-      // 网络失败 → 永久标记离线，后续不再尝试（避免重试风暴拖累帧率）
-      if (!this._offline) {
-        console.warn(`[DEM] ${this.bodyId} 瓦片加载失败，回退到程序化地形: ${e.message}`);
-        this._offline = true;
-      }
+      // Keep valid cached terrain. A failed fine tile must not discard the
+      // whole planet's DEM, and transient errors retry after a bounded cooldown.
+      this._failures.set(`${level}/${x}/${y}`, Date.now() + 30000);
+      this._offline = this.cache.size === 0;
+      if (!this._disposed) console.warn(`[DEM] ${this.bodyId} ${level}/${x}/${y}: ${e.message}`);
       return null;
+    } finally {
+      clearTimeout(timer);
+      this._controllers.delete(ctl);
     }
   }
 
@@ -233,7 +252,7 @@ export class DEMTileSource {
    */
   async _decodeTile(blob) {
     if (typeof createImageBitmap === 'undefined') return null;
-    const bmp = await createImageBitmap(blob);
+    const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
     const w = bmp.width, h = bmp.height;
     const canvas = typeof OffscreenCanvas !== 'undefined'
       ? new OffscreenCanvas(w, h)
@@ -264,7 +283,7 @@ export class DEMTileSource {
    * @returns {Promise<number|null>} 海拔 km，或 null（离线/未配置）
    */
   async getHeight(lat, lon, level) {
-    if (!this.config || this._offline) return null;
+    if (!this.config) return null;
     level = Math.min(level ?? this.sampleLevel, this.config.maxLevel);
     const t = latLonToTile(lat, lon, level);
     const tile = await this.getTile(level, t.x, t.y);
@@ -279,7 +298,7 @@ export class DEMTileSource {
    * 全局像素格采样（修瓦片边界断崖）：瓦片由全球画布切割而来（fetch-dem.mjs），
    * 像素 i 覆盖区间 [i, i+1)，中心在 i+0.5。旧实现在每块瓦片内独立把
    * fx∈[0,1] 映射到像素 [0, s-1]——同一条边界经度在东侧瓦片取第 0 列、
-   * 西侧取第 255 列，而这两列在数据里相距一个像素（z4 ≈ 86m）；
+   * 西侧取第 255 列，而这两列在数据里相距一个像素（月球 z4 ≈ 2.7km）；
    * 陡坡（撞击坑壁梯度可达 ~1km/像素）上相邻地形顶点因此高差百米，
    * 沿瓦片边界形成贯穿各级 LOD 的垂直"巨墙"（lon=0° 等永久边界最易触发）。
    * 现改为在全球连续像素坐标系中做双线性插值，跨界时从相邻瓦片取像素，
@@ -289,7 +308,7 @@ export class DEMTileSource {
    * @returns {number|null} 海拔 km，或 null（缓存未命中/离线）
    */
   getHeightSync(dir) {
-    if (!this.config || this._offline) return null;
+    if (!this.config) return null;
     const { lat, lon } = dirToLatLon(dir);
     const s = this.config.tileSize;
     // 从高到低分辨率尝试：该级所需的 ≤4 块瓦片全部命中才使用，否则落到下一级
@@ -306,7 +325,7 @@ export class DEMTileSource {
       const px = (X, Y) => {
         const Xi = ((X % span) + span) % span;
         const Yi = Math.max(0, Math.min(span - 1, Y));
-        const tile = this.cache.get(level, Math.floor(Xi / s), Math.floor(Yi / s));
+        const tile = this.cache.peek(level, Math.floor(Xi / s), Math.floor(Yi / s));
         return tile ? tile.data[(Yi % s) * s + (Xi % s)] : null;
       };
       const h00 = px(x0, y0), h10 = px(x0 + 1, y0);
@@ -341,7 +360,7 @@ export class DEMTileSource {
    * @param {number} level 期望分辨率层级
    */
   requestTiles(dirLocal, level) {
-    if (!this.config || this._offline || this._disposed) return;
+    if (!this.config || this._disposed) return;
     level = Math.min(level, this.config.maxLevel);
     const { lat, lon } = dirToLatLon(dirLocal);
     const t = latLonToTile(lat, lon, level);
@@ -357,12 +376,15 @@ export class DEMTileSource {
 
   /** 预加载基础层级（全球 1×1 瓦片），确保大尺度地形形状先就位 */
   async preloadBase() {
-    if (!this.config || this._offline) return;
+    if (!this.config) return;
     await this.getTile(0, 0, 0);
   }
 
   dispose() {
     this._disposed = true;
+    for (const ctl of this._controllers) ctl.abort();
+    this._controllers.clear();
+    this._failures.clear();
     this.cache.clear();
     this.loading.clear();
   }

@@ -42,6 +42,10 @@ export class WebXRManager {
     this._raycaster = new THREE.Raycaster();
     this._rays = [];              // 可视化射线 Line
     this._factory = null;         // XRControllerModelFactory（延迟创建）
+    this._models = new Map();
+    this._trackingRig = new THREE.Group();
+    this._trackingRig.scale.setScalar(0.001); // XR metres -> scene kilometres
+    this._poseMatrix = new THREE.Matrix4();
 
     // 手势状态
     this._squeezeState = [false, false];  // 左右手 squeeze
@@ -51,6 +55,7 @@ export class WebXRManager {
 
     // 性能：保存桌面模式原始参数，VR 退出后恢复
     this._savedPixelRatio = renderer.getPixelRatio();
+    this._savedCameraAutoUpdate = renderer.xr.cameraAutoUpdate;
 
     // 绑定方法（避免每帧创建闭包）
     this._onSessionEnded = this._onSessionEnded.bind(this);
@@ -113,6 +118,9 @@ export class WebXRManager {
     if (!this._supported || this._session) return false;
 
     try {
+      this._savedPixelRatio = this._renderer.getPixelRatio();
+      this._savedCameraAutoUpdate = this._renderer.xr.cameraAutoUpdate;
+      this._renderer.xr.setReferenceSpaceType('local');
       const session = await navigator.xr.requestSession('immersive-vr', {
         optionalFeatures: ['local-floor', 'bounded-floor', 'layers'],
       });
@@ -121,10 +129,10 @@ export class WebXRManager {
 
       // 启用 XR 渲染
       this._renderer.xr.enabled = true;
+      this._renderer.xr.cameraAutoUpdate = false;
       await this._renderer.xr.setSession(session);
 
       // 性能降级：VR 双目渲染开销大，降低像素比
-      this._savedPixelRatio = this._renderer.getPixelRatio();
       this._renderer.setPixelRatio(VR_PIXEL_RATIO);
 
       // 尝试启用 foveated rendering（Quest 2/3 支持，减少边缘分辨率）
@@ -136,7 +144,9 @@ export class WebXRManager {
       return true;
     } catch (err) {
       console.warn('[WebXR] 进入 VR 失败:', err);
-      this._session = null;
+      const session = this._session;
+      this._onSessionEnded();
+      await session?.end().catch(() => {});
       return false;
     }
   }
@@ -155,8 +165,10 @@ export class WebXRManager {
       this._session = null;
     }
     this._renderer.xr.enabled = false;
+    this._renderer.xr.cameraAutoUpdate = this._savedCameraAutoUpdate;
     this._renderer.setPixelRatio(this._savedPixelRatio);
     this._cleanupControllers();
+    this._callback?.({ type: 'sessionend' });
   }
 
   /**
@@ -165,6 +177,7 @@ export class WebXRManager {
    * 不可用时静默跳过。
    */
   _tryFoveatedRendering() {
+    this._renderer.xr.setFoveation?.(0.5);
     try {
       const gl = this._renderer.getContext();
       // WEBGL_qcom_framebuffer_foveated 或类似扩展
@@ -181,6 +194,7 @@ export class WebXRManager {
   // ── 控制器设置 ──────────────────────────────────────────────────────
 
   _setupControllers() {
+    this._scene.add(this._trackingRig);
     // 延迟创建 factory（避免桌面模式无谓加载）
     if (!this._factory) {
       try {
@@ -207,33 +221,40 @@ export class WebXRManager {
       this._rays.push(ray);
 
       // 事件绑定
-      controller.addEventListener('selectstart', () => this._onSelectStart(i));
-      controller.addEventListener('selectend', () => this._onSelectEnd(i));
-      controller.addEventListener('squeezestart', () => this._onSqueezeStart(i));
-      controller.addEventListener('squeezeend', () => this._onSqueezeEnd(i));
+      const handlers = {
+        selectstart: () => this._onSelectStart(i), selectend: () => this._onSelectEnd(i),
+        squeezestart: () => this._onSqueezeStart(i), squeezeend: () => this._onSqueezeEnd(i),
+        connected: e => { controller.userData.swInputSource = e.data; },
+        disconnected: () => { delete controller.userData.swInputSource; },
+      };
+      controller.userData.swXrHandlers = handlers;
+      for (const [event, handler] of Object.entries(handlers)) controller.addEventListener(event, handler);
 
-      this._scene.add(controller);
+      this._trackingRig.add(controller);
       this._controllers.push(controller);
 
       // 加载控制器 3D 模型（失败时仅有射线）
       if (this._factory) {
         try {
-          const model = this._factory.createControllerModel(grip);
+          const model = this._models.get(grip) ?? this._factory.createControllerModel(grip);
+          this._models.set(grip, model);
           grip.add(model);
         } catch { /* 模型加载失败，不影响功能 */ }
       }
-      this._scene.add(grip);
+      this._trackingRig.add(grip);
       this._controllerGrips.push(grip);
     }
   }
 
   _cleanupControllers() {
     for (const c of this._controllers) {
-      this._scene.remove(c);
-      c.removeEventListener('selectstart', null);
+      c.removeFromParent();
+      for (const [event, handler] of Object.entries(c.userData.swXrHandlers ?? {})) c.removeEventListener(event, handler);
+      delete c.userData.swXrHandlers;
     }
-    for (const g of this._controllerGrips) this._scene.remove(g);
-    for (const r of this._rays) r.geometry.dispose();
+    for (const g of this._controllerGrips) { g.removeFromParent(); this._models.get(g)?.removeFromParent(); }
+    this._trackingRig.removeFromParent();
+    for (const r of this._rays) { r.removeFromParent(); r.geometry.dispose(); r.material.dispose(); }
     this._controllers = [];
     this._controllerGrips = [];
     this._rays = [];
@@ -317,11 +338,14 @@ export class WebXRManager {
    */
   update(dt) {
     if (!this._session || this._controllers.length === 0) return;
+    this._updateTrackingCamera();
 
     // 摇杆/触摸板传送
     for (let i = 0; i < this._controllers.length; i++) {
       const c = this._controllers[i];
-      const axes = c.userData.axes; // [x, y] 或 gamepad axes
+      const source = c.userData.swInputSource ?? [...this._session.inputSources].find(s => s.handedness === (i === 0 ? 'left' : 'right'));
+      const rawAxes = source?.gamepad?.axes;
+      const axes = rawAxes?.length >= 4 ? rawAxes.slice(2, 4) : rawAxes ?? c.userData.axes;
       if (!axes) continue;
 
       // 触摸板/摇杆 Y 轴 → 前后移动
@@ -355,7 +379,7 @@ export class WebXRManager {
     const grabHand = this._squeezeState[0] ? 0 : (this._squeezeState[1] ? 1 : -1);
     if (grabHand >= 0 && this._grabOffset) {
       const c = this._controllers[grabHand];
-      const delta = c.position.clone().sub(this._grabOffset);
+      const delta = c.position.clone().sub(this._grabOffset).multiplyScalar(0.001).applyQuaternion(this._camera.quaternion);
       if (delta.lengthSq() > 1e-8 && this._callback) {
         this._callback({
           type: 'grab',
@@ -364,6 +388,35 @@ export class WebXRManager {
       }
       this._grabOffset = c.position.clone();
     }
+  }
+
+  /** Three's XR poses use metres. Convert translations, preserve unit rotation,
+   * and set kilometre clip planes before the XR ArrayCamera is rendered. */
+  _updateTrackingCamera() {
+    const xrCamera = this._renderer.xr.getCamera?.();
+    if (!xrCamera?.cameras?.length) return;
+    this._camera.updateMatrixWorld(true);
+    this._trackingRig.position.copy(this._camera.position);
+    this._trackingRig.quaternion.copy(this._camera.quaternion);
+    this._trackingRig.updateMatrixWorld(true);
+    for (const view of [...xrCamera.cameras, xrCamera]) {
+      this._poseMatrix.copy(view.matrix);
+      for (const i of [12, 13, 14]) this._poseMatrix.elements[i] *= 0.001;
+      view.matrixWorld.multiplyMatrices(this._camera.matrixWorld, this._poseMatrix);
+      view.matrixWorldInverse.copy(view.matrixWorld).invert();
+      view.near = this._camera.near; view.far = this._camera.far;
+      if (view !== xrCamera) {
+        const p = view.projectionMatrix.elements, n = view.near, f = view.far;
+        p[10] = -(f + n) / (f - n); p[14] = -2 * f * n / (f - n);
+        view.projectionMatrixInverse.copy(view.projectionMatrix).invert();
+      }
+    }
+    // A conservative central frustum covers both eyes for scene culling;
+    // rendering still uses the original asymmetric per-eye projections.
+    xrCamera.projectionMatrix.copy(xrCamera.cameras[0].projectionMatrix);
+    xrCamera.projectionMatrix.elements[0] *= 0.9;
+    xrCamera.projectionMatrix.elements[8] = 0;
+    xrCamera.projectionMatrixInverse.copy(xrCamera.projectionMatrix).invert();
   }
 
   /**

@@ -117,6 +117,7 @@ export class HUD {
     if (info.period) rows.push(`<div>${t('tgt.period', { p: info.period })}</div>`);
     if (info.rotation) rows.push(`<div>${t('tgt.rotation', { p: info.rotation })}</div>`);
     if (info.desc) rows.push(`<div class="desc">${info.desc}</div>`);
+    if (info.ephemeris) rows.push(`<div class="dim">${info.ephemeris}</div>`);
     // 科教知识卡片
     this._curId = info.id;
     if (info.id) {
@@ -190,7 +191,7 @@ function lightTime(km) {
 }
 
 /** 目标信息组装 */
-export function targetInfo(id, registry, dist, dSun = null) {
+export function targetInfo(id, registry, dist, dSun = null, jdTT = null) {
   const e = registry.get(id);
   if (!e) return null;
   // 英文界面：主名用英文、副名用中文；中文界面反之。

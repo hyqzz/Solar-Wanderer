@@ -6,6 +6,7 @@
 // heightFn 同时供行走碰撞使用（几何与碰撞同源，无穿模）。
 
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeNoise, hashSeed } from '../util/noise.js';
 import { QUALITY } from '../engine/quality.js';
 import { DEMTileSource } from './demTiles.js';
@@ -82,6 +83,8 @@ export class HeightField {
 
   /** 海床半径（海面之下 0.7–4 km 起伏的大陆架/深海盆，R9-2b 水下地形） */
   oceanFloor(dir) {
+    const demH = this.demSource?.getHeightSync(dir);
+    if (demH != null && demH < 0) return this.baseRadius(dir) + demH;
     const n = this.noise;
     const d = 1.0 + 2.4 * (0.5 + 0.5 * n.fbm(dir.x * 22 + 11.1, dir.y * 22, dir.z * 22, 3))
       + 0.5 * n.fbm(dir.x * 240, dir.y * 240, dir.z * 240, 2);
@@ -120,14 +123,11 @@ export class HeightField {
   _heightWithDEM(dir, demH) {
     const R = this.baseRadius(dir);
     const n = this.noise;
-    const bodyR = this.phys.radiusKm;
-    const detailScale = Math.min(1, bodyR / 400);
-    let detail = 0;
-    detail += 0.05 * detailScale * n.fbm(dir.x * 900, dir.y * 900, dir.z * 900, 3);
-    detail += 0.022 * detailScale * n.fbm(dir.x * 8000, dir.y * 8000, dir.z * 8000, 2);
-    detail += 0.009 * detailScale * n.fbm(dir.x * 42000, dir.y * 42000, dir.z * 42000, 2);
-    const effAmp = Math.min(this.sp.ampKm, bodyR * 0.05);
-    return R + demH + effAmp * detail * 0.5;
+    // Synthetic sub-resolution relief is bounded to 1.6 m, independent of the
+    // body's kilometre-scale mountain amplitude. This is detail, not measured DEM.
+    const detail = 0.001 * n.fbm(dir.x * 8000, dir.y * 8000, dir.z * 8000, 2)
+      + 0.0006 * n.fbm(dir.x * 42000, dir.y * 42000, dir.z * 42000, 2);
+    return R + demH + detail;
   }
 
   /** 纯程序化噪声地形（现有行为，DEM 不可用时回退到此） */
@@ -160,6 +160,8 @@ export class HeightField {
   }
 
   isOcean(dir) {
+    const demH = this.demSource?.getHeightSync(dir);
+    if (demH != null) return demH < 0;
     const c = this.sampleMap(dir);
     if (!c) return false;
     return c[2] > c[0] * 1.15 && c[2] > 60; // 偏蓝像素
@@ -294,6 +296,7 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
     polygonOffsetUnits: polyUnits, // 粗级后推，消除 LOD 环带重叠区 z-fight（R9-2a）
   });
   const uDetailScale = { value: detailScale };
+  mat.defines = { SW_LOW: QUALITY.detail ? 0 : 1 };
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uPatchRel = uPatchRel;
     shader.uniforms.uTime = uTime;
@@ -321,6 +324,7 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
         uniform float uFade;
         uniform float uDetailScale;
         uniform float uWaterFade;
+        uniform mat3 normalMatrix;
         float thash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         float tnoise(vec3 p) {
           vec3 i = floor(p), f = fract(p);
@@ -333,8 +337,32 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
         // 双八度去网格化：单八度值噪声的等值线呈轴对齐圆角方块（地表"迷宫/砖块"假象），
         // 叠加一个坐标循环置换（zxy ≈ 绕(1,1,1)旋转120°）的倍频八度打破格点排列。
         float tnoise2(vec3 p) {
+          #if SW_LOW
+          return tnoise(p);
+          #else
           return tnoise(p) * 0.667 + tnoise(p.zxy * 2.13 + vec3(17.31, 9.17, 5.23)) * 0.333;
-        }`)
+          #endif
+        }
+        // Analytic object-space gradient avoids screen-derivative discontinuities
+        // along triangle boundaries and remains stable during camera movement.
+        vec3 tnoiseGrad(vec3 p) {
+          vec3 i = floor(p), f = fract(p), df = 6.0 * f * (1.0 - f);
+          f = f * f * (3.0 - 2.0 * f);
+          float a=thash(i), b=thash(i+vec3(1,0,0)), c=thash(i+vec3(0,1,0)), d=thash(i+vec3(1,1,0));
+          float e=thash(i+vec3(0,0,1)), h=thash(i+vec3(1,0,1)), j=thash(i+vec3(0,1,1)), k=thash(i+vec3(1,1,1));
+          return df * vec3(mix(mix(b-a,d-c,f.y),mix(h-e,k-j,f.y),f.z),
+            mix(mix(c-a,d-b,f.x),mix(j-e,k-h,f.x),f.z),
+            mix(mix(e-a,h-b,f.x),mix(j-c,k-d,f.x),f.y));
+        }
+        vec3 tnoise2Grad(vec3 p) {
+          #if SW_LOW
+          return tnoiseGrad(p);
+          #else
+          vec3 q=tnoiseGrad(p.zxy*2.13+vec3(17.31,9.17,5.23));
+          return tnoiseGrad(p)*0.667+q.yzx*(2.13*0.333);
+          #endif
+        }
+        `)
       .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
         {
           // 三尺度细节：~28m / ~2.4m / ~20cm（对象空间稳定）；高频项随距离淡出防远处沙噪。
@@ -361,8 +389,13 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
           float g4 = f4 * aa4 * uDetailScale;
           float d1 = tnoise2(vObjPos * 35.0) * g1;
           float d2 = tnoise2(vObjPos * 420.0) * g2 * uDetailScale;
-          float d3 = tnoise2(vObjPos * 5200.0) * g3 * uDetailScale;
-          float d4 = tnoise(vObjPos * 26000.0) * g4;
+          #if SW_LOW
+          float d3 = 0.5 * g3 * uDetailScale;
+          float d4 = 0.5 * g4;
+          #else
+          float d3 = g3 > 0.01 ? tnoise2(vObjPos * 5200.0) * g3 * uDetailScale : 0.0;
+          float d4 = g4 > 0.01 ? tnoise(vObjPos * 26000.0) * g4 : 0.0;
+          #endif
           float dm = 0.78 + 0.46 * (d1 * 0.42 + d2 * 0.31 + d3 * 0.19 + d4 * 0.08)
                    + (1.0 - g1) * 0.21
                    + (1.0 - g2) * 0.075 + (1.0 - g3) * 0.05 + (1.0 - g4) * 0.02;
@@ -380,33 +413,25 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
         roughnessFactor = mix(0.82 + clamp(vSlope, 0.0, 1.0) * 0.18, 0.12, vWater);`)
       .replace('#include <normal_fragment_begin>', /* glsl */ `#include <normal_fragment_begin>
         {
-          // 程序化凹凸（屏幕导数法）；水面 = 三向行进波叠加（SpaceEngine 式海面，#21）
-          // bump 振幅 0.7m：旧值 1.6m 在 2.4m 波长上形成 ~45° 视在坡度，
-          // 格点极值处法线汇聚成规则黑色圆坑阵列（月面"黑点阵"假象）；
-          // 真实风化层米级起伏为厘米-分米级，0.7m 保留立体感而不产生深坑。
-          float vdb = length(vViewPosition);
-          float bf = 1.0 - smoothstep(0.1, 1.2, vdb);
-          // 同一足迹抗混叠（与颜色细节共用）：凹凸梯度在欠采样时直接把法线搅成点阵
-          float fpb = length(fwidth(vObjPos));
-          float bab2 = 1.0 - smoothstep(0.35, 0.9, fpb * 420.0);
-          float bab3 = 1.0 - smoothstep(0.35, 0.9, fpb * 5200.0);
-          // 20cm 倍频改用 tnoise2 去网格 + 独立小振幅（0.15m）：旧值与主频共享 0.7m，
-          // 在 20cm 波长上坡度>70°，法线扰动成规则黑色坑点阵列（近景斜格点阵）
-          float hRock = (tnoise2(vObjPos * 420.0) * 0.68 * 0.0007 * bab2
-                       + tnoise2(vObjPos * 5200.0) * 0.32 * 0.00015 * bab3) * bf * uDetailScale;
-          float wf = 1.0 - smoothstep(0.05, 14.0, vdb);
-          float hWave = (tnoise(vObjPos * 820.0  + vec3(uTime * 0.07,  0.0,          uTime * 0.05 )) * 0.50
-                       + tnoise(vObjPos * 2800.0 - vec3(uTime * 0.12,  uTime * 0.04, 0.0          )) * 0.35
-                       + tnoise(vObjPos * 7200.0 + vec3(uTime * 0.19, -uTime * 0.09, uTime * 0.11 )) * 0.15) * 0.0012 * wf;
-          float hb = mix(hRock, hWave, vWater);
-          vec3 sX = dFdx(-vViewPosition);
-          vec3 sY = dFdy(-vViewPosition);
-          vec3 r1 = cross(sY, normal);
-          vec3 r2 = cross(normal, sX);
-          float det = dot(sX, r1);
-          det *= (float(gl_FrontFacing) * 2.0 - 1.0);
-          vec3 grad = sign(det) * (dFdx(hb) * r1 + dFdy(hb) * r2);
-          normal = normalize(abs(det) * normal - grad);
+          float vd = length(vViewPosition), fp = length(fwidth(vObjPos));
+          float fade = 1.0 - smoothstep(0.1, 1.2, vd);
+          float aa2 = 1.0 - smoothstep(0.35, 0.9, fp * 420.0);
+          vec3 grad = tnoise2Grad(vObjPos * 420.0) * (420.0 * 0.00015 * aa2 * fade * uDetailScale);
+          #if !SW_LOW
+          float aa3 = 1.0 - smoothstep(0.35, 0.9, fp * 5200.0);
+          if (aa3 > 0.01) grad += tnoise2Grad(vObjPos * 5200.0) * (5200.0 * 0.00002 * aa3 * fade * uDetailScale);
+          #endif
+          if (vWater > 0.001) {
+            float w1 = 1.0 - smoothstep(0.25, 0.65, fp * 820.0);
+            float w2 = 1.0 - smoothstep(0.25, 0.65, fp * 2800.0);
+            float w3 = 1.0 - smoothstep(0.25, 0.65, fp * 7200.0);
+            vec3 waterGrad = tnoiseGrad(vObjPos * 820.0 + vec3(uTime * 0.07, 0.0, uTime * 0.05)) * (820.0 * 0.50 * w1);
+            if (w2 > 0.01) waterGrad += tnoiseGrad(vObjPos * 2800.0 - vec3(uTime * 0.12, uTime * 0.04, 0.0)) * (2800.0 * 0.35 * w2);
+            if (w3 > 0.01) waterGrad += tnoiseGrad(vObjPos * 7200.0 + vec3(uTime * 0.19, -uTime * 0.09, uTime * 0.11)) * (7200.0 * 0.15 * w3);
+            grad = mix(grad, waterGrad * 0.00025 * (1.0 - smoothstep(0.05, 14.0, vd)), vWater);
+          }
+          vec3 gradView = normalMatrix * grad;
+          normal = normalize(normal - gradView + normal * dot(normal, gradView));
         }`)
       .replace('#include <colorspace_fragment>',
         `#include <colorspace_fragment>
@@ -436,10 +461,14 @@ class RockField {
     this.CELL = 0.018;  // 18 m 格（加密，小砾石需要更高空间频率）
     this.RANGE = 0.34;  // 340 m 散布半径
     const N = Math.floor(this.RANGE / this.CELL);
-    this.MAX = Math.min(640, Math.ceil((2 * N + 1) * (2 * N + 1) * this.density * 1.1));
+    this.MAX = Math.min(QUALITY.rockCount, Math.ceil((2 * N + 1) * (2 * N + 1) * this.density * 1.1));
     // 岩石网格：detail 2 二十面体确定性变形（detail 1 棱角感太强，
     // 近看是"低多边形游戏道具"而非风化岩石）
-    const geo = new THREE.IcosahedronGeometry(1, 2);
+    const raw = new THREE.IcosahedronGeometry(1, QUALITY.detail ? 4 : 2);
+    // PolyhedronGeometry is non-indexed. Weld before calculating normals;
+    // otherwise every triangle has its own normal and rocks look faceted.
+    raw.deleteAttribute('normal'); raw.deleteAttribute('uv');
+    const geo = mergeVertices(raw); raw.dispose();
     const n = makeNoise(hashSeed(field.bodyId + ':rock'));
     const pos = geo.attributes.position;
     const v = new THREE.Vector3();
@@ -484,38 +513,43 @@ class RockField {
     const CELL = this.CELL, RANGE = this.RANGE;
     this.mesh.position.copy(origin);
     const u = anchorDir.clone().normalize();
-    const east = Math.abs(u.y) > 0.999
-      ? new THREE.Vector3(1, 0, 0)
-      : new THREE.Vector3(0, 1, 0).cross(u).normalize();
-    const north = new THREE.Vector3().crossVectors(u, east);
-    const N = Math.floor(RANGE / CELL);
-    let count = 0;
+    const lat0 = Math.asin(u.y), lon0 = Math.atan2(-u.z, u.x);
+    const latStep = CELL / R, latIndex = Math.floor(lat0 / latStep);
+    const N = Math.ceil(RANGE / CELL), candidates = [];
     const dir = new THREE.Vector3();
-    for (let ix = -N; ix <= N && count < this.MAX; ix++) {
-      for (let iy = -N; iy <= N && count < this.MAX; iy++) {
-        // 世界锚定：以体固系绝对坐标的整数格为键（与 anchor 无关 → 重建稳定）
-        this._p.copy(u).multiplyScalar(R)
-          .addScaledVector(east, ix * CELL).addScaledVector(north, iy * CELL);
-        const kx = Math.floor(this._p.x / CELL), ky = Math.floor(this._p.y / CELL), kz = Math.floor(this._p.z / CELL);
-        const r0 = RockField.hash(kx, ky, kz, 1);
-        if (r0 > this.density) continue;
-        const r1 = RockField.hash(kx, ky, kz, 2);
-        const r2 = RockField.hash(kx, ky, kz, 3);
-        const r3 = RockField.hash(kx, ky, kz, 4);
-        const r4 = RockField.hash(kx, ky, kz, 5);
-        dir.set(
-          this._p.x + (r1 - 0.5) * CELL, this._p.y + (r2 - 0.5) * CELL, this._p.z + (r3 - 0.5) * CELL
-        ).normalize();
-        if (this.field.sp.ocean && this.field.isOcean(dir)) continue; // 海面无岩石
-        // 散布边缘渐缩：250m→330m 缩放至 0，行走时远处岩石平滑消长而非整批跳入
-        const dAnchor = Math.hypot(ix * CELL, iy * CELL);
+    // Fixed latitude rows and fixed rings: candidate positions do not depend on
+    // the camera anchor. Moving/rebuilding changes visibility, not rock locations.
+    for (let row = latIndex - N; row <= latIndex + N; row++) {
+      const lat = (row + 0.5) * latStep;
+      if (Math.abs(lat) >= Math.PI / 2) continue;
+      const rings = Math.max(1, Math.round(2 * Math.PI * R * Math.cos(lat) / CELL));
+      const step = 2 * Math.PI / rings, center = Math.floor((lon0 + Math.PI) / step);
+      for (let offset = -Math.min(N, Math.floor(rings / 2)); offset <= Math.min(N, Math.floor(rings / 2)); offset++) {
+        const cell = ((center + offset) % rings + rings) % rings;
+        if (RockField.hash(cell, row, 0, 1) > this.density) continue;
+        const r1 = RockField.hash(cell, row, 0, 2), r2 = RockField.hash(cell, row, 0, 3);
+        const r3 = RockField.hash(cell, row, 0, 4), r4 = RockField.hash(cell, row, 0, 5);
+        const lon = (cell + 0.5 + (r1 - 0.5) * 0.7) * step - Math.PI;
+        const jitterLat = lat + (r2 - 0.5) * latStep * 0.7;
+        dir.set(Math.cos(jitterLat) * Math.cos(lon), Math.sin(jitterLat), -Math.cos(jitterLat) * Math.sin(lon));
+        const distance = dir.distanceTo(u) * R;
+        if (distance >= RANGE || (this.field.sp.ocean && this.field.isOcean(dir))) continue;
+        candidates.push({ dir: dir.clone(), distance, r1, r2, r3, r4 });
+      }
+    }
+    candidates.sort((a, b) => a.distance - b.distance);
+    let count = 0;
+    const up = new THREE.Vector3(0, 1, 0), yaw = new THREE.Quaternion();
+    for (const candidate of candidates.slice(0, this.MAX)) {
+        const { distance: dAnchor, r1, r2, r3, r4 } = candidate;
+        dir.copy(candidate.dir);
         const edge = 1 - sstep(RANGE * 0.74, RANGE * 0.97, dAnchor);
         if (edge <= 0.01) continue;
         const h = this.field.height(dir);
         // 幂律尺寸：0.12m 砾石为主，~2.8m 巨砾稀少（r1³ 压缩大端）
         const scale = (0.00012 + r1 * r1 * r1 * 0.0026) * edge;
         this._p.copy(dir).multiplyScalar(h + scale * 0.15).sub(origin);
-        this._q.setFromAxisAngle(dir, r2 * Math.PI * 2);
+        this._q.setFromUnitVectors(up, dir).multiply(yaw.setFromAxisAngle(up, r2 * Math.PI * 2));
         this._s.set(scale * (0.7 + r3 * 0.7), scale, scale * (0.7 + r2 * 0.7));
         this._m.compose(this._p, this._q, this._s);
         this.mesh.setMatrixAt(count, this._m);
@@ -525,7 +559,6 @@ class RockField {
         const v = 0.62 + r4 * 0.4;
         this.mesh.setColorAt(count, this._c.multiplyScalar(v));
         count++;
-      }
     }
     this.mesh.count = count;
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -534,6 +567,8 @@ class RockField {
 
   dispose() {
     this.mesh.geometry.dispose();
+    this.mesh.material.dispose();
+    this.mesh.dispose();
   }
 }
 
@@ -584,7 +619,7 @@ export class TerrainPatchSet {
       const mesh = new THREE.Mesh(geo, mat);
       mesh.frustumCulled = false;
       mesh.receiveShadow = true; // 近场太阳阴影（岩石/地形自我投影）
-      mesh.castShadow = true;
+      mesh.castShadow = li < (QUALITY.detail ? 4 : 2);
       this.group.add(mesh);
       this.levels.push({
         mesh, geo, mat, uPatchRel, uFade, extent: this.extents[li],
@@ -641,6 +676,18 @@ export class TerrainPatchSet {
     }
     // 首次激活：由外向内逐帧构建（大覆盖先出现，远处进入时感知更自然）
     const initMode = !this._initialized;
+    if (this._buildTask) {
+      const task = this._buildTask, start = performance.now();
+      let result;
+      do { result = task.steps.next(); } while (!result.done && performance.now() - start < 3);
+      if (result.done) {
+        task.lv.builtAnchor.copy(task.anchor);
+        task.lv.demClean = true;
+        if (task.li === 0) this.rocks.rebuild(task.anchor, task.lv.origin, task.demRebuild);
+        this._buildTask = null;
+        if (this.levels.every(l => l.demClean)) this.demDirty = false;
+      }
+    }
     for (let i = 0; i < this.levels.length; i++) {
       const li = initMode ? this.levels.length - 1 - i : i;
       const lv = this.levels[li];
@@ -649,18 +696,14 @@ export class TerrainPatchSet {
       // 程序化噪声高程上，与近处 DEM 地形错位出断崖/平台，30m 外的岩石也因
       // 坐在陈旧噪声地形上而悬浮空中）。每帧扫一级（最内优先），扫完清脏。
       const demRebuild = !initMode && this.demDirty && !lv.demClean;
-      if (moveKm > lv.extent * 0.25 || demRebuild) {
+      if (!this._buildTask && (moveKm > lv.extent * 0.25 || demRebuild)) {
         // 淡入仅用于"新几何出现"：首次构建全淡入；DEM 高程更新半淡入
         // （0.35→1, 500ms，避免透过半透地面看到地平线下黑天空）；
         // 随移动的常规重建不淡入（顶点仍在同一连续高度场上，重置淡入
         // 会让地面每走几步闪一次——行走/奔跑时地面闪烁的根因，#18 回归修正）
-        this.build(lv, dirLocal, !lv.built ? 'full' : demRebuild ? 'dem' : 'none');
-        lv.builtAnchor.copy(dirLocal);
-        lv.demClean = true;
-        if (li === 0) {
-          this.rocks.rebuild(dirLocal, lv.origin, demRebuild);
-        }
-        if (this.levels.every((l) => l.demClean)) this.demDirty = false;
+        const anchor = dirLocal.clone();
+        this._buildTask = { lv, li, anchor, demRebuild,
+          steps: this._buildSteps(lv, anchor, !lv.built ? 'full' : 'none') };
         break; // 分帧：其余级下一帧再建
       }
     }
@@ -673,6 +716,12 @@ export class TerrainPatchSet {
   }
 
   build(lv, anchor, fadeMode = 'full') {
+    for (const unused of this._buildSteps(lv, anchor, fadeMode)) { /* synchronous utility */ }
+  }
+
+  *_buildSteps(lv, anchor, fadeMode = 'full') {
+    const geo = lv.geo.clone();
+    this._stagingGeometry = geo;
     const GRID = this.grid;
     const R = this.field.phys.radiusKm;
     const u = anchor.clone().normalize();
@@ -682,18 +731,16 @@ export class TerrainPatchSet {
     const north = new THREE.Vector3().crossVectors(u, east);
     // 级原点：锚点地表（fround 取 fp32 精确可表示值 → mesh.position 无量化误差），
     // 顶点存原点相对坐标（模 ≤ 2×extent，亚毫米精度，R9-2a 修闪烁根因）
-    lv.origin.set(
+    const origin = new THREE.Vector3(
       Math.fround(u.x * R), Math.fround(u.y * R), Math.fround(u.z * R)
     );
-    lv.mesh.position.copy(lv.origin);
-    lv.uPatchRel.value.copy(lv.origin).sub(this.noiseOriginU.value);
-    const pos = lv.geo.attributes.position.array;
-    const col = lv.geo.attributes.color.array;
-    const wat = lv.geo.attributes.water.array;
+    const pos = geo.attributes.position.array;
+    const col = geo.attributes.color.array;
+    const wat = geo.attributes.water.array;
     const dir = new THREE.Vector3();
     const c = new THREE.Color();
-    const dirs = new Float32Array((GRID + 1) * (GRID + 1) * 3);
-    const hs = new Float64Array((GRID + 1) * (GRID + 1));
+    const dirs = lv.dirs ??= new Float32Array((GRID + 1) * (GRID + 1) * 3);
+    const hs = lv.heights ??= new Float64Array((GRID + 1) * (GRID + 1));
     const isO = this.field.sp.ocean;
     let k = 0;
     for (let y = 0; y <= GRID; y++) {
@@ -704,19 +751,20 @@ export class TerrainPatchSet {
         const h = this.field.height(dir);
         hs[k] = h;
         dirs[k * 3] = dir.x; dirs[k * 3 + 1] = dir.y; dirs[k * 3 + 2] = dir.z;
-        pos[k * 3] = dir.x * h - lv.origin.x;
-        pos[k * 3 + 1] = dir.y * h - lv.origin.y;
-        pos[k * 3 + 2] = dir.z * h - lv.origin.z;
+        pos[k * 3] = dir.x * h - origin.x;
+        pos[k * 3 + 1] = dir.y * h - origin.y;
+        pos[k * 3 + 2] = dir.z * h - origin.z;
         wat[k] = isO && this.field.isOcean(dir) ? 1 : 0;
       }
+      yield;
     }
-    lv.geo.attributes.position.needsUpdate = true;
-    lv.geo.attributes.water.needsUpdate = true;
-    lv.geo.computeVertexNormals();
-    lv.geo.attributes.normal.needsUpdate = true;
+    geo.attributes.position.needsUpdate = true;
+    geo.attributes.water.needsUpdate = true;
+    geo.computeVertexNormals();
+    geo.attributes.normal.needsUpdate = true;
     // 第二遍：用法线坡度上色（陡坡岩壁化）并写入坡度属性（PBR 粗糙度驱动）
-    const nrm = lv.geo.attributes.normal.array;
-    const slp = lv.geo.attributes.slope.array;
+    const nrm = geo.attributes.normal.array;
+    const slp = geo.attributes.slope.array;
     k = 0;
     for (let y = 0; y <= GRID; y++) {
       for (let x = 0; x <= GRID; x++, k++) {
@@ -727,10 +775,11 @@ export class TerrainPatchSet {
         col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
         slp[k] = slope;
       }
+      yield;
     }
-    lv.geo.attributes.color.needsUpdate = true;
-    lv.geo.attributes.slope.needsUpdate = true;
-    if (fadeMode === 'none') {
+    geo.attributes.color.needsUpdate = true;
+    geo.attributes.slope.needsUpdate = true;
+    if (fadeMode === 'none' || fadeMode === 'dem') {
       lv.uFade.value = 1; // 移动重建：保持不透明，不重启淡入
     } else {
       lv.fadeFrom = fadeMode === 'dem' ? 0.35 : 0;
@@ -738,11 +787,20 @@ export class TerrainPatchSet {
       lv.uFade.value = lv.fadeFrom;
       lv.fadeStart = performance.now();
     }
+    const previous = lv.geo;
+    lv.geo = geo; lv.mesh.geometry = geo;
+    lv.origin.copy(origin); lv.mesh.position.copy(origin);
+    lv.uPatchRel.value.copy(origin).sub(this.noiseOriginU.value);
+    previous.dispose();
+    this._stagingGeometry = null;
     lv.built = true;
   }
 
   dispose() {
-    for (const lv of this.levels) lv.geo.dispose();
+    this._buildTask = null;
+    this._stagingGeometry?.dispose();
+    this._stagingGeometry = null;
+    for (const lv of this.levels) { lv.geo.dispose(); lv.mesh.material.dispose(); }
     this.rocks.dispose();
   }
 }
@@ -774,6 +832,15 @@ export class TerrainManager {
       const dem = this.demSources.get(bodyId) ?? this._createDEMFor(bodyId);
       if (dem) f.setDEMSource(dem);
       this.fields.set(bodyId, f);
+      if (this.fields.size > 4) {
+        const oldest = [...this.fields.keys()].find(id => id !== bodyId && id !== this.active?.bodyId);
+        if (oldest) this.fields.delete(oldest);
+      }
+    }
+    const map = this.getMapData?.(bodyId);
+    if (map && map !== f.map) {
+      f.map = map;
+      if (this.active?.bodyId === bodyId) this.active.patches.markDirty();
     }
     return f;
   }
@@ -854,7 +921,8 @@ export class TerrainManager {
       }
       // DEM 瓦片流式：按相机位置请求瓦片 + 检查新瓦片到达
       const dem = this.demSources.get(this.active.bodyId);
-      if (dem && !dem.isOffline) {
+      if (dem) {
+        dem.preloadBase(); // retries are throttled in the tile source
         const dist = nearest ? nearest.distSurface : 100;
         dem.setPriority(1 / Math.max(0.1, dist)); // 近=高优先级
         dem.requestTiles(camLocalDir, this._demLevelForDistance(dist));

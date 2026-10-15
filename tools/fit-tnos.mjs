@@ -51,6 +51,7 @@ for (const id of TNO_IDS) {
     const nDegPerDay = Math.sqrt(GM_SUN / (aKm * aKm * aKm)) * RAD2DEG * 86400;
     if (!epochJd) epochJd = el.epoch;
     out[id] = {
+      epochJd: el.epoch,
       aAU: el.a, e: el.e, iDeg: el.i,
       nodeDeg: el.om, periDeg: ((el.om + el.w) % 360), M0Deg: el.ma,
       nDegPerDay,

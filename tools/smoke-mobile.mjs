@@ -6,6 +6,7 @@
 // Requires: dev server running at http://localhost:5173
 import puppeteer from 'puppeteer';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const baseUrl = (process.argv[2] ?? 'http://localhost:5173/').replace(/\/?$/, '/');
 
 async function run(lang) {
   const browser = await puppeteer.launch({
@@ -21,6 +22,7 @@ async function run(lang) {
     defaultViewport: { width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
   });
   const page = await browser.newPage();
+  await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1');
   await page.emulateTimezone('UTC');
 
   // Force coarse-pointer media query and touch detection
@@ -39,7 +41,7 @@ async function run(lang) {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 
-  const url = lang === 'en' ? 'http://localhost:5173/en/' : 'http://localhost:5173/';
+  const url = lang === 'en' ? baseUrl + 'en/' : baseUrl;
   await page.goto(url, { waitUntil: 'networkidle2', timeout: 120000 });
   await page.waitForSelector('#start-btn', { visible: true, timeout: 120000 });
 

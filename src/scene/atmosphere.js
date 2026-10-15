@@ -47,6 +47,9 @@ export function createAtmosphere(phys, auroraMode = 0) {
     // 从而被前方卫星/行星本体正确遮挡（#R15 替代方案，避免模板缓冲失效）。
     // 内侧：DoubleSide 保证相机在大气壳内部时仍能看到天空穹顶。
     side: THREE.DoubleSide,
+    // A volume integral already accounts for the entire atmosphere ray. Three
+    // otherwise draws transparent DoubleSide meshes twice, integrating twice.
+    forceSinglePass: true,
     transparent: true,
     depthWrite: false,
     depthTest: true,
@@ -110,6 +113,10 @@ export function createAtmosphere(phys, auroraMode = 0) {
       }
 
       void main() {
+        // Outside the shell use its near face, inside use its far face. This
+        // keeps one integral per pixel across the atmospheric boundary.
+        bool insideShell = length(stretch(-uCenter)) < uRa;
+        if (gl_FrontFacing == insideShell) discard;
         #include <logdepthbuf_fragment>
         vec3 ro = vec3(0.0);
         vec3 rd = normalize(vWorldPos);

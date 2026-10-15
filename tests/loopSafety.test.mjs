@@ -66,8 +66,9 @@ test('DEMTileSource：LRU 缓存淘汰不抛异常', () => {
   src.cache.set(0, 1, 0, { data: new Float32Array(1), size: 1, level: 0 });
   src.cache.set(0, 0, 1, { data: new Float32Array(1), size: 1, level: 0 }); // 淘汰 (0,0,0)
   assert.equal(src.cache.size, 2);
-  // 被淘汰的瓦片返回 undefined
-  assert.equal(src.cache.get(0, 0, 0), undefined);
+  // 全球基础瓦片固定保留；最久未用的非基础瓦片淘汰。
+  assert.ok(src.cache.get(0, 0, 0));
+  assert.equal(src.cache.get(0, 1, 0), undefined);
 });
 
 // ── 循环安全网模式验证 ──────────────────────────────────────────

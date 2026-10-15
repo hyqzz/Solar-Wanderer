@@ -22,7 +22,8 @@ function detectLang() {
     const params = new URLSearchParams(window.location.search);
     const paramLang = params.get('lang');
     if (SUPPORTED_LANGS.includes(paramLang)) return paramLang;
-    const pathLang = window.location.pathname.split('/')[1];
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const pathLang = segments.at(-1) === 'index.html' ? segments.at(-2) : segments.at(-1);
     if (SUPPORTED_LANGS.includes(pathLang)) return pathLang;
   }
   if (typeof navigator !== 'undefined') {

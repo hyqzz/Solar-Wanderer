@@ -69,7 +69,7 @@ Solar Wanderer already works. But to become *indistinguishable from reality* and
 We are building toward four pillars:
 
 1. **🪐 Realism that is indistinguishable from reality**
-   - Real DEM terrain for the Moon (LOLA), Mars (MOLA/HiRISE), and Earth (SRTM)
+   - Real global DEM terrain: Moon (LOLA), Mars (MOLA), Earth (ETOPO1); local HiRISE / photographic surface detail remains future work
    - Real solar/lunar/planetary eclipse shadows
    - Dynamic weather, clouds, dust storms, auroras
    - High-resolution 16K–32K textures

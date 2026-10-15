@@ -9,6 +9,8 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 
 import { SimClock } from './astro/time.js';
 import { surfaceGravity } from './astro/bodies.js';
@@ -17,6 +19,7 @@ import { Ship, Input } from './engine/ship.js';
 import { OrbitCamera } from './engine/orbitCamera.js';
 import { buildSolarSystem, texturesOfBody } from './scene/builder.js';
 import { createStarfield, BRIGHT_STARS, SKY_R } from './scene/starfield.js';
+import { photoSkyVisibility } from './scene/photoExposure.js';
 import { createBelts, createOortCloud } from './scene/belts.js';
 import { createSmallBodies } from './scene/smallBodies.js';
 import { createTNOScene } from './scene/tnoScene.js';
@@ -42,12 +45,23 @@ import { EclipseSystem } from './scene/eclipses.js';
 import { WebXRManager } from './engine/webxr.js';
 import { createSpacecraftModel, makeSpacecraftGlow, SPACECRAFT_TIMELINES } from './scene/spacecraft.js';
 import { createApolloLandmarks, createRoverSites } from './scene/landmarks.js';
+import { createEphemerisLoader } from './engine/ephemerisLoader.js';
+import { bootstrapRenderer } from './engine/rendererBootstrap.js';
 
-const canvas = document.getElementById('app');
-// powerPreference: 多显卡系统由浏览器选高性能独显（R7 #8）
-const renderer = new THREE.WebGLRenderer({
-  canvas, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance',
+const renderBoot = await bootstrapRenderer({
+  canvas: document.getElementById('app'), create: options => new THREE.WebGLRenderer(options),
+  status({ state }) {
+    const text = document.getElementById('start-btn-text');
+    if (text) { text.removeAttribute('data-i18n'); text.textContent = t(state === 'failed' ? 'start.retryGpu' : 'start.retryingGpu'); }
+    if (state === 'failed') {
+      const message = document.createElement('p');message.id = 'startup-error';message.setAttribute('role', 'alert');message.textContent = t('start.gpuUnavailable');
+      const button = document.getElementById('start-btn');button.before(message);button.disabled = false;button.onclick = () => location.reload();
+    }
+  },
 });
+// Failure leaves an interactive retry screen; skip graphics-dependent setup.
+if (renderBoot) {
+const { renderer, canvas } = renderBoot;
 initQuality(renderer); // 必须在 buildSolarSystem 之前（着色器步进/网格密度构建期固化）
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY.pixelRatio));
@@ -71,16 +85,28 @@ scene.add(ambient);
 // ACES 色调映射前不再被 8-bit 缓冲截断为 1.0，亮部渐变连续不断层
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(
   window.innerWidth, window.innerHeight,
-  { type: THREE.HalfFloatType, colorSpace: THREE.LinearSRGBColorSpace }
+  { type: THREE.HalfFloatType, colorSpace: THREE.LinearSRGBColorSpace,
+    samples: QUALITY.tier === 'high' ? Math.min(4, renderer.capabilities.maxSamples) : 0 }
 ));
 composer.addPass(new RenderPass(scene, camera));
 // 注：不启用 UnrealBloomPass 式全屏泛光（非物理后期）；日冕等真实结构直接建模
 composer.addPass(new OutputPass());
+const fxaaPass = QUALITY.tier === 'low' ? new ShaderPass(FXAAShader) : null;
+if (fxaaPass) composer.addPass(fxaaPass);
+composer.setPixelRatio(renderer.getPixelRatio());
+function syncRenderResolution() {
+  composer.setPixelRatio(renderer.getPixelRatio());
+  if (fxaaPass) fxaaPass.uniforms.resolution.value.set(
+    1 / (window.innerWidth * renderer.getPixelRatio()),
+    1 / (window.innerHeight * renderer.getPixelRatio()));
+}
+syncRenderResolution();
 
 // 运行时帧率自适应：持续低帧降档、持续高帧恢复（双向）
 const fpsGuard = makeFpsGuard(renderer, () => {
   for (const [, e] of builder.bodies) {
-    if (e.mat?.userData.uniforms?.uDetailMode) e.mat.userData.uniforms.uDetailMode.value = 0;
+    if (e.mat?.userData.uniforms?.uDetailMode) e.mat.userData.uniforms.uDetailMode.value =
+      QUALITY.detail ? ((e.phys.type === 'gas' || e.phys.type === 'ice') ? 2 : (e.phys.landable ? 1 : 0)) : 0;
   }
   hud.tip(t('tip.quality'));
 }, () => {
@@ -88,10 +114,10 @@ const fpsGuard = makeFpsGuard(renderer, () => {
   for (const [, e] of builder.bodies) {
     if (e.mat?.userData.uniforms?.uDetailMode) {
       e.mat.userData.uniforms.uDetailMode.value =
-        (e.phys.type === 'gas' || e.phys.type === 'ice') ? 2 : (e.phys.landable ? 1 : 0);
+        QUALITY.detail ? ((e.phys.type === 'gas' || e.phys.type === 'ice') ? 2 : (e.phys.landable ? 1 : 0)) : 0;
     }
   }
-});
+}, syncRenderResolution);
 
 const hud = new HUD();
 const world = new World();
@@ -105,6 +131,7 @@ let builder, comets, labels, searchUI, touchControls, sky, belts, oortCloud, tno
 let appMode = 'orbit'; // orbit | fly | walk
 const registry = new Map();
 let selectedId = null;
+const ephemerisLoader = createEphemerisLoader();
 const voyagerEntries = [];
 const boundaryEntries = [];
 const IDENTITY_Q = new THREE.Quaternion();
@@ -115,6 +142,7 @@ const LABEL_CLICK_WINDOW = 250;
 
 // 新功能模块实例（#3-#55 集成）
 let audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr;
+let apolloLandmarks, roverSites;
 
 init();
 
@@ -319,8 +347,8 @@ async function init() {
   });
 
   // Apollo 着陆点地标（#34）和火星车路径（#35）—— try-catch 保护，失败不应阻止渲染循环启动
-  try { createApolloLandmarks(scene, terrainMgr); } catch (e) { console.error('[Apollo landmarks]', e); }
-  try { createRoverSites(scene, terrainMgr); } catch (e) { console.error('[Rover sites]', e); }
+  try { apolloLandmarks = createApolloLandmarks(scene, terrainMgr); } catch (e) { console.error('[Apollo landmarks]', e); }
+  try { roverSites = createRoverSites(scene, terrainMgr); } catch (e) { console.error('[Rover sites]', e); }
 
   // 键盘快捷键：C 指南针、M 音效、Ctrl+B 保存书签、Ctrl+Shift+B 回到最近书签、Y 人体比例剪影（行走模式）
   window.addEventListener('keydown', (e) => {
@@ -338,7 +366,7 @@ async function init() {
     }
   });
 
-  window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr, smallBodies, quality: QUALITY };
+  window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr, smallBodies, quality: QUALITY, ephemerisLoader, renderer, composer, apolloLandmarks, roverSites };
   renderer.setAnimationLoop(loop);
 
   // ── 生命周期：后台/标签切换/睡眠恢复后强制同步仿真时钟 ──
@@ -623,7 +651,8 @@ let nearestCache = null;
 let lastTakeoff = -1e9; // 滚轮起飞时间戳（自动登陆 0.8s 冷却，防滞回）
 
 function loop() {
-  const dtReal = Math.min(clock.getDelta(), 0.1);
+  const frameDelta = clock.getDelta();
+  const dtReal = Math.min(frameDelta, 0.1);
 
   // 时间系统
   handleTimeKeys();
@@ -792,7 +821,7 @@ function loop() {
       t.posKm[0] - ship.posKm[0], t.posKm[1] - ship.posKm[1], t.posKm[2] - ship.posKm[2]
     );
     const dSun = Math.hypot(t.posKm[0], t.posKm[1], t.posKm[2]);
-    hud.updateTarget(targetInfo(selectedId, registry, dist, dSun));
+    hud.updateTarget(targetInfo(selectedId, registry, dist, dSun, jdTT));
   } else {
     hud.updateTarget(null);
   }
@@ -917,6 +946,15 @@ function loop() {
     // 比例参照物（#38）：跟随相机位置
     scaleRef?.update({ mode: appMode });
   } catch (e) { console.error('[scaleRef]', e); }
+  try {
+    for (const [id, landmarks] of [['moon', apolloLandmarks], ['mars', roverSites]]) {
+      const entry = builder.bodies.get(id);
+      if (!landmarks || !entry) continue;
+      const local = _rel.set(ship.posKm[0] - entry.posKm[0], ship.posKm[1] - entry.posKm[1], ship.posKm[2] - entry.posKm[2]);
+      local.applyQuaternion(_q.copy(entry.mesh.quaternion).invert());
+      landmarks.update(local);
+    }
+  } catch (e) { loopErr('landmarks', e); }
 
   try {
     // 日食阴影系统（#25）：检查所有掩星三元组
@@ -928,7 +966,7 @@ function loop() {
     webxr?.update(dtReal);
   } catch (e) { console.error('[webxr]', e); }
 
-  try { fpsGuard(dtReal); } catch (e) { loopErr('fpsGuard', e); }
+  try { fpsGuard(frameDelta); } catch (e) { loopErr('fpsGuard', e); }
   // Shift+滚轮：FOV 变焦（10°–100°，等效全画幅焦距提示）
   try {
     if (input.fovWheel !== 0) {
@@ -940,7 +978,8 @@ function loop() {
   } catch (e) { loopErr('fov', e); }
   try { input.endFrame(); } catch (e) { loopErr('input', e); }
   try {
-    composer.render();
+    if (renderer.xr.isPresenting) renderer.render(scene, camera);
+    else composer.render();
   } catch (e) {
     // 渲染本身异常：记录一次，避免每帧刷屏
     if (!loop._renderErr) {
@@ -1147,6 +1186,17 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   if (nearest) {
     const e = builder.bodies.get(nearest.id);
     const atm = e.phys.atmosphere;
+    for (const id of new Set([nearest.id, orbitCam.focusId])) {
+      const body = builder.bodies.get(id); if (!body) continue;
+      const radial = new THREE.Vector3(ship.posKm[0] - body.posKm[0], ship.posKm[1] - body.posKm[1], ship.posKm[2] - body.posKm[2]);
+      const distanceKm = radial.length();
+      radial.normalize();
+      const towardSun = new THREE.Vector3(...body.posKm).normalize().negate();
+      const view = camera.getWorldDirection(new THREE.Vector3());
+      skyFade = Math.min(skyFade, photoSkyVisibility({ radiusKm: body.phys.radiusKm, distanceKm,
+        sunElevation: id === 'sun' ? 1 : radial.dot(towardSun), phaseCosine: id === 'sun' ? 1 : radial.dot(towardSun),
+        viewCosine: -view.dot(radial), dSunAU }));
+    }
     const inAtmo = atm && nearest.distSurface < atm.heightKm;
     // 入气密度增幅：气巨/冰巨内部放大；岩石行星用 interiorBoost 分离"地表天空亮"与"太空薄气雾"
     if (e.atmoMesh) {
@@ -1225,7 +1275,7 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       // 即使站在 21km 的奥林帕斯山顶，火星正午天空依旧亮得看不见星。
       // 系数 3.0：地表/低海拔白昼 → skyFade=0 星光全灭（物理正确）；
       // 30km 平流层白昼 density≈0.2 → skyFade≈0.4 亮星依稀可见（与真实高空气球观测一致）。
-      skyFade = THREE.MathUtils.clamp(1 - day * density * 3.0, 0, 1);
+      skyFade = Math.min(skyFade, THREE.MathUtils.clamp(1 - day * density * 3.0, 0, 1));
       // 穿越云层薄纱（R9-2b）：掠过云甲板高度时短暂白雾，入气更有层次
       if (e.cloudMesh && !waterFx) {
         const hc = e.phys.radiusKm * 0.0035;
@@ -1265,7 +1315,7 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
 
   scene.fog.color.copy(fogColor);
   scene.fog.density = fogDensity;
-  sky.setFade(skyFade);
+  sky.setFade(skyFade / Math.max(1, renderer.toneMappingExposure));
   // 统计性点云/暗弱标记的可见性：白昼大气内被日光淹没（skyFade），
   // 且行走地表时肉眼本就不可见——主带/柯伊伯带点云、真实小天体、奥尔特云、
   // TNO 辉光（≥17 等）、探测器辉光在任何天体的地表夜晚也看不见
@@ -1310,6 +1360,7 @@ function onResize() {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
+  syncRenderResolution();
 }
 
 // ---- 可分享 URL（issue #1）----
@@ -1348,6 +1399,11 @@ const _xrDir = new THREE.Vector3();
 const _xrV = new THREE.Vector3();
 
 function handleXREvent(ev) {
+  if (ev.type === 'sessionend') { syncRenderResolution(); return; }
+  if (ev.type === 'grab' && appMode === 'orbit') {
+    orbitCam.panOffset.sub(_xrV.set(ev.delta.x, ev.delta.y, ev.delta.z));
+    return;
+  }
   if (ev.type === 'teleport' || ev.type === 'zoom') {
     // 摇杆前后 / 双手捏合 → 探索模式下按焦点缩放（方向统一：前推/捏合=靠近）
     if (appMode !== 'orbit') return;
@@ -1433,3 +1489,5 @@ function copyShareUrl() {
     showActionTip(t('tip.urlUpdated'));
   }
 }
+
+} // Graphics-dependent application setup.

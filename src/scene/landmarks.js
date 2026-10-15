@@ -279,6 +279,9 @@ export function createApolloLandmarks(scene, terrainMgr) {
   function update(camRelPosKm) {
     if (!camRelPosKm) return;
     for (const e of entries) {
+      const h = terrainMgr.heightAt('moon', e.dir);
+      e.posLocal.copy(e.dir).multiplyScalar(h + m(0.05));
+      e.group.position.copy(e.posLocal);
       const dx = camRelPosKm.x - e.posLocal.x;
       const dy = camRelPosKm.y - e.posLocal.y;
       const dz = camRelPosKm.z - e.posLocal.z;
@@ -579,6 +582,23 @@ export function createRoverSites(scene, terrainMgr) {
   function update(camRelPosKm) {
     if (!camRelPosKm) return;
     for (const e of entries) {
+      const field = terrainMgr.field('mars');
+      const h = field.height(e.dir);
+      e.posLocal.copy(e.dir).multiplyScalar(h + m(0.05));
+      e.group.position.copy(e.posLocal);
+      const revision = field.demSource?.revision ?? 0;
+      if (e.demRevision !== revision) {
+        const positions = e.pathLine.geometry.attributes.position;
+        for (let i = 0; i < e.site.path.length; i++) {
+          const wp = e.site.path[i], dir = latLonToDir(wp.latDeg, wp.lonDeg);
+          const radius = field.height(dir);
+          positions.setXYZ(i, dir.x * (radius + m(0.3)), dir.y * (radius + m(0.3)), dir.z * (radius + m(0.3)));
+          e.waypointMeshes[i].position.copy(dir).multiplyScalar(radius + m(0.5));
+        }
+        positions.needsUpdate = true;
+        e.pathLine.geometry.computeBoundingSphere();
+        e.demRevision = revision;
+      }
       const dx = camRelPosKm.x - e.posLocal.x;
       const dy = camRelPosKm.y - e.posLocal.y;
       const dz = camRelPosKm.z - e.posLocal.z;

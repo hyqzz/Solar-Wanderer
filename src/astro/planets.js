@@ -3,12 +3,13 @@
 // a(AU)  e  I(deg)  L(deg)  ϖ(deg)  Ω(deg)，第二行为每儒略世纪变化率。
 //
 // 高精度模式（issue #55）：可切换到 VSOP87 截断版（±3000 年 < 0.1°），
-// 默认仍用 Standish 元素（快速、测试基准）。
+// 默认 VSOP87D；发布时段的 JPL 插值数据到位后优先使用。
 
 import { elementsToEcliptic } from './kepler.js';
 import { centuriesTT } from './time.js';
 import { moonGeocentric } from './moon.js';
 import { planetaryPositionVSOP } from './vsop87.js';
+import { sampledPosition } from './sampledEphemeris.js';
 
 const TABLE = {
   mercury: {
@@ -82,22 +83,15 @@ function tablePosition(key, jdTT) {
 
 /**
  * 行星日心黄道 J2000 坐标（km）。
- * 默认 Standish 元素；开启高精度后用 VSOP87（±3000 年 < 0.1°）。
- * 地球 = 地月质心 − 月球地心矢量 × 月球质量占比。
+ * 默认 VSOP87D。只有 Standish EMB 元素需要扣除月球质心分量。
  */
 export function planetPosition(name, jdTT) {
+  const sampled = sampledPosition(name, jdTT);
+  if (sampled) return sampled;
   // VSOP87 高精度路径
   if (useHighPrecision) {
-    if (name === 'earth') {
-      // VSOP87 给出地月质心 (EMB)，需扣除月球分量得到地心
-      const emb = planetaryPositionVSOP('earth', jdTT);
-      const m = moonGeocentric(jdTT);
-      return {
-        x: emb.x - m.x * MOON_MASS_FRACTION,
-        y: emb.y - m.y * MOON_MASS_FRACTION,
-        z: emb.z - m.z * MOON_MASS_FRACTION,
-      };
-    }
+    // The VSOP87D .ear series is Earth, not EMB (CDS VI/81).
+    // Subtracting the Moon here applied the barycentre correction twice.
     return planetaryPositionVSOP(name, jdTT);
   }
 

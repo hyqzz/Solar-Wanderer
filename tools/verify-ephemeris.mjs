@@ -41,19 +41,19 @@ for (const name of PLANETS) {
   );
 }
 
-// 月球（地心，阈值放宽到 0.5°：截断级数理论精度 ~0.3°）
+// 月球（完整 Meeus 级数，地心，阈值 0.01°）
 {
   const ref = await horizonsVectors('301', '500@399', date, false);
   const ours = moonGeocentric(ref.jdTDB);
   const dAng = angleDeg(ours, ref.pos);
   const rRef = Math.hypot(...ref.pos);
   const dDist = (Math.abs(Math.hypot(ours.x, ours.y, ours.z) - rRef) / rRef) * 100;
-  const pass = dAng < 0.5;
+  const pass = dAng < 0.01;
   allPass &&= pass;
   results.push({ name: 'moon(geo)', dAng, dDist, pass });
   console.log(
     `${'moon(geo)'.padEnd(10)} ${dAng.toFixed(5).padStart(12)} ${dDist.toFixed(4).padStart(11)} ` +
-    `${''.padStart(12)}     ${pass ? '✅' : '❌'} (阈值0.5°)`
+    `${''.padStart(12)}     ${pass ? '✅' : '❌'} (阈值0.01°)`
   );
 }
 

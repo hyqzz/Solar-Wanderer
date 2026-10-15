@@ -1,12 +1,13 @@
 // 冒烟：分别以中文/英文 locale 加载，校验无运行时错误 + UI 文本本地化 + 区域/恒星标签存在。
 import puppeteer from 'puppeteer';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const baseUrl = process.argv[2] ?? 'http://localhost:5173/';
 
 async function run(locale) {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--window-size=1400,900', '--hide-scrollbars', `--lang=${locale}`],
-    defaultViewport: { width: 1400, height: 900 },
+    defaultViewport: { width: 1400, height: 900, deviceScaleFactor: 1 },
   });
   const page = await browser.newPage();
   await page.emulateTimezone('UTC');
@@ -18,7 +19,8 @@ async function run(locale) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  await page.goto('http://localhost:5173/', { waitUntil: 'networkidle2', timeout: 120000 });
+  const url = new URL(baseUrl); url.searchParams.set('lang', locale.split('-')[0]);
+  await page.goto(url.href, { waitUntil: 'networkidle2', timeout: 120000 });
   await page.waitForSelector('#start-btn', { visible: true, timeout: 120000 });
 
   const startTxt = await page.$eval('#start-btn', (e) => e.textContent.trim());
@@ -45,7 +47,9 @@ async function run(locale) {
   return { locale, errors, startTxt, subTxt, dirTitle, helpTitle, dir, timePanel };
 }
 
-for (const loc of ['zh-CN', 'en-US']) {
+const expected = { 'zh-CN': '点击进入太阳系', 'en-US': 'Enter the solar system', 'es-ES': 'Entrar al sistema solar', 'ja-JP': '太陽系に入る', 'fr-FR': 'Entrer dans le système solaire', 'de-DE': 'Sonnensystem betreten', 'ru-RU': 'Войти в Солнечную систему' };
+let failures = 0;
+for (const loc of Object.keys(expected)) {
   const r = await run(loc);
   console.log('\n===== locale:', r.locale, '=====');
   console.log('errors:', r.errors.length ? r.errors : 'NONE');
@@ -53,8 +57,10 @@ for (const loc of ['zh-CN', 'en-US']) {
   console.log('subtitle:', r.subTxt);
   console.log('dir-head:', r.dirTitle);
   console.log('help h2:', r.helpTitle);
-  console.log('region entries:', r.dir.hasBelts, r.dir.hasOort);
+  console.log('region entries:', r.dir.hasAsteroidBelt, r.dir.hasKuiperBelt, r.dir.hasOort);
   console.log('dir groups:', r.dir.regionGroup.join(' | '));
   console.log('time panel:', r.timePanel.slice(0, 120));
+  const ok = r.errors.length === 0 && r.startTxt === expected[loc] && r.dir.hasAsteroidBelt && r.dir.hasKuiperBelt && r.dir.hasOort;
+  console.log(ok ? 'PASS' : 'FAIL', loc); if (!ok) failures++;
 }
-process.exit(0);
+process.exit(failures ? 1 : 0);

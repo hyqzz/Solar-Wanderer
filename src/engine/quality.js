@@ -1,117 +1,94 @@
-// GPU 自适应画质（R7 #8）：
-// - WebGLRenderer 以 powerPreference:'high-performance' 创建 → 多显卡系统由浏览器/驱动选独立显卡
-// - 经 WEBGL_debug_renderer_info 识别实际 GPU：软件渲染/核显 → lite 档；独显/未知 → high 档
-// - 移动端（pointer:coarse + maxTouchPoints）强制 lite，pixelRatio 上限 1.5
-// 必须在 buildSolarSystem 之前调用 initQuality（着色器步进数/网格密度在构建期固化）。
-
-export const QUALITY = {
-  tier: 'high',
-  gpuName: '(未检测)',
-  pixelRatio: 2,
-  atmoN: 20, // #21：增加步进数改善黄昏色带与大气内散射细节
-  atmoNL: 8,
-  terrainGrid: 64,
-  anisotropy: 8,
-  segHi: [96, 64],
-  segLo: [48, 32],
-  detail: true,
+// Low: integrated/shared-memory/mobile GPUs. High: discrete GPUs.
+// Physical scale, DEM and astronomy are identical; only rendering work differs.
+const HIGH = {
+  tier: 'high', label: 'High', pixelRatio: 1.5, atmoN: 20, atmoNL: 8,
+  terrainGrid: 64, anisotropy: 8, segHi: [96, 64], segLo: [48, 32],
+  detail: true, textureSize: 8192, textureConcurrency: 3, shadowSize: 2048,
+  rockCount: 640, targetFps: 60,
 };
-
-/** true when running on a touch-primary device (phone/tablet) */
+const LOW = {
+  tier: 'low', label: 'Low', pixelRatio: 1, atmoN: 12, atmoNL: 4,
+  terrainGrid: 40, anisotropy: 4, segHi: [64, 42], segLo: [40, 28],
+  detail: false, textureSize: 4096, textureConcurrency: 2, shadowSize: 1024,
+  rockCount: 240, targetFps: 45,
+};
+export const QUALITY = { ...HIGH, gpuName: '(未检测)', hardware: 'unknown', renderScale: 1 };
 export let IS_MOBILE = false;
 
-const LOW_GPU = /SwiftShader|llvmpipe|Basic Render|Software|Mali-|Adreno|PowerVR|Intel(?:\(R\))?\s*(?:HD|UHD|Iris(?!\s*Xe\s*Max)|GMA)/i;
-const HIGH_GPU = /NVIDIA|GeForce|Quadro|RTX|GTX|Radeon\s*(?:RX|Pro|VII)|FirePro|Arc\s*A|Apple\s*M\d/i;
+export function classifyGpu(name = '') {
+  if (/SwiftShader|llvmpipe|Basic Render|Software|Microsoft Basic/i.test(name)) return 'software';
+  if (/NVIDIA|GeForce|Quadro|RTX|GTX|Radeon\s*(?:RX|Pro|VII|R[579]\b)|FirePro|Arc(?:\(TM\))?\s*[AB]\d/i.test(name)) return 'discrete';
+  if (/Intel|Iris|Radeon.*Graphics|AMD.*Graphics|Apple|Mali|Adreno|PowerVR/i.test(name)) return 'integrated';
+  return 'unknown';
+}
 
-function detectMobile() {
+export function qualityProfile(name, mobile = false, force = null) {
+  const hardware = classifyGpu(name);
+  const high = !mobile && (force === 'high' || (!['low', 'lite'].includes(force) && hardware === 'discrete'));
+  const profile = { ...(high ? HIGH : LOW), gpuName: name || '(不可识别)', hardware, renderScale: 1 };
+  if (mobile) Object.assign(profile, { atmoN: 8, atmoNL: 3, terrainGrid: 32,
+    segHi: [48, 32], segLo: [32, 22], textureSize: 2048, rockCount: 160, targetFps: 40 });
+  return profile;
+}
+
+export function detectMobile() {
   if (typeof window === 'undefined') return false;
-  const coarse = window.matchMedia?.('(pointer: coarse)').matches;
-  const hasTouch = navigator.maxTouchPoints > 0;
-  // 触屏笔记本同时上报 coarse+fine：有鼠标/触控板（any-pointer:fine）的设备按桌面对待，
-  // 否则触屏 Windows 本会误判为移动端（出现摇杆/移动控制条覆盖桌面 UI）
-  const anyFine = window.matchMedia?.('(any-pointer: fine)').matches;
-  const smallScreen = window.screen.width <= 1024 || window.screen.height <= 1024;
-  return (coarse && hasTouch && !anyFine) || (hasTouch && smallScreen && !anyFine);
+  const mobileAgent = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent ?? '');
+  const iPadDesktopAgent = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return mobileAgent || iPadDesktopAgent;
 }
 
 export function initQuality(renderer) {
   IS_MOBILE = detectMobile();
-
   let name = '';
   try {
-    const gl = renderer.getContext();
-    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info');
     if (ext) name = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) ?? '');
-  } catch { /* 扩展不可用 → 保持 high + 运行时帧率兜底 */ }
-  QUALITY.gpuName = name || '(不可识别)';
-
+  } catch { /* Hidden GPU names start conservatively; frame pacing still adapts. */ }
   const force = new URLSearchParams(globalThis.location?.search ?? '').get('quality');
-  // 移动端强制 lite（无视 GPU 名，避免高分屏烤机）；桌面按 GPU 识别
-  const lite = force ? force === 'lite' : IS_MOBILE || (name && LOW_GPU.test(name) && !HIGH_GPU.test(name));
-
-  if (lite) {
-    const pr = IS_MOBILE ? Math.min(window.devicePixelRatio || 1, 1.5) : 1;
-    Object.assign(QUALITY, {
-      tier: 'lite',
-      pixelRatio: pr,
-      atmoN: IS_MOBILE ? 8 : 12, // #21：lite 档也适当提升
-      atmoNL: IS_MOBILE ? 3 : 4,
-      terrainGrid: IS_MOBILE ? 32 : 48,
-      anisotropy: 2,
-      segHi: IS_MOBILE ? [48, 32] : [64, 42],
-      segLo: IS_MOBILE ? [32, 22] : [40, 28],
-      detail: false,
-    });
-  }
-
-  if (IS_MOBILE) {
-    document.documentElement.classList.add('touch');
-  }
-
-  console.info(`[quality] GPU: ${QUALITY.gpuName} → ${QUALITY.tier} 档` +
-    (IS_MOBILE ? '（移动端：强制 lite）' : lite ? '（核显/软件渲染：已降档）' : '（独显：高画质）'));
+  Object.assign(QUALITY, qualityProfile(name, IS_MOBILE, force));
+  if (IS_MOBILE) document.documentElement.classList.add('touch');
+  console.info(`[quality] GPU: ${QUALITY.gpuName} → ${QUALITY.label} (${QUALITY.hardware})`);
   return QUALITY;
 }
 
-/** 运行时帧率自适应：持续低帧降档，持续高帧恢复——双向调节（可升可降）。
- * 降档快（4s 低帧即降，保流畅优先）；升档慢且克制（连续 20s 高帧才回升，
- * 且最多回升 2 次，防止升降振荡）。 */
-export function makeFpsGuard(renderer, onDegrade, onRestore) {
-  let acc = 0, n = 0, lowSec = 0, highSec = 0, upgrades = 0;
-  let degraded = false;
-  let savedRatio = null;
+/** Resize HDR targets together with the drawing buffer. Ignore background/resume
+ * gaps, retain each hardware profile, and use hysteresis to prevent oscillation. */
+export function makeFpsGuard(renderer, onDegrade, onRestore, onResolutionChange) {
+  const baseline = renderer.getPixelRatio();
+  const baselineDetail = QUALITY.detail;
+  const scales = [1, 0.88, 0.76, 0.65];
+  let level = 0, time = 0, samples = [], lowSec = 0, highSec = 0, cooldown = 0;
+  function change(next) {
+    const degrading = next > level;
+    level = next; lowSec = highSec = 0;
+    // Integrated GPUs need a prompt second reduction during asset decoding or
+    // CPU fallback generation; recovery still waits for a stable clear margin.
+    cooldown = degrading && QUALITY.tier === 'low' ? 2 : 8;
+    QUALITY.renderScale = scales[level];
+    QUALITY.detail = baselineDetail;
+    renderer.setPixelRatio(baseline * scales[level]);
+    onResolutionChange?.();
+    (next > 0 ? onDegrade : onRestore)?.();
+  }
   return (dt) => {
-    acc += dt; n++;
-    if (acc < 1) return;
-    const fps = n / acc;
-    acc = 0; n = 0;
-    const lowThreshold = IS_MOBILE ? 25 : 28;
-    const highThreshold = IS_MOBILE ? 45 : 55;
-    // 降档
-    lowSec = fps < lowThreshold ? lowSec + 1 : 0;
-    if (!degraded && lowSec >= (IS_MOBILE ? 3 : 4)) {
-      degraded = true;
-      savedRatio = renderer.getPixelRatio();
-      renderer.setPixelRatio(1);
-      QUALITY.detail = false;
-      console.warn('[quality] 持续低帧 → 自动降低像素比/关闭细节着色器');
-      onDegrade?.();
-      return;
+    if (!Number.isFinite(dt) || dt <= 0 || dt > 0.5 ||
+        (typeof document !== 'undefined' && document.hidden) || renderer.xr?.isPresenting) {
+      time = 0; samples = []; lowSec = highSec = 0; return;
     }
-    // 回升（仅对已降档的实例；保守：连续 20s 高帧，最多 2 次）
-    if (degraded) {
-      highSec = fps > highThreshold ? highSec + 1 : 0;
-      if (highSec >= 20 && upgrades < 2) {
-        upgrades++;
-        degraded = false;
-        lowSec = 0; highSec = 0;
-        renderer.setPixelRatio(savedRatio ?? 1);
-        QUALITY.detail = true;
-        console.info('[quality] 持续高帧 → 恢复像素比/细节着色器（第 ' + upgrades + ' 次）');
-        onRestore?.();
-      }
-    } else {
-      highSec = 0;
-    }
+    time += dt; samples.push(dt);
+    if (time < 1) return;
+    const fps = samples.length / time;
+    const sorted = [...samples].sort((a, b) => a - b);
+    const p95 = sorted[Math.floor((sorted.length - 1) * 0.95)];
+    QUALITY.fps = fps; QUALITY.p95Ms = p95 * 1000;
+    time = 0; samples = []; cooldown = Math.max(0, cooldown - 1);
+    // Low must react before sustained pacing drops below its usable target.
+    // High retains headroom for 60 Hz rAF clocks that report just under 60 FPS.
+    const slow = fps < QUALITY.targetFps * (QUALITY.tier === 'high' ? 0.9 : 1.1) || p95 > 0.04;
+    lowSec = slow ? lowSec + 1 : 0;
+    highSec = fps >= Math.min(58, QUALITY.targetFps * 1.2) && p95 < 0.022 ? highSec + 1 : 0;
+    if (cooldown === 0 && lowSec >= 3 && level < scales.length - 1) change(level + 1);
+    else if (cooldown === 0 && highSec >= 20 && level > 0) change(level - 1);
   };
 }

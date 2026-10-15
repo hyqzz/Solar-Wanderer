@@ -184,6 +184,15 @@ export function createStarfield(milkywayTex) {
   }
 
   // 程序化恒星：两层（普通 + 亮星），等概率球面分布，颜色按黑体近似
+  const pointCanvas = document.createElement('canvas');
+  pointCanvas.width = pointCanvas.height = 32;
+  const pointCtx = pointCanvas.getContext('2d');
+  const pointGlow = pointCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  pointGlow.addColorStop(0, 'rgba(255,255,255,1)');
+  pointGlow.addColorStop(0.35, 'rgba(255,255,255,0.8)');
+  pointGlow.addColorStop(1, 'rgba(255,255,255,0)');
+  pointCtx.fillStyle = pointGlow; pointCtx.fillRect(0, 0, 32, 32);
+  const pointMap = new THREE.CanvasTexture(pointCanvas);
   const n = makeNoise(99);
   for (const [count, size, baseI] of [[11000, 1.4, 0.55], [900, 2.6, 1.0]]) {
     const posArr = new Float32Array(count * 3);
@@ -211,7 +220,7 @@ export function createStarfield(milkywayTex) {
     geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
     const mat = new THREE.PointsMaterial({
-      size, sizeAttenuation: false, vertexColors: true, fog: false,
+      size, map: pointMap, sizeAttenuation: false, vertexColors: true, fog: false,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
     fadeMats.push(mat);
@@ -248,7 +257,7 @@ export function createStarfield(milkywayTex) {
     geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
     const mat = new THREE.PointsMaterial({
-      size: 3.4, sizeAttenuation: false, vertexColors: true, fog: false,
+      size: 3.4, map: pointMap, sizeAttenuation: false, vertexColors: true, fog: false,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
     fadeMats.push(mat);

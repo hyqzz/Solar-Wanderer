@@ -60,14 +60,22 @@ export function createSun(radiusKm, mapTex) {
       void main() {
         #include <logdepthbuf_fragment>
         vec3 p = normalize(vPos);
-        vec3 base = texture2D(uMap, vUv).rgb;
-        float g1 = fbm(p * 18.0 + uTime * 0.05);
-        float g2 = fbm(p * 55.0 - uTime * 0.09);
-        float granule = 0.72 + 0.55 * g1 + 0.3 * g2;
+        vec3 sampled = texture2D(uMap, vUv).rgb;
+        // The legacy orange map supplies structure, not visible-light color.
+        float luminance = dot(sampled, vec3(0.2126, 0.7152, 0.0722));
+        vec3 base = vec3(luminance);
+        // Solar granules are ~1 Mm, rather than planet-scale flowing patches.
+        // Suppress frequencies below a pixel to avoid scintillation in orbit.
+        float fp = length(fwidth(p));
+        float a1 = 1.0 - smoothstep(0.35, 0.9, fp * 700.0);
+        float a2 = 1.0 - smoothstep(0.35, 0.9, fp * 1450.0);
+        float g1 = a1 > 0.01 ? vnoise(p * 700.0 + uTime * 0.001) : 0.5;
+        float g2 = a2 > 0.01 ? vnoise(p * 1450.0 - uTime * 0.002) : 0.5;
+        float granule = 1.0 + (g1 - 0.5) * 0.25 * a1 + (g2 - 0.5) * 0.1 * a2;
         // 暗化的"黑子"区域
-        float spots = smoothstep(0.32, 0.2, fbm(p * 6.0 + 13.7 + uTime * 0.004));
+        float spots = 1.0 - smoothstep(0.2, 0.32, fbm(p * 6.0 + 13.7 + uTime * 0.004));
         vec3 col = base * granule * (1.0 - 0.75 * spots);
-        col *= vec3(1.02, 0.97, 0.9);
+        col *= vec3(1.0, 0.985, 0.97);
         // 临边昏暗（真实光球物理：视线切向穿越更深更冷的大气层）
         float mu = clamp(dot(normalize(vNormalV), normalize(vViewV)), 0.0, 1.0);
         col *= 0.35 + 0.65 * mu;
@@ -84,6 +92,7 @@ export function createSun(radiusKm, mapTex) {
   // ── 日冕：相机朝向的公告板，K 冕 r^-2.5 衰减 + 赤道冕流 + 极区冕洞变暗 ──
   const coronaUniforms = {
     uTime: { value: 0 },
+    uVisibility: { value: 0.000001 },
   };
   const coronaMat = new THREE.ShaderMaterial({
     uniforms: coronaUniforms,
@@ -105,6 +114,7 @@ export function createSun(radiusKm, mapTex) {
       #include <common>
       #include <logdepthbuf_pars_fragment>
       uniform float uTime;
+      uniform float uVisibility;
       varying vec2 vUvC;
 
       float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -130,7 +140,7 @@ export function createSun(radiusKm, mapTex) {
         float i = k * streamer * polarDim;
         // 颜色：近缘暖白 → 远处冷白
         vec3 col = mix(vec3(1.0, 0.93, 0.78), vec3(0.85, 0.9, 1.0), smoothstep(1.0, 4.0, rR));
-        float alpha = clamp(i * 0.85, 0.0, 1.0);
+        float alpha = clamp(i * 0.85 * uVisibility, 0.0, 1.0);
         gl_FragColor = vec4(col * i * 2.2, alpha);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -149,9 +159,12 @@ export function createSun(radiusKm, mapTex) {
 
   return {
     group, mesh, corona,
-    update(timeSec, camDistKm) {
+    update(timeSec, camDistKm, occulted = false) {
       uniforms.uTime.value = timeSec;
       coronaUniforms.uTime.value = timeSec;
+      // NASA: corona is ~10^6 times fainter than the photosphere. A bounded
+      // display adaptation reveals it when the photosphere is fully covered.
+      coronaUniforms.uVisibility.value = occulted ? 1 : 0.000001;
     },
   };
 }

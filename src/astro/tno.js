@@ -6,6 +6,7 @@
 import { elementsToEcliptic } from './kepler.js';
 import { centuriesTT } from './time.js';
 import { TNO_ORBITS, TNO_EPOCH_JD } from './tnoOrbits.generated.js';
+import { sampledPosition } from './sampledEphemeris.js';
 
 // el: [a, e, i, L, ϖ, Ω]  (all degrees; L = M + ϖ at J2000.0)
 // rate: [da, de, di, dL, dϖ, dΩ] per Julian century (only dL significant for TNOs)
@@ -219,9 +220,11 @@ export const TNO_DATA = TABLE;
  * 优先用 tnoOrbits.generated.js（JPL SBDB 当前历元密切根数 + 经验长期率）；
  * 缺失时退回内置 J2000 近似表。 */
 export function tnoPosition(id, jdTT) {
+  const sampled = sampledPosition(id, jdTT);
+  if (sampled) return sampled;
   const o = TNO_ORBITS[id];
   if (o) {
-    const dt = jdTT - TNO_EPOCH_JD;
+    const dt = jdTT - (o.epochJd ?? TNO_EPOCH_JD);
     const periDeg = o.periDeg + o.periDotDegPerDay * dt;
     const nodeDeg = o.nodeDeg + o.nodeDotDegPerDay * dt;
     const M = o.M0Deg + o.nDegPerDay * dt;

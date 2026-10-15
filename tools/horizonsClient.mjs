@@ -1,14 +1,13 @@
 // JPL Horizons API 客户端（Node 内置 fetch，无第三方依赖）
 
 const API = 'https://ssd.jpl.nasa.gov/api/horizons.api';
+import { dateToJD, jdUTtoTT } from '../src/astro/time.js';
 
 /**
  * 查询状态向量（黄道 J2000，单位 km / km/s）。
  * @returns {{jdTDB:number, pos:[x,y,z], vel:[vx,vy,vz]|null}}
  */
 export async function horizonsVectors(command, center, dateUTC, withVelocity = true) {
-  const t0 = dateUTC.toISOString().slice(0, 16).replace('T', ' ');
-  const t1 = new Date(dateUTC.getTime() + 120000).toISOString().slice(0, 16).replace('T', ' ');
   const params = new URLSearchParams({
     format: 'text',
     COMMAND: `'${command}'`,
@@ -16,16 +15,16 @@ export async function horizonsVectors(command, center, dateUTC, withVelocity = t
     MAKE_EPHEM: `'YES'`,
     EPHEM_TYPE: `'VECTORS'`,
     CENTER: `'${center}'`,
-    START_TIME: `'${t0}'`,
-    STOP_TIME: `'${t1}'`,
-    STEP_SIZE: `'2'`,
+    TLIST: `'${jdUTtoTT(dateToJD(dateUTC)).toFixed(10)}'`,
+    TIME_TYPE: "'TDB'",
+    VEC_CORR: "'NONE'",
     VEC_TABLE: `'${withVelocity ? 2 : 1}'`,
     REF_PLANE: `'ECLIPTIC'`,
     REF_SYSTEM: `'J2000'`,
     OUT_UNITS: `'KM-S'`,
     CSV_FORMAT: `'YES'`,
   });
-  const res = await fetch(`${API}?${params}`);
+  const res = await fetch(`${API}?${params}`, { signal: AbortSignal.timeout(30000) });
   if (!res.ok) throw new Error(`Horizons HTTP ${res.status} for ${command}`);
   const text = await res.text();
   const m = text.match(/\$\$SOE\s*([\s\S]*?)\$\$EOE/);

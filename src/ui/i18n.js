@@ -6,6 +6,8 @@ import { LANG } from '../config.js';
 export { LANG };
 
 const D = {
+  'tgt.ephemMeasured': { zh:'轨道：JPL 星历插值', en:'Orbit: interpolated JPL ephemeris', es:'Órbita: efemérides JPL interpoladas', ja:'軌道：JPL暦の補間', fr:'Orbite : éphémérides JPL interpolées', de:'Bahn: interpolierte JPL-Ephemeriden', ru:'Орбита: интерполяция эфемерид JPL' },
+  'tgt.ephemApprox': { zh:'轨道：近似模型（此时刻尚无 JPL 校准）', en:'Orbit: approximate model (JPL calibration unavailable at this time)', es:'Órbita: modelo aproximado (sin calibración JPL para esta fecha)', ja:'軌道：近似モデル（この時点のJPL較正なし）', fr:'Orbite : modèle approché (sans calibration JPL à cette date)', de:'Bahn: Näherungsmodell (keine JPL-Kalibrierung für diesen Zeitpunkt)', ru:'Орбита: приближённая модель (нет калибровки JPL для этой даты)' },
   // ── 通用单位（HUD 用）────────────────────────────────────────────────
   'u.year':   { zh: '年',   en: 'yr',  es: 'a',    ja: '年',     fr: 'an',   de: 'J',    ru: 'г' },
   'u.month':  { zh: '月',   en: 'mo',  es: 'mes',  ja: '月',     fr: 'mois', de: 'Mo',   ru: 'мес' },
@@ -204,6 +206,9 @@ const D = {
     ru: 'Солнечная система 1:1 в реальном времени · Эфемериды NASA JPL воссоздают систему сейчас · исследуйте всю Солнечную систему',
   },
   'start.loading': { zh: '加载中…', en: 'Loading…', es: 'Cargando…', ja: '読み込み中…', fr: 'Chargement…', de: 'Laden…', ru: 'Загрузка…' },
+  'start.retryingGpu': { zh: '正在重试图形启动…', en: 'Retrying graphics startup…', es: 'Reintentando iniciar gráficos…', ja: 'グラフィックスの起動を再試行中…', fr: 'Nouvel essai graphique…', de: 'Grafikstart wird wiederholt…', ru: 'Повторный запуск графики…' },
+  'start.retryGpu': { zh: '重新尝试', en: 'Try again', es: 'Reintentar', ja: '再試行', fr: 'Réessayer', de: 'Erneut versuchen', ru: 'Попробовать снова' },
+  'start.gpuUnavailable': { zh: '浏览器无法启用 WebGL2。请检查硬件加速或重启浏览器后重试。', en: 'The browser cannot start WebGL2. Check hardware acceleration or restart the browser, then try again.', es: 'El navegador no puede iniciar WebGL2. Comprueba la aceleración de hardware o reinicia el navegador y vuelve a intentarlo.', ja: 'WebGL2を起動できません。ハードウェアアクセラレーションを確認するか、ブラウザーを再起動して再試行してください。', fr: 'WebGL2 ne peut pas démarrer. Vérifiez l’accélération matérielle ou redémarrez le navigateur, puis réessayez.', de: 'WebGL2 kann nicht starten. Prüfen Sie die Hardwarebeschleunigung oder starten Sie den Browser neu und versuchen Sie es erneut.', ru: 'Браузер не может запустить WebGL2. Проверьте аппаратное ускорение или перезапустите браузер и повторите попытку.' },
   'start.loadingTex': { zh: '加载真实行星贴图… {done}/{total}', en: 'Loading real planet textures… {done}/{total}', es: 'Cargando texturas reales de planetas… {done}/{total}', ja: '実惑星テクスチャを読み込み中… {done}/{total}', fr: 'Chargement des textures planétaires réelles… {done}/{total}', de: 'Echte Planetentexturen laden… {done}/{total}', ru: 'Загрузка текстур планет… {done}/{total}' },
   'start.enter': { zh: '点击进入太阳系', en: 'Enter the solar system', es: 'Entrar al sistema solar', ja: '太陽系に入る', fr: 'Entrer dans le système solaire', de: 'Sonnensystem betreten', ru: 'Войти в Солнечную систему' },
   'hud.hdLoading': { zh: '高清贴图加载中 {pct}%', en: 'Loading HD textures {pct}%', es: 'Cargando texturas HD {pct}%', ja: 'HDテクスチャ読み込み中 {pct}%', fr: 'Chargement des textures HD {pct}%', de: 'HD-Texturen laden {pct}%', ru: 'Загрузка HD-текстур {pct}%' },

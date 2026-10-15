@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { KM_PER_AU } from '../config.js';
 import { VOYAGER_STATES } from './voyagerData.generated.js';
+import { sampledPosition } from '../astro/sampledEphemeris.js';
 
 const DEG = Math.PI / 180;
 // 星际风上游方向（鼻向），黄道坐标
@@ -117,6 +118,8 @@ const DAY_SEC = 86400;
  * 优先用 Horizons 实测状态向量弹道外推（匀速 + 太阳引力二阶修正，年内误差 ≪0.01 AU）；
  * 数据缺失时回退方向+速率的粗略线性模型。 */
 export function voyagerPosition(vg, jdTT) {
+  const sampled = sampledPosition(vg.id, jdTT);
+  if (sampled) return sampled;
   const st = VOYAGER_STATES[vg.id];
   if (st) {
     const dtSec = (jdTT - st.epochJd) * DAY_SEC;

@@ -8,11 +8,12 @@ const URL_ = process.argv[2] ?? 'http://localhost:5173/';
 const OUT = new URL('./.shot-journey/', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
 mkdirSync(OUT, { recursive: true });
 
+const headed = process.env.SW_HEADED === '1';
 const browser = await puppeteer.launch({
-  headless: true,
-  args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
-    '--window-size=1600,900', '--hide-scrollbars'],
-  defaultViewport: { width: 1600, height: 900 },
+  headless: !headed,
+  args: ['--no-sandbox', ...(headed ? [] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']),
+    '--window-position=20,20', '--window-size=1600,900', '--hide-scrollbars'],
+  defaultViewport: { width: 1600, height: 900, deviceScaleFactor: 1 },
 });
 const page = await browser.newPage();
 // 桌面代表性视图：本机触屏会让 headless 上报 coarse 指针，覆盖为桌面精细指针
@@ -274,11 +275,16 @@ await page.waitForFunction(() => {
   const el = document.getElementById('hud-bgload');
   return el && (el.style.display === 'none' || el.style.opacity === '0');
 }, { timeout: 240000 });
+await ev(() => window.__game.builder.boostTextures(['earth_day.jpg', 'moon.jpg']));
+await page.waitForFunction(() => {
+  const g = window.__game;
+  return ['earth_day.jpg','moon.jpg'].every(f => g.builder.cache.get(f)?.image?.width === g.quality.textureSize);
+}, { timeout: 120000 });
 const hdState = await ev(() => {
   const c = window.__game.builder.cache;
-  return { earth: c.get('earth_day.jpg')?.image?.width ?? 0, moon: c.get('moon.jpg')?.image?.width ?? 0 };
+  return { earth: c.get('earth_day.jpg')?.image?.width ?? 0, moon: c.get('moon.jpg')?.image?.width ?? 0, expected: window.__game.quality.textureSize };
 });
-check('高清贴图后台升级到位（earth/moon = 8192）', hdState.earth === 8192 && hdState.moon === 8192, JSON.stringify(hdState));
+check('当前硬件预算内的高清贴图到位', hdState.earth === hdState.expected && hdState.moon === hdState.expected, JSON.stringify(hdState));
 check('真实小天体层加载（5412 颗）', await ev(() => window.__game.smallBodies.count === 5412));
 
 // ════════════ J. 视觉场景截图集（供人工审查） ════════════
@@ -309,7 +315,7 @@ const fps = await ev(() => new Promise((res) => {
   const tick = () => { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(tick); else res(n / 3); };
   requestAnimationFrame(tick);
 }));
-console.log(`  ℹ️  软渲染 FPS ≈ ${fps.toFixed(1)}（swiftshader 软渲染，真实 GPU 会高一个数量级）`);
+console.log(`  ℹ️  FPS ≈ ${fps.toFixed(1)}；GPU: ${await ev(() => window.__game.quality.gpuName)}`);
 check('渲染循环未冻结（FPS > 3）', fps > 3, `fps=${fps.toFixed(1)}`);
 
 // ════════════ M. 搜索链路 ════════════
@@ -394,14 +400,11 @@ await ev(() => window.__game.flyTo('moon'));
 await waitArrival();
 await sleep(1200);
 const apollo = await ev(() => {
-  let found = 0;
-  window.__game.builder.sunEntry.group.traverse?.(() => {});
-  // 地标挂在场景图：通过 scene 遍历找 marker（命名 apollo*）
-  let names = [];
-  // builder 不直接暴露 scene；从 registry 间接验证：阿波罗 11 静海基地在月球 DEM 为低地（静海）
-  return { ok: true, names };
+  const g = window.__game;
+  return { apollo: g.apolloLandmarks?.entries.length, rovers: g.roverSites?.entries.length,
+    attached: g.apolloLandmarks?.group.parent === g.builder.bodies.get('moon').mesh };
 });
-console.log('  [信息] 阿波罗地标存在性由零控制台错误与地标模块初始化覆盖');
+check('Apollo 与火星车地标已创建并挂接', apollo.apollo >= 5 && apollo.rovers >= 3 && apollo.attached, JSON.stringify(apollo));
 
 // ════════════ L. 二次访问：IndexedDB 命中（重载页面，须放最后） ════════════
 console.log('\n═══ L. 二次访问缓存 ═══');

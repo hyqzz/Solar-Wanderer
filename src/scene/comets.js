@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { solveKepler, KM_PER_AU, DEG } from '../astro/kepler.js';
 import { eclToWorld } from '../config.js';
 import { COMET_ORBITS } from '../astro/cometOrbits.generated.js';
+import { sampledPosition } from '../astro/sampledEphemeris.js';
 
 const GM_SUN = 1.32712440018e11; // km³/s²
 
@@ -26,6 +27,8 @@ export const COMETS = [
 
 /** 彗星日心位置（km，黄道 J2000）：优先 SBDB 当前历元根数，缺失回退内置表 */
 export function cometPosition(c, jdTT) {
+  const sampled = sampledPosition(c.id, jdTT);
+  if (sampled) return sampled;
   const o = COMET_ORBITS[c.id];
   if (o) {
     const aKm = o.aAU * KM_PER_AU;
@@ -75,6 +78,15 @@ function makeGlowTexture() {
 /** 尘埃尾粒子数（syndyne 弧线采样） */
 const DUST_N = 220;
 
+/** Bounded visual approximation: activity is not an observed gas-production
+ * model. Keep a diffuse coma below ~150,000 km diameter rather than millions. */
+export function cometAppearance(rAU) {
+  const activity = Math.max(0, Math.min(1, (4 - rAU) / 3.5));
+  return { activity, comaDiameterKm: 4000 + activity * 140000,
+    comaOpacity: activity * 0.25 / (1 + rAU * 0.5),
+    ionOpacity: activity * 0.06 / (1 + rAU * rAU) };
+}
+
 /** 创建彗星可视对象集合；返回 { entries: [{c, group, head, ionTail, dustTail, posKm}], update(jdTT) } */
 export function createComets(world) {
   const glow = makeGlowTexture();
@@ -88,7 +100,7 @@ export function createComets(world) {
     group.add(head);
 
     // I 型离子尾：窄、直、蓝（CO⁺ ~420nm），严格沿太阳风（反日）方向
-    const ionGeo = new THREE.ConeGeometry(1, 1, 12, 1, true);
+    const ionGeo = new THREE.CylinderGeometry(0.2, 0.02, 1, 12, 1, true);
     ionGeo.translate(0, 0.5, 0);
     const ionTail = new THREE.Mesh(ionGeo, new THREE.MeshBasicMaterial({
       color: 0x7fb4ff, transparent: true, opacity: 0.22,
@@ -144,19 +156,20 @@ export function createComets(world) {
         e.posKm[0] = w.x; e.posKm[1] = w.y; e.posKm[2] = w.z;
         const rAU = Math.hypot(p.x, p.y, p.z) / KM_PER_AU;
         // 活动度：4 AU 内显著（气体升华），亮度 ∝ 1/r²（反照）× 活动度
-        const act = Math.max(0, Math.min(1, (4 - rAU) / 3.5));
-        e.head.scale.setScalar(3e5 + act * 2.5e6);
-        e.head.material.opacity = Math.min(1, 0.35 + act * 0.65);
+        const appearance = cometAppearance(rAU), act = appearance.activity;
+        e.head.scale.setScalar(appearance.comaDiameterKm);
+        e.head.material.opacity = appearance.comaOpacity;
+        e.head.visible = appearance.comaOpacity > 0.001;
 
         // ── 离子尾：反日直尾 ──
         const ionLen = act * act * 0.5 * KM_PER_AU;
         e.ionTail.visible = act > 0.02;
         if (e.ionTail.visible) {
-          e.ionTail.scale.set(ionLen * 0.04, ionLen, ionLen * 0.04); // 比旧版更窄更直
+          e.ionTail.scale.set(ionLen * 0.015, ionLen, ionLen * 0.015);
           _dir.set(w.x, w.y, w.z).normalize();
           _q.setFromUnitVectors(_up, _dir);
           e.ionTail.quaternion.copy(_q);
-          e.ionTail.material.opacity = (0.06 + act * 0.22) / (1 + rAU * 0.5);
+          e.ionTail.material.opacity = appearance.ionOpacity;
         }
 
         // ── 尘埃尾：syndyne 弧线（反日 + 轨道滞后弯曲）──

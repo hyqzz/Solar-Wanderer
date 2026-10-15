@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { KM_PER_AU } from '../config.js';
+import { sampledPosition } from '../astro/sampledEphemeris.js';
 
 const DEG = Math.PI / 180;
 const m = (v) => v * 0.001; // 米→千米（项目世界单位为 km）
@@ -275,6 +276,8 @@ export const NEW_HORIZONS = {
 
 /** New Horizons 日心位置（km，黄道 J2000）——与 voyagerPosition 同构 */
 export function newHorizonsPosition(jdTT) {
+  const sampled = sampledPosition('newhorizons', jdTT);
+  if (sampled) return sampled;
   const year = 2000 + (jdTT - 2451545.0) / 365.25;
   const r = (NEW_HORIZONS.r0AU + NEW_HORIZONS.rateAUyr * (year - NEW_HORIZONS.epochYear)) * KM_PER_AU;
   const lon = NEW_HORIZONS.lonDeg * DEG, lat = NEW_HORIZONS.latDeg * DEG;

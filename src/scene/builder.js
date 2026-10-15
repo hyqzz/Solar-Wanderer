@@ -2,9 +2,32 @@
 // 网格、云层、大气、行星环、轨道线，并提供每帧的星历驱动更新。
 
 import * as THREE from 'three';
+import { isSunOcculted } from './photoExposure.js';
+
+export function readMapDataCache(cache, id, image) {
+  const entry = cache.get(id);
+  return entry && entry.image === image ? entry.data : undefined;
+}
+
+export function textureBitmapOptions(meta = {}, size) {
+  const scale = Math.min(1, size / Math.max(meta.width ?? size, meta.height ?? size));
+  const resize = meta.width && meta.height ? {
+    resizeWidth: Math.max(1, Math.round(meta.width * scale)),
+    resizeHeight: Math.max(1, Math.round(meta.height * scale)), resizeQuality: 'high',
+  } : {};
+  return { ...resize, imageOrientation: 'flipY', premultiplyAlpha: 'none' };
+}
+
+export function drawTextureForSampling(ctx, image, width, height) {
+  if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) {
+    ctx.translate(0, height); ctx.scale(1, -1);
+  }
+  ctx.drawImage(image, 0, 0, width, height);
+}
 import { BODIES, MOON_PHYS } from '../astro/bodies.js';
 import { planetPosition, PLANETS, orbitPoints } from '../astro/planets.js';
 import { moonGeocentric } from '../astro/moon.js';
+import { jdUTtoTT } from '../astro/time.js';
 import { moonLocalPosition, moonOrbitNormal, moonOrbitPoints, MOON_IDS } from '../astro/moons.js';
 import { bodyToEclipticMatrix, tidalLockMatrix } from '../astro/rotation.js';
 import { eclToWorldArr, eclToWorld, eclMatrixToWorldQuat, KM_PER_AU, asset } from '../config.js';
@@ -16,6 +39,7 @@ import { createSun } from './sun.js';
 import { proceduralMapLazy, proceduralBandsLazy } from './proceduralTextures.js';
 import { HeightField } from './terrain.js';
 import { idbGet, idbPut } from '../engine/texCache.js';
+import { resourceQueue, whenIdle } from '../engine/resourceQueue.js';
 
 /** 全尺寸贴图后台升级优先级：默认视野（地月系/太阳）优先，气巨其次，远端卫星最后 */
 const TEX_PRIORITY = [
@@ -25,88 +49,137 @@ const TEX_PRIORITY = [
   'io.jpg', 'europa.png', 'ganymede.jpg', 'callisto.jpg', 'titan.jpg',
   'uranus.jpg', 'neptune.jpg', 'triton.jpg', 'pluto.jpg', 'charon.jpg',
 ];
-const UPGRADE_CONCURRENCY = 6; // 进入后全速并行升级（预览层已放行，带宽此时空闲）
 
 function priorityOf(file) {
   const i = TEX_PRIORITY.indexOf(file);
   return i === -1 ? TEX_PRIORITY.length : i;
 }
 
-/** 拉全尺寸贴图：优先 IndexedDB 命中，否则网络下载并写缓存。
- * 弱网防护：25s 超时主动断开（否则挂起的 socket 会把队列卡死成"永远模糊"），
- * 指数退避重试 3 次；最终失败返回 null（保留预览，队列尾再补一轮）。 */
-async function loadFullImage(file, hash, attempt = 0) {
-  const key = hash ? `${file}@${hash}` : file;
+/** Decode to the hardware budget, preserving the source aspect ratio. */
+async function loadFullImage(file, meta, size, priority, attempt = 0) {
+  const medium = size <= 2048 && meta?.m;
+  const version = (medium ? meta.mh : meta?.h) ?? meta?.h;
+  const key = (version ? `${file}@${version}` : file) + (medium ? ':medium' : '');
   try {
-    let blob = await idbGet(key);
+    let blob = attempt === 0 ? await idbGet(key) : null;
     if (!blob) {
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), 25000);
-      try {
-        const resp = await fetch(asset('textures/' + file), { signal: ctl.signal });
-        if (!resp.ok) throw new Error('http ' + resp.status);
-        blob = await resp.blob();
-      } finally {
-        clearTimeout(timer);
-      }
-      idbPut(key, blob); // 后台写缓存，不阻塞解码
+      blob = await resourceQueue.run('texture:' + key, async () => {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 25000);
+        try {
+          const res = await fetch(asset('textures/' + (medium ? 'medium/' + meta.m : file))+(version?'?v='+version:''), { signal: ctl.signal });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return await res.blob();
+        } finally { clearTimeout(timer); }
+      }, priority);
+      idbPut(key, blob);
     }
-    return await createImageBitmap(blob); // 解码在工作线程，不卡主线程
+    await whenIdle();
+    const options = textureBitmapOptions(meta, size);
+    // WebGL ignores Texture.flipY for ImageBitmap. Bake the orientation into
+    // the decode so L1 HTMLImageElement -> L2/L3 bitmap preserves north/south.
+    return await createImageBitmap(blob, options);
   } catch {
-    if (attempt < 3) {
-      await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
-      return loadFullImage(file, hash, attempt + 1);
+    if (attempt < 2) {
+      await new Promise(r => setTimeout(r, 800 * 2 ** attempt));
+      return loadFullImage(file, meta, size, priority, attempt + 1);
     }
     return null;
   }
 }
 
-/** 单趟队列执行：工人从队首取任务（队首 = 当前最高优先级，可被 boost 动态重排） */
-async function runQueuePass(queue, cache, pManifest, countFinal) {
-  const failed = [];
-  const worker = async () => {
-    for (;;) {
-      const file = queue.shift();
-      if (file === undefined) return;
-      const tex = cache.get(file);
-      const bmp = tex ? await loadFullImage(file, pManifest[file]?.h) : null;
-      if (bmp && tex) {
-        tex.image = bmp;
-        tex.needsUpdate = true;
-        countFinal(file, true);
-      } else {
-        failed.push(file);
-        countFinal(file, false);
-      }
-    }
+/** L1 preview -> L2 1024px surroundings -> L3 focused maps.
+ * Keep small decoded maps for eviction. Large maps have a byte budget; visiting
+ * every planet must not keep every 8K texture resident on a shared-memory GPU. */
+function progressiveTextures(files, cache, manifest, onProgress) {
+  const records = new Map(files.map(file => [file, {
+    file, base: null, size: 512, desired: 1024, busy: false, queued: false,
+  }]));
+  const queue = [...records.values()];
+  for (const r of queue) r.queued = true;
+  let active = 0, completed = 0, firstResolve, uploadTail = Promise.resolve();
+  const upgrades = new Promise(resolve => { firstResolve = resolve; });
+  if (!files.length) firstResolve();
+  const publish = (r, image, size) => {
+    const old = cache.get(r.file).image;
+    cache.get(r.file).image = image;
+    cache.get(r.file).userData.realLoaded = true;
+    cache.get(r.file).needsUpdate = true;
+    r.size = size;
+    if (old !== r.base && old !== image) old.close?.();
   };
-  await Promise.all(Array.from({ length: UPGRADE_CONCURRENCY }, worker));
-  return failed;
-}
-
-/** 后台升级队列：全尺寸到位后立即换图（替换 image + needsUpdate，材质与采样器不动）。
- * 第一趟失败的文件在所有其他文件完成后补试一轮（弱网大包常被重置，第二遍利用已建立的连接）。 */
-async function runUpgradeQueue(queue, cache, pManifest, onBgProgress) {
-  const total = queue.length;
-  let done = 0;
-  const failed1 = await runQueuePass(queue, cache, pManifest, (f, ok) => {
-    if (ok) onBgProgress?.(++done, total, f);
-  });
-  if (failed1.length) {
-    await runQueuePass(failed1, cache, pManifest, (f) => {
-      onBgProgress?.(++done, total, f); // 第二趟无论成败都计入（最终态）
-    });
+  const enqueue = (r, front = false) => {
+    if (r.busy || r.queued || r.size === r.desired) return;
+    r.queued = true;
+    front ? queue.unshift(r) : queue.push(r);
+  };
+  async function job(r) {
+    const size = r.base ? r.desired : 1024;
+    const bmp = await loadFullImage(r.file, manifest[r.file], size, size > 1024 ? 40 : 0);
+    if (bmp) {
+      // Serialize replacements across animation frames; concurrent downloads
+      // otherwise trigger several texture uploads in the same render.
+      uploadTail = uploadTail.then(async () => {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        await whenIdle();
+        if (size === 1024) r.base = bmp;
+        if (size === 1024 || r.desired === size) publish(r, bmp, size);
+        else bmp.close?.();
+      });
+      await uploadTail;
+    }
+    if (!r.initialDone) {
+      r.initialDone = true;
+      onProgress?.(++completed, files.length, r.file);
+      if (completed === files.length) firstResolve();
+    }
+    if (!bmp) r.failedUntil = Date.now() + 30000;
   }
+  function pump() {
+    while (active < QUALITY.textureConcurrency && queue.length) {
+      const r = queue.shift(); r.queued = false; r.busy = true; active++;
+      job(r).catch(e => console.warn('[textures]', r.file, e.message)).finally(() => {
+        r.busy = false; active--;
+        if (!(r.failedUntil > Date.now())) enqueue(r, r.desired > 1024);
+        pump();
+      });
+    }
+  }
+  function boost(files) {
+    const desired = new Map();
+    let budget = QUALITY.tier === 'high' ? 384 * 1024 * 1024 : 128 * 1024 * 1024;
+    for (const file of files) {
+      const r = records.get(file), meta = manifest[file];
+      if (!r || !meta) continue;
+      let size = Math.min(QUALITY.textureSize, /clouds|night|milkyway/.test(file) ? 2048 : QUALITY.textureSize);
+      const scale = Math.min(1, size / Math.max(meta.width ?? size, meta.height ?? size));
+      const bytes = (meta.width ?? size) * (meta.height ?? size / 2) * scale * scale * 4 * 4 / 3;
+      if (bytes > budget) continue;
+      budget -= bytes; desired.set(file, size);
+    }
+    for (const r of records.values()) {
+      r.desired = desired.get(r.file) ?? 1024;
+      if (r.base && r.desired === 1024 && r.size > 1024) publish(r, r.base, 1024);
+      if (!(r.failedUntil > Date.now())) enqueue(r, r.desired > 1024);
+    }
+    queue.sort((a, b) => (desired.has(b.file) ? 1 : 0) - (desired.has(a.file) ? 1 : 0) ||
+      files.indexOf(a.file) - files.indexOf(b.file));
+    pump();
+  }
+  pump();
+  return { upgrades, boost };
 }
 
 async function loadTextures(onProgress, onBgProgress) {
-  let manifest = {}, pManifest = {};
-  try {
-    manifest = await (await fetch(asset('textures/manifest.json'))).json();
-  } catch { /* 离线/无清单 → 全部程序化 */ }
-  try {
-    pManifest = await (await fetch(asset('textures/preview/manifest.json'))).json();
-  } catch { /* 无预览层 → 退回直接加载全尺寸 */ }
+  const getManifest = async path => {
+    try {
+      const response = await fetch(asset(path), { cache: 'no-store', signal: AbortSignal.timeout(8000) });
+      return response.ok ? await response.json() : {};
+    } catch { return {}; }
+  };
+  const [manifest, pManifest] = await Promise.all([
+    getManifest('textures/manifest.json'), getManifest('textures/preview/manifest.json'),
+  ]);
   const loader = new THREE.TextureLoader();
   const cache = new Map();
   const wanted = new Set();
@@ -119,12 +192,19 @@ async function loadTextures(onProgress, onBgProgress) {
   let done = 0;
   const previewed = new Set();
   const tasks = [...wanted].map((file) => new Promise((resolve) => {
-    const finish = () => { onProgress?.(++done, wanted.size, file); resolve(); };
+    let settled = false;
+    const timer = setTimeout(() => finish(), 8000);
+    const finish = () => {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      onProgress?.(++done, wanted.size, file); resolve();
+    };
     if (!manifest[file]) { finish(); return; }
     const p = pManifest[file];
     loader.load(
-      p ? asset('textures/preview/' + p.p) : asset('textures/' + file),
+      (p ? asset('textures/preview/' + p.p) : asset('textures/' + file)) + (p?.ph || p?.h ? '?v='+(p.ph??p.h) : ''),
       (tex) => {
+        if (settled) { tex.dispose(); return; }
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.anisotropy = QUALITY.anisotropy;
         cache.set(file, tex);
@@ -137,17 +217,23 @@ async function loadTextures(onProgress, onBgProgress) {
   }));
   await Promise.all(tasks);
 
-  // L2/L3（后台，不阻塞）：全尺寸按优先级队列逐张升级
-  const queue = [...previewed].sort((a, b) => priorityOf(a) - priorityOf(b));
-  const upgrades = runUpgradeQueue(queue, cache, pManifest, onBgProgress);
-  // 视点驱动插队：把指定贴图按给定顺序提到队首（用户正在看/前往的天体优先变清晰）
-  const boost = (files) => {
-    if (!files?.length || !queue.length) return;
-    for (let i = files.length - 1; i >= 0; i--) {
-      const idx = queue.indexOf(files[i]);
-      if (idx > 0) { queue.splice(idx, 1); queue.unshift(files[i]); }
+  // Failed previews retain a texture object so a later network recovery can
+  // replace its image, including materials already bound to this placeholder.
+  for (const file of wanted) {
+    if (cache.has(file) || !pManifest[file]) continue;
+    const owner = [...Object.entries(BODIES), ...Object.entries(MOON_PHYS)].find(([, p]) =>
+      p.textures?.map === file || (p.textures?.cloudsOpaque && p.textures.clouds === file));
+    let texture;
+    if (owner) texture = texOf(cache, null, owner[0], owner[1]);
+    else {
+      const canvas=document.createElement('canvas');canvas.width=canvas.height=2;
+      texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
     }
-  };
+    texture.anisotropy=QUALITY.anisotropy;cache.set(file,texture);previewed.add(file);
+  }
+
+  const files = [...previewed].sort((a, b) => priorityOf(a) - priorityOf(b));
+  const { upgrades, boost } = progressiveTextures(files, cache, pManifest, onBgProgress);
   return { cache, upgrades, boost };
 }
 
@@ -266,9 +352,9 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   // 平行光（地表尺度上阳光本就近似平行），由它投射岩石/地形自我阴影——
   // 无阴影的岩石像贴图浮在地上（地表审查"照片级"缺口之首）。
   // 平行光正交阴影框 ±400m 只覆盖近场；w=0 时 castShadow 关闭、零开销。
-  const sunShadow = new THREE.DirectionalLight(0xfff2e0, 0);
+  const sunShadow = new THREE.DirectionalLight(0xffffff, 0);
   sunShadow.castShadow = false;
-  sunShadow.shadow.mapSize.set(QUALITY.tier === 'lite' ? 1024 : 2048, QUALITY.tier === 'lite' ? 1024 : 2048);
+  sunShadow.shadow.mapSize.set(QUALITY.shadowSize, QUALITY.shadowSize);
   sunShadow.shadow.camera.left = -0.4; sunShadow.shadow.camera.right = 0.4;
   sunShadow.shadow.camera.top = 0.4; sunShadow.shadow.camera.bottom = -0.4;
   sunShadow.shadow.camera.near = 0.02; sunShadow.shadow.camera.far = 6;
@@ -342,7 +428,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     entry.glint = glint;
 
     // 轨道线（日心；当前时刻元素冻结一整圈，长期漂移可忽略）
-    const jdNow = Date.now() / 86400000 + 2440587.5;
+    const jdNow = jdUTtoTT(Date.now() / 86400000 + 2440587.5);
     const pts = orbitPoints(id, jdNow, 512);
     const arr = new Float32Array(pts.length);
     for (let i = 0; i < pts.length; i += 3) {
@@ -357,6 +443,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     sun.group.add(oline);
     orbitLines.userData[id] = oline;
     oline.userData.isOrbit = true;
+    oline.userData.jd = jdNow;
     oline.userData.baseOpacity = 0.3; // 近距淡出基准（main.js 按相机距离调制）
 
     scene.add(group);
@@ -444,7 +531,31 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     return p;
   }
 
+  let orbitWorker;
+  const pendingOrbits = new Set();
+  function refreshOrbitLines(jdTT) {
+    for (const id of PLANETS) {
+      const line = orbitLines.userData[id];
+      if (Math.abs(jdTT - line.userData.jd) < 1 || pendingOrbits.has(id)) continue;
+      if (!orbitWorker && typeof Worker !== 'undefined') {
+        orbitWorker = new Worker(new URL('../engine/orbitWorker.js', import.meta.url), { type: 'module' });
+        orbitWorker.onmessage = ({ data }) => {
+          pendingOrbits.delete(data.id);
+          if (data.error) { console.warn('[orbit]', data.error); return; }
+          const target = orbitLines.userData[data.id];
+          target.geometry.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
+          target.geometry.computeBoundingSphere();
+          target.userData.jd = data.jd;
+        };
+      }
+      if (!orbitWorker) return;
+      pendingOrbits.add(id);
+      orbitWorker.postMessage({ id, jd: jdTT });
+    }
+  }
+
   function update(jdTT, camPosKm) {
+    refreshOrbitLines(jdTT);
     // 相机绝对坐标（three 世界系 km）→ 黄道系，用于光行时回退
     const camEcl = camPosKm ? { x: camPosKm[0], y: -camPosKm[2], z: camPosKm[1] } : null;
     // 本帧各天体黄道视位置（供卫星叠加母星视位置）
@@ -458,7 +569,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     const marsDust = Math.max(0,
       THREE.MathUtils.smoothstep(ls, 180, 220) * (1 - THREE.MathUtils.smoothstep(ls, 330, 360)));
     // 极光强度（移动端/降档时关闭）
-    const auroraStrength = QUALITY.detail ? 1.0 : 0.0;
+    const auroraStrength = 1.0;
 
     for (const [id, e] of bodies) {
       if (id === 'sun') {
@@ -640,18 +751,20 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       sunShadow.castShadow = false;
       sunShadow.intensity = 0;
     }
-    sun.update(simTimeSec, dSunKm);
+    sun.update(simTimeSec, dSunKm, isSunOcculted(shipPosKm, sunPhys.radiusKm,
+      [...bodies.values()].filter(b => b.phys.id !== 'sun')));
   }
 
   // 地形颜色采样数据（真实贴图 → ImageData）
   const mapDataCache = new Map();
   function mapDataOf(id) {
-    if (mapDataCache.has(id)) return mapDataCache.get(id);
     const e = bodies.get(id);
     const file = e?.phys.textures?.map;
     let data = null;
     const tex = file ? cache.get(file) : null;
     const img = tex?.image;
+    const cachedData = readMapDataCache(mapDataCache, id, img);
+    if (cachedData !== undefined) return cachedData;
     if (img && (img.width || img.videoWidth)) {
       try {
         // 按贴图原生分辨率采样（上限 2048×1024）：地形顶点色直接取自盘面同一张贴图。
@@ -662,11 +775,15 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
         const cv = document.createElement('canvas');
         cv.width = w; cv.height = h;
         const ctx = cv.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(img, 0, 0, w, h);
+        // CPU terrain sampling expects the original north-at-top atlas, while
+        // GPU bitmaps have been flipped during decode to match TextureLoader.
+        drawTextureForSampling(ctx, img, w, h);
         data = ctx.getImageData(0, 0, w, h);
       } catch { /* 跨域等异常 → null */ }
     }
-    mapDataCache.set(id, data);
+    mapDataCache.delete(id);
+    mapDataCache.set(id, { image: img, data });
+    if (mapDataCache.size > 4) mapDataCache.delete(mapDataCache.keys().next().value);
     return data;
   }
 

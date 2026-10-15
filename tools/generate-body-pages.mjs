@@ -243,7 +243,7 @@ function generateBodyPage(body) {
 </head>
 <body>
   <div class="container">
-    <a href="/" class="back-link">← 返回 Solar Wanderer / Back to Solar Wanderer</a>
+    <a href="../" class="back-link">← 返回 Solar Wanderer / Back to Solar Wanderer</a>
 
     <div class="header">
       <span class="type-badge">${esc(typeLabel.zh)} · ${esc(typeLabel.en)}${parent ? ` · ${esc(parent.zh)}的卫星` : ''}</span>
@@ -429,7 +429,7 @@ function generateIndexPage(bodies) {
 </head>
 <body>
   <div class="container">
-    <a href="/" class="back-link">← 返回 Solar Wanderer</a>
+    <a href="../" class="back-link">← 返回 Solar Wanderer</a>
     <h1>🪐 太阳系天体目录</h1>
     <p class="subtitle">Solar System Bodies Directory — ${bodies.length} 个天体 · 基于 NASA JPL 星历</p>
 
