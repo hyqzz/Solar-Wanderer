@@ -231,6 +231,8 @@ const D = {
     ru: 'Поворот одним пальцем · щипок для масштаба · двойное касание метки для полёта',
   },
   'start.star': { zh: 'Star on GitHub', en: 'Star on GitHub', es: 'Star en GitHub', ja: 'GitHubでスター', fr: 'Star sur GitHub', de: 'Auf GitHub starren', ru: 'Звезда на GitHub' },
+  'tip.gravityOn': { zh: '🛰 真实引力：推力只给加速度——可自由落体、可入轨（X 清速已禁用）', en: '🛰 Real gravity: thrust adds acceleration only — free-fall and orbit (X clear disabled)', es: '🛰 Gravedad real activada', ja: '🛰 実引力オン：自由落下と軌道投入が可能', fr: '🛰 Gravité réelle activée', de: '🛰 Echte Gravitation an', ru: '🛰 Реальная гравитация включена' },
+  'tip.gravityOff': { zh: '🛰 已回到街机飞行手感', en: '🛰 Back to arcade flight', es: '🛰 Vuelo arcade', ja: '🛰 アーケード飛行に戻りました', fr: '🛰 Vol arcade', de: '🛰 Arcade-Flug', ru: '🛰 Аркадный полёт' },
   'hud.errCount': { zh: '⚠ 运行时错误 {n}（{tag}）· 点击复制', en: '⚠ Runtime errors {n} ({tag}) · click to copy', es: '⚠ Errores {n} · clic para copiar', ja: '⚠ 実行時エラー {n}（{tag}）· クリックでコピー', fr: '⚠ Erreurs {n} · cliquer pour copier', de: '⚠ Laufzeitfehler {n} · klicken zum Kopieren', ru: '⚠ Ошибок {n} · нажмите, чтобы скопировать' },
   'hud.errHint': { zh: '主循环异常被兜底捕获，画面可能不完整', en: 'Main-loop errors were caught; the view may be incomplete', es: 'Errores capturados; la vista puede estar incompleta', ja: '例外を捕捉しました。表示が不完全な可能性があります', fr: 'Erreurs interceptées ; l’affichage peut être incomplet', de: 'Fehler abgefangen; die Ansicht kann unvollständig sein', ru: 'Ошибки перехвачены; изображение может быть неполным' },
   'hud.errCopied': { zh: '错误详情已复制到剪贴板', en: 'Error details copied', es: 'Detalles copiados', ja: '詳細をコピーしました', fr: 'Détails copiés', de: 'Details kopiert', ru: 'Подробности скопированы' },

@@ -1156,6 +1156,11 @@ function handleUIKeys() {
     e.orbitLine.visible = showTnoOrbits && f > 0.01;
     if (e.orbitLine.visible) e.orbitLine.material.opacity = (e.orbitLine.userData.baseOpacity ?? 0.18) * f;
   }
+  // J：真实引力模式（默认关闭）。开启后推力只给加速度，可自由落体与入轨。
+  if (input.tapped('KeyJ') && appMode === 'fly') {
+    ship.gravityMode = !ship.gravityMode;
+    hud.tip(t(ship.gravityMode ? 'tip.gravityOn' : 'tip.gravityOff'));
+  }
   if (input.tapped('KeyL')) labels.setVisible(!labels.visible);
   if (input.tapped('KeyH')) hud.toggleHelp();
   // Z：纯净/电影模式——一次性收掉全部叠加层（HUD/目录/准星/提示/罗盘/参照物），

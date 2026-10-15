@@ -409,6 +409,10 @@ export class Ship {
     this.quat = new THREE.Quaternion();
     this.vel = new THREE.Vector3();
     this.speedSetting = 10;
+    // 真实引力模式（默认关闭，快捷键切换）：开启后推力只提供加速度，
+    // 速度由引力积分得到——于是可以自由落体、可以入轨、可以停在地球静止轨道
+    // 看着行星自转，而不是"停手就被行星甩掉"。默认关闭以保留原有街机手感。
+    this.gravityMode = false;
     this.effSpeed = 0;
     this.damping = true;
     this.walk = {
@@ -476,7 +480,27 @@ export class Ship {
     this.effSpeed = thrusting ? cap : 0;
     const boost = (input.down('ShiftLeft') || input.touchSprint) ? 2 : 1;
 
-    if (this.damping) {
+    if (this.gravityMode) {
+      // ── 真实引力：推力只给加速度，速度靠积分 ──
+      // 主天体用平方反比，另叠太阳；不建模多体摄动（真实任务规划才需要）。
+      // 关键点：**不做阻尼**——阻尼等于有介质，太空中没有。
+      this.vel.addScaledVector(_v1, cap * boost * 0.5 * dt);   // 推力
+      const nb = env.nearest;
+      if (nb && nb.phys?.gm) {
+        _v3.set(this.posKm[0] - nb.posKm[0], this.posKm[1] - nb.posKm[1], this.posKm[2] - nb.posKm[2]);
+        const r2 = Math.max(_v3.lengthSq(), 1e-6);
+        const r = Math.sqrt(r2);
+        const a = nb.phys.gm / r2;                        // km/s²
+        this.vel.addScaledVector(_v3, -a * dt / r);
+      }
+      const rSun2 = Math.max(this.posKm[0] ** 2 + this.posKm[1] ** 2 + this.posKm[2] ** 2, 1e-6);
+      const aSun = 1.32712440018e11 / rSun2;
+      const rSunLen = Math.sqrt(rSun2);
+      this.vel.x -= aSun * dt * this.posKm[0] / rSunLen;
+      this.vel.y -= aSun * dt * this.posKm[1] / rSunLen;
+      this.vel.z -= aSun * dt * this.posKm[2] / rSunLen;
+      if (input.tapped('KeyX')) { /* 引力模式下 X 不再清零速度：那等于凭空消掉动量 */ }
+    } else if (this.damping) {
       _v2.copy(_v1).multiplyScalar(cap * boost);
       const k = 1 - Math.exp(-dt * 3.5);
       this.vel.lerp(_v2, k);
@@ -484,7 +508,7 @@ export class Ship {
     } else {
       this.vel.addScaledVector(_v1, cap * boost * 0.5 * dt);
     }
-    if (input.tapped('KeyX')) this.vel.set(0, 0, 0);
+    if (!this.gravityMode && input.tapped('KeyX')) this.vel.set(0, 0, 0);
 
     this.posKm[0] += this.vel.x * dt;
     this.posKm[1] += this.vel.y * dt;

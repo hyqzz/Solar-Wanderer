@@ -64,3 +64,47 @@ test('不同天体地形互不相同（种子隔离）', () => {
   const b = makeNoise(hashSeed('mars')).fbm(1, 2, 3, 5);
   assert.notEqual(a, b);
 });
+
+// ── 真实引力模式：圆轨道必须保持圆 ──────────────────────────────────────────
+// 这是引力的硬判据。两个测试前提必须说清，否则会得到假失败：
+//   1) posKm 在应用里是**日心**坐标，地球必须放在 1 AU 处，太阳项才成立；
+//   2) 地球必须**按真实轨道运动**——钉死在原地会多出一个 5.9e-6 km/s² 的相对加速度，
+//      两小时累积成约 1.4% 的假漂移（该漂移与步长无关，可据此判定不是数值误差）。
+test('引力模式：圆轨道半径稳定、速度守恒；街机模式作为对照衰减到零', async () => {
+  const { Ship } = await import('../src/engine/ship.js');
+  const GM_E = 3.986004418e5, GM_S = 1.32712440018e11;
+  const RE = 6371, ALT = 600, AU = 1.496e8;
+  const r0 = RE + ALT;
+  const vc = Math.sqrt(GM_E / r0), vE = Math.sqrt(GM_S / AU);
+  const idle = {
+    dx: 0, dy: 0, wheel: 0, fovWheel: 0, locked: false,
+    drag: { active: false, dx: 0, dy: 0 }, pan: { active: false, dx: 0, dy: 0 },
+    look: { active: false, dx: 0, dy: 0 }, joystick: { x: 0, y: 0 },
+    touchAscend: false, touchDescend: false, touchSprint: false,
+    down: () => false, tapped: () => false,
+  };
+  const run = (gravityMode) => {
+    const earth = {
+      id: 'earth', posKm: new Float64Array([AU, 0, 0]), radiusKm: RE,
+      distSurface: ALT, landable: true, phys: { gm: GM_E, radiusKm: RE },
+    };
+    const env = { nearest: earth, get: () => earth, baseReady: () => true, phys: () => earth.phys };
+    const s = new Ship();
+    s.mode = 'fly'; s.gravityMode = gravityMode;
+    s.posKm[0] = AU + r0; s.vel.set(0, vE, vc);
+    let mn = Infinity, mx = -Infinity, absV = Infinity;
+    const dt = 0.1, steps = Math.round(7200 / dt);
+    for (let i = 0; i < steps; i++) {
+      const th = (i * dt * vE) / AU;
+      earth.posKm[0] = AU * Math.cos(th); earth.posKm[1] = AU * Math.sin(th);
+      s.update(dt, idle, env);
+      mn = Math.min(mn, Math.hypot(s.posKm[0] - earth.posKm[0], s.posKm[1] - earth.posKm[1], s.posKm[2]));
+      mx = Math.max(mx, Math.hypot(s.posKm[0] - earth.posKm[0], s.posKm[1] - earth.posKm[1], s.posKm[2]));
+      absV = Math.min(absV, s.vel.length());
+    }
+    return { drift: (mx - mn) / r0, absV };
+  };
+  const g = run(true), a = run(false);
+  assert.ok(g.drift < 0.005, `引力模式圆轨道相对漂移 ${(g.drift * 100).toFixed(4)}%，应 <0.5%`);
+  assert.ok(a.absV < 1, `街机模式无推力应衰减到零（对照组），实际 ${a.absV.toFixed(2)} km/s`);
+});
