@@ -1556,7 +1556,18 @@ function copyShareUrl() {
 // 只在 https 或 localhost、且同源部署时注册；file:// 打开（教师工具包建议的
 // "拷到 U 盘双击 index.html"）没有 serviceWorker，会自然跳过。
 // 注册失败不抛错——它只是加速手段，不能影响应用本身。
-if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator
+//
+// 开发服务器上必须完全不注册：sw.js 对同源 GET 是"缓存优先"，它会连 /src/*.js
+// 一起缓存，于是改了源码、刷新页面拿到的还是旧模块——本轮核验扁率时就因此读到
+// 改动前的半径，白跑一次。而且上一次会话留下的 worker 仍会继续接管页面，所以
+// 除了不注册，还要主动注销。
+const DEV = import.meta.env?.DEV === true;
+if (DEV && typeof navigator !== 'undefined' && navigator.serviceWorker) {
+  navigator.serviceWorker.getRegistrations?.()
+    .then((rs) => rs.forEach((r) => r.unregister()))
+    .catch(() => {});
+}
+if (!DEV && typeof navigator !== 'undefined' && 'serviceWorker' in navigator
     && (location.protocol === 'https:' || location.hostname === 'localhost'
         || location.hostname === '127.0.0.1')) {
   window.addEventListener('load', () => {

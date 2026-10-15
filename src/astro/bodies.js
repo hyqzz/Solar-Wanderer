@@ -1,5 +1,20 @@
 // 天体物理数据库：真实半径 / GM / 扁率 / 大气 / 地表 / 环系 / 贴图 / 中文资料。
 // 半径单位 km，GM 单位 km³/s²（重力 g = GM/r²，得 km/s² → ×1000 为 m/s²）。
+//
+// ── 半径口径（radiusKm 与 oblateness 必须配对） ────────────────────────────────
+// 渲染器对非可登陆天体施加 mesh.scale.y = 1 − oblateness，即
+//     赤道半径 = radiusKm，极半径 = radiusKm × (1 − oblateness)
+// 所以 `oblateness` 是标准扁率 f = (a−b)/a，`radiusKm` 就必须是**赤道半径 a**。
+// 两者口径不一致会直接算错天体大小——四颗巨行星此前填的是体积平均半径
+// （木星 69911、土星 58232、天王星 25362、海王星 24622），
+// 于是土星被画小了 3.4%（2036 km）、木星 2.2%（1581 km），且极半径也一并偏小。
+// 现已改为标准赤道半径（1 bar 层），与扁率配对后极半径与实测值逐位吻合：
+//     木星 71492 × (1−0.06487) = 66854 ✓   土星 60268 × (1−0.09796) = 54364 ✓
+//     天王星 25559 × (1−0.02293) = 24973 ✓  海王星 24764 × (1−0.01708) = 24341 ✓
+// 可登陆的岩质天体（地球 6371、火星 3389.5）保留**体积平均半径**并渲染为正球：
+// 地形瓦片、行走碰撞、高度查询全建立在正球 R 上，单独压扁网格会让地表与碰撞错位；
+// 而 0.3%–0.6% 的扁率在正球近似下不可辨，用等体积球半径才是更好的球近似。
+// 这类天体的 `oblateness` 因此只作数据保留，不参与渲染。
 
 export const BODIES = {
   sun: {
@@ -95,7 +110,8 @@ export const BODIES = {
   },
   jupiter: {
     id: 'jupiter', nameZh: '木星', nameEn: 'Jupiter', type: 'gas', parent: 'sun',
-    radiusKm: 69911, gm: 1.26686534e8, oblateness: 0.06487,
+    // 赤道半径（1 bar 层），不是体积平均半径——见文件顶部「半径口径」说明
+    radiusKm: 71492, gm: 1.26686534e8, oblateness: 0.06487,
     rotation: 'iau', landable: false,
     atmosphere: {
       heightKm: 350, rayleighScaleKm: 27, mieScaleKm: 27,
@@ -117,7 +133,7 @@ export const BODIES = {
   },
   saturn: {
     id: 'saturn', nameZh: '土星', nameEn: 'Saturn', type: 'gas', parent: 'sun',
-    radiusKm: 58232, gm: 3.7931187e7, oblateness: 0.09796,
+    radiusKm: 60268, gm: 3.7931187e7, oblateness: 0.09796,
     rotation: 'iau', landable: false,
     atmosphere: {
       heightKm: 300, rayleighScaleKm: 40, mieScaleKm: 40,
@@ -131,7 +147,7 @@ export const BODIES = {
   },
   uranus: {
     id: 'uranus', nameZh: '天王星', nameEn: 'Uranus', type: 'ice', parent: 'sun',
-    radiusKm: 25362, gm: 5.793939e6, oblateness: 0.02293,
+    radiusKm: 25559, gm: 5.793939e6, oblateness: 0.02293,
     rotation: 'iau', landable: false,
     atmosphere: {
       heightKm: 250, rayleighScaleKm: 28, mieScaleKm: 28,
@@ -150,7 +166,7 @@ export const BODIES = {
   },
   neptune: {
     id: 'neptune', nameZh: '海王星', nameEn: 'Neptune', type: 'ice', parent: 'sun',
-    radiusKm: 24622, gm: 6.836529e6, oblateness: 0.01708,
+    radiusKm: 24764, gm: 6.836529e6, oblateness: 0.01708,
     rotation: 'iau', landable: false,
     atmosphere: {
       heightKm: 250, rayleighScaleKm: 25, mieScaleKm: 25,

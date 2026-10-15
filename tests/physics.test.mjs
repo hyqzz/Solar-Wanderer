@@ -46,6 +46,41 @@ test('全部卫星：物理数据完备且半径>0', () => {
   }
 });
 
+// 半径口径：oblateness 是标准扁率 f=(a−b)/a，radiusKm 就必须是赤道半径 a。
+// 两者口径不一致会静默算错天体大小——四颗巨行星此前填的是体积平均半径，
+// 于是土星被画小 3.4%、木星 2.2%，画面照出、看不出错，只有对数字才发现。
+// 参考值取自 NASA 行星实况表（1 bar 层赤道半径与极半径）。
+const OBLATE_REFERENCE = {
+  jupiter: { a: 71492, b: 66854, f: 0.06487 },
+  saturn:  { a: 60268, b: 54364, f: 0.09796 },
+  uranus:  { a: 25559, b: 24973, f: 0.02293 },
+  neptune: { a: 24764, b: 24341, f: 0.01708 },
+};
+
+test('巨行星半径是赤道半径而非体积平均半径，与扁率配对', () => {
+  for (const [id, ref] of Object.entries(OBLATE_REFERENCE)) {
+    const p = BODIES[id];
+    // 1) 填的必须就是赤道半径（体积平均半径会明显偏小：木星 69911、土星 58232…）
+    assert.ok(Math.abs(p.radiusKm - ref.a) < 1,
+      `${id} 的 radiusKm=${p.radiusKm} 不是赤道半径 ${ref.a}（体积平均半径会让天体被画小）`);
+    // 2) 扁率必须是标准扁率，而不是别的口径
+    assert.ok(Math.abs(p.oblateness - ref.f) < 1e-4, `${id} 扁率 ${p.oblateness} 与标准值 ${ref.f} 不符`);
+    // 3) 渲染器施加 scale.y = 1−f 后得到的极半径必须与实测吻合
+    const b = p.radiusKm * (1 - p.oblateness);
+    assert.ok(Math.abs(b - ref.b) < 1, `${id} 极半径算出 ${b.toFixed(0)}，实测 ${ref.b}`);
+  }
+});
+
+test('可登陆天体渲染为正球：radiusKm 应是体积平均半径而非赤道半径', () => {
+  // 地形、碰撞、高度查询都建立在正球 R 上，单独压扁网格会让地表与碰撞错位。
+  // 因此这类天体该用等体积球半径（更好的球近似），而不是赤道半径。
+  assert.ok(Math.abs(BODIES.earth.radiusKm - 6371.0) < 1,
+    `地球 ${BODIES.earth.radiusKm} 应为平均半径 6371（赤道半径 6378.137 是更差的球近似）`);
+  assert.ok(Math.abs(BODIES.mars.radiusKm - 3389.5) < 1, `火星 ${BODIES.mars.radiusKm} 应为平均半径 3389.5`);
+  // 太阳接近正球，赤道与平均几乎无差
+  assert.ok(Math.abs(BODIES.sun.radiusKm - 695700) < 1);
+});
+
 test('地形噪声：确定性（同种子同输出）且有界', () => {
   const n1 = makeNoise(hashSeed('moon'));
   const n2 = makeNoise(hashSeed('moon'));
