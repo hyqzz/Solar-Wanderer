@@ -143,6 +143,7 @@ export function createAtmosphere(phys, auroraMode = 0) {
         const int NL = ${QUALITY.atmoNL};
         float ds = (t1 - t0) / float(N);
         float odR = 0.0, odM = 0.0, odO = 0.0;
+        float odRlit = 0.0;   // 其中落在**被阳光照到的地面**之上的那一份（见地面反弹项）
         vec3 inscR = vec3(0.0), inscM = vec3(0.0);
         vec3 auroraL = vec3(0.0); // Issue #29：极光发射累积（非散射，独立于 BetaR/BetaM）
 
@@ -156,6 +157,10 @@ export function createAtmosphere(phys, auroraMode = 0) {
           float dM = (exp(-h / uHM) + hazeEff * exp(-h / max(uHM * 0.22, 0.5))) * uBoostM;
           odR += dR * ds;
           odM += dM * ds;
+          // 该采样点脚下那片地面是否被太阳照到。地面反弹只在受照地面上成立，
+          // 夜间没有直射光可反——用采样点自身的本地垂线判定，
+          // 于是地表视角与轨道视角都自然成立（夜半球整片为 0）。
+          odRlit += smoothstep(-0.10, 0.10, dot(uSunDir, normalize(p - uCenter))) * dR * ds;
           // 臭氧不在地表而在平流层：用峰值 25 km、半宽 8 km 的高斯层近似 Chapman 剖面
           odO += exp(-pow((h - 25.0) / 8.0, 2.0)) * ds;
           // 向太阳的光学深度
@@ -256,11 +261,18 @@ export function createAtmosphere(phys, auroraMode = 0) {
         // 这里用视线自身的光学深度作双程近似（下行与上行各一次），
         // 并对朝向地表以下的视线加权：抬头看天时看到的主要是散射，
         // 俯视/掠视时才大量看到"地面反上来的那一份"。
+        //
+        // 必须乘以受照地面占比：这一项原本**完全没有昼夜判定**，
+        // 于是反日点上空仍被 uSunI × groundAlbedo 照亮——实测夜空均值 RGB
+        // 24/42/53，而关掉大气后只有 0.2/0.3/0.9，夜空的亮度几乎全部来自这一项。
+        // 真实夜空没有直射光可反，只剩气辉（本实现未建模），应当接近全黑。
         if (uGroundAlbedo > 0.0) {
           vec3 up = normalize(uCenter - ro);          // 该点的"上"（指向行星中心）
           float below = clamp(-dot(rd, up), 0.0, 1.0);
+          float groundLit = odR > 1e-6 ? odRlit / odR : 0.0;
           vec3 twoWay = exp(-(uBetaR * odR + uBetaM * 1.1 * odM) * 1.5);
-          L += uSunI * uGroundAlbedo * twoWay * (0.35 + 0.65 * below) * msFrac * (1.0 / PI);
+          L += uSunI * uGroundAlbedo * twoWay * (0.35 + 0.65 * below) * msFrac
+             * (1.0 / PI) * groundLit;
         }
 
         // 轻微抖动消除条带（×alpha：仅作用于有大气信号处。R8 #1 修复——

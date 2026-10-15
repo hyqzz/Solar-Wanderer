@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SphereGeometry } from 'three';
 import { DEM_SOURCES, levelExceedsSource } from '../src/scene/demTiles.js';
+import { parseStarCatalog, bvToRgb, magToIntensity } from '../src/astro/starCatalog.js';
+import { CATALOG_COUNT } from '../src/astro/stars.generated.js';
 import { BODIES } from '../src/astro/bodies.js';
 
 const read = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
@@ -257,6 +259,21 @@ test('大气含地面反照率反弹项（低空天光提亮的主因）', () =>
   assert.ok(/if \(uGroundAlbedo > 0\.0\)/.test(src), '缺少零值短路（气巨没有地面）');
 });
 
+test('地面反照率反弹按"地面是否受照"加权（否则夜空被照亮）', () => {
+  const src = read('src/scene/atmosphere.js');
+  // 这一项原本完全没有昼夜判定，于是反日点上空仍被 uSunI × groundAlbedo 照亮。
+  // 实测：夜空均值 RGB 24/42/53，关掉大气后只有 0.2/0.3/0.9——夜空的亮度
+  // 几乎全部来自这一项；真实夜空没有直射光可反，应当接近全黑。
+  assert.ok(/float odRlit = 0\.0;/.test(src), '缺少受照地面的累积量');
+  assert.ok(/odRlit \+= smoothstep\(-0\.10, 0\.10, dot\(uSunDir, normalize\(p - uCenter\)\)\) \* dR \* ds;/.test(src),
+    '未按采样点自身的本地垂线判定是否受照');
+  assert.ok(/float groundLit = odR > 1e-6 \? odRlit \/ odR : 0\.0;/.test(src), '缺少受照占比');
+  assert.ok(/\* \(1\.0 \/ PI\) \* groundLit;/.test(src), '受照占比未进入最终着色');
+  // 用采样点自身而非相机的本地垂线：这样地表视角与轨道视角都自然成立
+  assert.ok(!/uGroundAlbedo \* twoWay \* \(0\.35 \+ 0\.65 \* below\) \* msFrac \* \(1\.0 \/ PI\);\n/.test(src),
+    '地面反弹仍是无条件的');
+});
+
 test('地面反照率只给有固体表面或云顶的天体', () => {
   assert.ok(BODIES.earth.atmosphere.groundAlbedo > 0.05, '地球应有海陆反照率');
   assert.ok(BODIES.mars.atmosphere.groundAlbedo > BODIES.earth.atmosphere.groundAlbedo,
@@ -292,67 +309,150 @@ test('音效状态在 HUD 上可见（默认静音但必须能发现怎么开）
   assert.ok(/tip\.audioOn/.test(main), '切换音效时没有反馈提示');
 });
 
-// ── 批次 11：背景星场的统计真实性 ────────────────────────────────────────────
+// ── 批次 11：真实星表 ───────────────────────────────────────────────────────
+//
+// 这一组测的是**数据本身**，不是合成器。此前星场是"132 颗手写亮星 + 11900 颗
+// 虚构背景星"，而手写表后半段把前面的星按坐标回收复制、只改星等（天狼星出现两次、
+// 星等 −1.46 与 2.95 并存），专名也大量错位。测试当时只断言了合成器的分布形状，
+// 对"星表是假的"这件事完全无感——所以现在直接对真实星表下断言。
 
-/** 与 starfield.js 中采样逻辑逐项对应的镜像实现 */
-function sampleStarField(count, seed) {
-  let s = seed;
-  const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
-  const ngp = { x: 0.5, y: 0.78, z: 0.38 };   // 任意单位向量即可，只验证分布形状
-  const n = Math.hypot(ngp.x, ngp.y, ngp.z);
-  ngp.x /= n; ngp.y /= n; ngp.z /= n;
-  const B0 = 12 * Math.PI / 180;
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    let dx = 1, dy = 0, dz = 0;
-    for (let k = 0; k < 24; k++) {
-      const z = rnd() * 2 - 1, phi = rnd() * Math.PI * 2, r = Math.sqrt(1 - z * z);
-      const px = r * Math.cos(phi), pz = r * Math.sin(phi);
-      const sinB = Math.abs(px * ngp.x + z * ngp.y + pz * ngp.z);
-      const b = Math.asin(Math.min(1, sinB));
-      if (rnd() < (0.35 + Math.exp(-b / B0)) / 1.35) { dx = px; dy = z; dz = pz; break; }
+const STAR_BIN = readFileSync(new URL('../public/data/stars.bin', import.meta.url));
+
+test('星表二进制可解析，规模与生成时一致', () => {
+  const cat = parseStarCatalog(STAR_BIN.buffer.slice(
+    STAR_BIN.byteOffset, STAR_BIN.byteOffset + STAR_BIN.byteLength));
+  assert.ok(cat, 'stars.bin 解析失败');
+  assert.equal(cat.count, CATALOG_COUNT, '星表规模与 stars.generated.js 记录的不一致');
+  assert.ok(cat.count > 9000, `只有 ${cat.count} 颗，BSC5 应有 9096 颗`);
+  for (let i = 0; i < cat.count; i++) {
+    assert.ok(cat.ra[i] >= 0 && cat.ra[i] < 360, `第 ${i} 颗赤经越界 ${cat.ra[i]}`);
+    assert.ok(cat.dec[i] >= -90.1 && cat.dec[i] <= 90.1, `第 ${i} 颗赤纬越界 ${cat.dec[i]}`);
+    assert.ok(cat.mag[i] > -2 && cat.mag[i] < 8, `第 ${i} 颗星等越界 ${cat.mag[i]}`);
+  }
+});
+
+test('拒绝坏数据而不是猜：magic / 版本 / 长度任一不对都返回 null', () => {
+  const buf = STAR_BIN.buffer.slice(STAR_BIN.byteOffset, STAR_BIN.byteOffset + STAR_BIN.byteLength);
+  const bad1 = buf.slice(0); new DataView(bad1).setUint8(0, 0x58);
+  assert.equal(parseStarCatalog(bad1), null, 'magic 不对时应拒绝');
+  const bad2 = buf.slice(0); new DataView(bad2).setUint16(4, 99, true);
+  assert.equal(parseStarCatalog(bad2), null, '版本不认识时应拒绝');
+  assert.equal(parseStarCatalog(buf.slice(0, 40)), null, '长度不足时应拒绝');
+  assert.equal(parseStarCatalog(new ArrayBuffer(4)), null, '太短时应拒绝');
+});
+
+test('标志星的位置与实测一致（列号错位会立刻暴露）', () => {
+  const cat = parseStarCatalog(STAR_BIN.buffer.slice(
+    STAR_BIN.byteOffset, STAR_BIN.byteOffset + STAR_BIN.byteLength));
+  // 期望值取自 BSC5 本身（自检脚本 tools/fetch-stars.mjs 也核这几颗）
+  const expect = [
+    ['天狼星 Sirius', 101.287, -16.716, -1.46],
+    ['织女一 Vega', 279.234, 38.784, 0.03],
+    ['北极星 Polaris', 37.955, 89.264, 2.02],
+    ['参宿七 Rigel', 78.634, -8.202, 0.12],
+  ];
+  for (const [name, ra, dec, mag] of expect) {
+    let best = -1, bestD = 1e9;
+    for (let i = 0; i < cat.count; i++) {
+      const d = Math.hypot(cat.ra[i] - ra, cat.dec[i] - dec);
+      if (d < bestD) { bestD = d; best = i; }
     }
-    const u = rnd();
-    const I = Math.min(1, Math.max(0.12, 0.12 * Math.pow(1 - u * 0.999, -2 / 3)));
-    out.push({ x: dx, y: dy, z: dz, I });
+    assert.ok(bestD < 0.02, `${name} 未在星表中找到（最近 ${bestD.toFixed(3)}°）`);
+    assert.ok(Math.abs(cat.mag[best] - mag) < 0.1, `${name} 星等 ${cat.mag[best]} 与实测 ${mag} 不符`);
   }
-  return out;
-}
+});
 
-test('背景星向银道面集中（银河之所以是一条带）', () => {
-  const stars = sampleStarField(20000, 12345);
-  const ngp = { x: 0.5, y: 0.78, z: 0.38 };
-  const n = Math.hypot(ngp.x, ngp.y, ngp.z);
-  ngp.x /= n; ngp.y /= n; ngp.z /= n;
+test('累积星数符合全天实测（填充表绝对过不了这一关）', () => {
+  const cat = parseStarCatalog(STAR_BIN.buffer.slice(
+    STAR_BIN.byteOffset, STAR_BIN.byteOffset + STAR_BIN.byteLength));
+  // 全天实测累积星数（经典数值，各星表一致）：
+  //   V≤1: 15   V≤2: 48   V≤3: 171   V≤4: 513   V≤5: 1602   V≤6: ~5000
+  // 手写表那种"把前面的星按坐标回收复制、只把星等往上调"的填充法，
+  // 会让每一档都严重超标——这是比"查重"可靠得多的判据。
+  const expect = [[1, 15], [2, 48], [3, 171], [4, 513], [5, 1602], [6, 5000]];
+  for (const [m, want] of expect) {
+    let n = 0;
+    for (let i = 0; i < cat.count; i++) if (cat.mag[i] <= m) n++;
+    assert.ok(Math.abs(n - want) <= want * 0.2,
+      `V≤${m} 有 ${n} 颗，全天实测约 ${want} 颗（差 ${((n / want - 1) * 100).toFixed(0)}%）`);
+  }
+});
+
+test('坐标重合的星只是密近双星分量，占比极小', () => {
+  const cat = parseStarCatalog(STAR_BIN.buffer.slice(
+    STAR_BIN.byteOffset, STAR_BIN.byteOffset + STAR_BIN.byteLength));
+  const seen = new Set();
+  let dup = 0;
+  for (let i = 0; i < cat.count; i++) {
+    const k = `${cat.ra[i].toFixed(3)}/${cat.dec[i].toFixed(3)}`;
+    if (seen.has(k)) dup++;
+    seen.add(k);
+  }
+  // BSC5 里确有密近双星的两个分量各自成条、位置在 0.001° 内重合
+  // （如参宿三 δ Ori V=2.05 与其 V=4.21 的伴星）。所以判据是"极少"而不是"零"：
+  // 实测 17 组 / 9096 颗 = 0.19%；填充表会是几十个百分点。
+  assert.ok(dup / cat.count < 0.01,
+    `${dup} 颗与别的星坐标重合（${((dup / cat.count) * 100).toFixed(1)}%），远超密近双星的量级`);
+});
+
+test('真实星表本身向银道面集中（银河是一条带，这是数据的性质而非拟合出来的）', () => {
+  const cat = parseStarCatalog(STAR_BIN.buffer.slice(
+    STAR_BIN.byteOffset, STAR_BIN.byteOffset + STAR_BIN.byteLength));
+  // 银极 J2000：RA 192.8595°, Dec 27.1284°
+  const D = Math.PI / 180;
+  const ra0 = 192.8595 * D, dec0 = 27.1284 * D;
+  const nx = Math.cos(dec0) * Math.cos(ra0), ny = Math.cos(dec0) * Math.sin(ra0), nz = Math.sin(dec0);
   let near = 0, far = 0;
-  for (const st of stars) {
-    const sinB = Math.abs(st.x * ngp.x + st.y * ngp.y + st.z * ngp.z);
-    if (sinB < Math.sin(12 * Math.PI / 180)) near++;          // |b| < 12°
-    if (sinB > Math.sin(60 * Math.PI / 180)) far++;           // |b| > 60°
+  for (let i = 0; i < cat.count; i++) {
+    const ra = cat.ra[i] * D, dec = cat.dec[i] * D;
+    const sinB = Math.abs(Math.cos(dec) * Math.cos(ra) * nx
+      + Math.cos(dec) * Math.sin(ra) * ny + Math.sin(dec) * nz);
+    if (sinB < Math.sin(12 * D)) near++;
+    if (sinB > Math.sin(60 * D)) far++;
   }
-  // 球面均匀时 |b|<12° 占 1−cos12° ≈ 2.2%，|b|>60° 占 cos60° = 50%
-  const nearFrac = near / stars.length, farFrac = far / stars.length;
-  assert.ok(nearFrac > 0.08, `银道面附近占比仅 ${(nearFrac * 100).toFixed(1)}%，集中不足`);
-  assert.ok(farFrac < 0.32, `高银纬占比 ${(farFrac * 100).toFixed(1)}%，仍接近球面均匀`);
-  assert.ok(nearFrac / farFrac > 0.5, '银道面与高银纬的密度比过低');
+  const nearFrac = near / cat.count, farFrac = far / cat.count;
+  // 球面均匀时 |b|<12° 应占 1−cos12° ≈ 2.2%，|b|>60° 应占 50%
+  assert.ok(nearFrac > 0.08, `银道面附近仅 ${(nearFrac * 100).toFixed(1)}%，不像真实星空`);
+  assert.ok(farFrac < 0.32, `高银纬 ${(farFrac * 100).toFixed(1)}%，接近球面均匀`);
 });
 
-test('背景星流量服从幂律（少数很亮 + 大量很暗）', () => {
-  const stars = sampleStarField(20000, 999);
-  const bright = stars.filter((s) => s.I > 0.6).length / stars.length;
-  const dim = stars.filter((s) => s.I < 0.2).length / stars.length;
-  assert.ok(dim > 0.4, `暗星占比 ${(dim * 100).toFixed(1)}% 过低，层次不足`);
-  assert.ok(bright > 0.02 && bright < 0.25,
-    `亮星占比 ${(bright * 100).toFixed(1)}% 不在合理区间（真实天空亮星是少数）`);
-  assert.ok(dim / Math.max(bright, 1e-6) > 4, '亮暗层次比不足');
+test('B−V → RGB：蓝星确实比红星蓝，且归一化不影响亮度关系', () => {
+  const blue = bvToRgb(-0.3), white = bvToRgb(0.5), red = bvToRgb(1.8);
+  assert.ok(blue[2] > blue[0], 'B−V=−0.3 应是蓝星（B 通道应高于 R）');
+  assert.ok(red[0] > red[2], 'B−V=1.8 应是红星（R 通道应高于 B）');
+  assert.ok(white[0] > 0.8 && white[2] > 0.8, 'B−V=0.5（太阳色）应接近白');
+  for (const c of [blue, white, red]) {
+    assert.ok(Math.abs(Math.max(...c) - 1) < 1e-9, '应归一化到最大分量为 1');
+    assert.ok(c.every((x) => x >= 0 && x <= 1), '分量应在 [0,1]');
+  }
 });
 
-test('星场源码确实按银极方向做密度集中、按幂律抽流量', () => {
+test('星等→强度服从 Pogson 定义（每 5 等差 100 倍）', () => {
+  assert.ok(Math.abs(magToIntensity(0) - 1) < 1e-12);
+  assert.ok(Math.abs(magToIntensity(5) / magToIntensity(0) - 0.01) < 1e-12, '差 5 等应差 100 倍');
+  assert.ok(magToIntensity(-1.46) > magToIntensity(0.03), '天狼星应亮于织女星');
+  assert.ok(magToIntensity(6) < magToIntensity(1), '暗星强度应更低');
+});
+
+test('星场源码确实用真实星表，且没有残留的虚构星', () => {
   const src = read('src/scene/starfield.js');
-  assert.ok(/ngpWorld = raDecToWorld\(192\.8595 \* DEG, 27\.1284 \* DEG/.test(src),
-    '缺少银极方向（NGP）');
-  assert.ok(/0\.35 \+ Math\.exp\(-b \/ B0\)/.test(src), '缺少银道面密度函数');
-  assert.ok(/Math\.pow\(1 - u \* 0\.999, -2 \/ 3\)/.test(src), '缺少幂律流量抽样');
+  assert.ok(/import \{ bvToRgb, magToDisplayIntensity \} from '\.\.\/astro\/starCatalog\.js'/.test(src),
+    '未接入真实星表');
+  // 显示强度必须走感知压缩：纯 Pogson 会让 6 等星（比 0 等暗 250 倍）
+  // 在 8 位帧缓冲上直接掉到不可见，地面抬头只剩零星几个点
+  assert.ok(/magToDisplayIntensity\(mag\)/.test(src), '星等未经过感知压缩');
+  assert.ok(!/0\.9 \* magToIntensity\(mag\)/.test(src), '仍在直接用物理通量当显示亮度');
+  assert.ok(/function setCatalog\(cat\)/.test(src), '缺少星表填充入口');
+  assert.ok(/cat\.ra\[i\] \* DEG, cat\.dec\[i\] \* DEG/.test(src), '未按赤经赤纬定位');
+  // 虚构背景星与手写亮星表都必须已经删掉
+  assert.ok(!/BRIGHT_STARS/.test(src), '手写亮星表仍有残留');
+  assert.ok(!/STAR_COLORS/.test(src), '离散色档仍有残留');
+  assert.ok(!/Math\.pow\(1 - u \* 0\.999/.test(src), '虚构背景星的幂律抽样仍在');
+  assert.ok(!/11000/.test(src), '虚构背景星仍在生成');
+  // 标签必须每颗星各自持有方向——共用一个临时向量会让所有标签指向最后一颗
+  const main = read('src/main.js');
+  assert.ok(/const dirWorld = raDecToWorld\(/.test(main), '标签方向未按星各自持有');
+  assert.ok(/getRelPos: \(v\) => v\.copy\(dirWorld\)/.test(main), '标签仍闭包共享方向向量');
 });
 
 // ── 批次 6：行星环系 ────────────────────────────────────────────────────────

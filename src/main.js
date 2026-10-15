@@ -19,7 +19,9 @@ import { World } from './engine/floating.js';
 import { Ship, Input } from './engine/ship.js';
 import { OrbitCamera } from './engine/orbitCamera.js';
 import { buildSolarSystem, texturesOfBody } from './scene/builder.js';
-import { createStarfield, BRIGHT_STARS, SKY_R } from './scene/starfield.js';
+import { createStarfield, SKY_R } from './scene/starfield.js';
+import { loadStarCatalog } from './astro/starCatalog.js';
+import { NAMED_STARS } from './astro/stars.generated.js';
 import { photoSkyVisibility } from './scene/photoExposure.js';
 import { createBelts, createOortCloud } from './scene/belts.js';
 import { createSmallBodies } from './scene/smallBodies.js';
@@ -30,7 +32,7 @@ import { TerrainManager } from './scene/terrain.js';
 import { Labels } from './ui/labels.js';
 import { HUD, targetInfo } from './ui/hud.js';
 import { SearchUI } from './ui/search.js';
-import { eclToWorldArr, KM_PER_AU } from './config.js';
+import { eclToWorldArr, KM_PER_AU, raDecToWorld } from './config.js';
 import { initQuality, makeFpsGuard, QUALITY, IS_MOBILE } from './engine/quality.js';
 import { TouchControls } from './ui/touchControls.js';
 import { t, bodyName, LANG, applyDomI18n } from './ui/i18n.js';
@@ -74,6 +76,8 @@ renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.shadowMap.autoUpdate = true;
+
+const STAR_DEG = Math.PI / 180; // 星表赤经/赤纬（度）→ 弧度
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x000000, 0); // 地形气溶胶透视（仅 fog:true 材质受影响）
@@ -169,11 +173,15 @@ async function init() {
   builder = await buildSolarSystem(scene, world, (d, total) => hud.setLoading(d, total), (d, total) => hud.setBgLoading(d, total));
 
   sky = createStarfield(builder.cache.get('milkyway.jpg'));
-  scene.add(sky.group); // 背景程序化星空固定相机（零视差）
+  scene.add(sky.group); // 银河贴图球（以相机为心）
 
-  // R11：亮星真实 3D 位置注册浮动原点（产生恒星视差效果）
+  // 真实星表恒星：以真实 3D 位置注册浮动原点（有视差的近星会产生可辨视差，R11）。
+  // 星表是可选的增强——加载失败时星空只剩银河贴图，应用照常可用。
   scene.add(sky.brightGroup);
   world.register(new Float64Array(3), sky.brightGroup);
+  loadStarCatalog().then((cat) => {
+    if (cat) sky.setCatalog(cat);
+  });
 
   // 带/尘光/日球层壳为日心结构：必须注册浮动原点，否则会错误地以相机为中心
   belts = createBelts();
@@ -388,7 +396,7 @@ async function init() {
     }
   });
 
-  window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr, smallBodies, quality: QUALITY, ephemerisLoader, renderer, composer, apolloLandmarks, roverSites };
+  window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr, smallBodies, quality: QUALITY, ephemerisLoader, renderer, composer, apolloLandmarks, roverSites, sky, labels };
   renderer.setAnimationLoop(loop);
 
   // ── 生命周期：后台/标签切换/睡眠恢复后强制同步仿真时钟 ──
@@ -547,14 +555,20 @@ function setupLabels() {
       getRelPos: (v) => v.copy(t.relObj.position),
     });
   }
-  // 真实亮星标签（恒星视为无穷远，方向固定；显示真实光年距离——科教）
-  for (const s of BRIGHT_STARS) {
-    if (!s.dirWorld) continue;
-    const name = LANG === 'zh' ? s.zh : (s.en || s.zh);
+  // 真实亮星标签（恒星视为无穷远，方向固定；显示真实光年距离——科教）。
+  // 只标到 2.5 等：BSC5 里 436 颗有专名，全标会糊成一片；2.5 等以上约百颗，
+  // 与"抬头能认出名字的星"相当。中文名只在该星确有通行译名时才用——
+  // stars.generated.js 里 zh 为空表示没有，这时回落到英文专名，不要编一个错的。
+  for (const s of NAMED_STARS) {
+    if (s.mag > 2.5) continue;
+    // 方向必须**每颗星各自持有**：若共用一个临时向量，闭包会在循环结束后
+    // 全部指向最后一颗星（这个坑很隐蔽——标签数量对、名字对，位置全错）。
+    const dirWorld = raDecToWorld(s.ra * 15 * STAR_DEG, s.dec * STAR_DEG, new THREE.Vector3());
+    const name = (LANG === 'zh' && s.zh) ? s.zh : s.en;
     labels.add({
       id: 'star_' + s.en, name, kind: 'fixstar', radiusKm: 0.001,
-      distText: s.ly + ' ' + t('u.ly'),
-      getRelPos: (v) => v.copy(s.dirWorld).multiplyScalar(SKY_R * 0.97),
+      distText: s.ly > 0 ? s.ly + ' ' + t('u.ly') : '',
+      getRelPos: (v) => v.copy(dirWorld).multiplyScalar(SKY_R * 0.97),
     });
   }
 }
