@@ -101,6 +101,17 @@ export const BODIES = {
       heightKm: 350, rayleighScaleKm: 27, mieScaleKm: 27,
       rayleigh: [4e-7, 3.5e-7, 2.5e-7], mie: 3e-7, mieG: 0.7, multiplier: 0.8,
     },
+    // 木星暗环：Halo 1.40–1.71 R_J、Main 1.72–1.81 R_J、Amalthea/Thebe Gossamer 至 3.11 R_J。
+    // 与土星环完全不同：由微米级尘埃构成，光学深度 ~10⁻⁶，正面几乎不可见，
+    // 逆光（伽利略号）才显形——所以 diffuse 取得极低，不能套用天王星的基底。
+    rings: { innerKm: 100000, outerKm: 222000, texture: null, opacity: 0.18, diffuse: 0.004,
+      tint: [0.62, 0.55, 0.48],
+      narrow: [
+        [111000, 22000, 0.006],   // Halo（垂直方向很厚的弥漫晕）
+        [126000, 6400, 0.014],    // Main（薄而密，木星环里最亮的一层）
+        [155000, 52000, 0.005],   // Amalthea Gossamer
+        [202000, 40000, 0.003],   // Thebe Gossamer
+      ] },
     textures: { map: 'jupiter.jpg' },
     desc: '太阳系最大的行星，质量为其他行星总和的 2.5 倍。大红斑是持续数百年的反气旋风暴。强磁场与致命辐射带环绕。',
   },
@@ -145,6 +156,18 @@ export const BODIES = {
       heightKm: 250, rayleighScaleKm: 25, mieScaleKm: 25,
       rayleigh: [1.8e-7, 2.8e-7, 4.0e-7], mie: 1.5e-7, mieG: 0.65, multiplier: 0.9,
     },
+    // 海王星环系：Galle(N42) / Le Verrier(N53) / Lassell(N55 宽片) / Arago(N63) / Adams(N63)。
+    // 全部极暗（τ ~10⁻⁴），但 Adams 环上有 5 段著名的弧（Courage / Liberté / Égalité / Fraternité），
+    // 弧是**经度方向**的密度集中，一维径向纹理表达不了——这里只给环本体，弧仍缺失。
+    rings: { innerKm: 41900, outerKm: 62980, texture: null, opacity: 0.3, diffuse: 0.004,
+      tint: [0.50, 0.52, 0.60],
+      narrow: [
+        [41900, 2000, 0.010],     // Galle (N42)
+        [53200, 113, 0.012],      // Le Verrier (N53)
+        [55400, 4400, 0.006],     // Lassell (N55) 宽片
+        [57600, 100, 0.009],      // Arago (N63)
+        [62930, 50, 0.016],       // Adams (N63)
+      ] },
     textures: { map: 'neptune.jpg' },
     desc: '最遥远的行星，通过数学计算被发现。拥有太阳系最快的风速（2100 km/h）。深邃的蓝色来自甲烷与未知的吸收物。',
   },

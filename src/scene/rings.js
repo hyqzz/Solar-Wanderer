@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 
 /** 无贴图窄环（天王星）：按真实环半径/宽度/光学深度生成 1D 径向 alpha 纹理 */
-function makeNarrowRingTexture(innerKm, outerKm, narrow) {
+function makeNarrowRingTexture(innerKm, outerKm, narrow, diffuse = 0.03) {
   const W = 1024;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = 1;
@@ -11,7 +11,7 @@ function makeNarrowRingTexture(innerKm, outerKm, narrow) {
   const img = ctx.createImageData(W, 1);
   for (let i = 0; i < W; i++) {
     const r = innerKm + (i / (W - 1)) * (outerKm - innerKm);
-    let a = 0.03; // 弥漫尘埃基底
+    let a = diffuse; // 弥漫尘埃基底（木星/海王星环远暗于天王星，逐天体可配）
     for (const [rc, w, tau] of narrow) {
       const d = Math.abs(r - rc) / Math.max(w, 1);
       a += tau * Math.exp(-d * d * 2.8);
@@ -29,7 +29,7 @@ function makeNarrowRingTexture(innerKm, outerKm, narrow) {
 export function createRings(phys, ringTex) {
   const { innerKm, outerKm, opacity = 1, narrow } = phys.rings;
   // 无贴图但有窄环参数 → 程序化生成真实环结构纹理
-  if (!ringTex && narrow) ringTex = makeNarrowRingTexture(innerKm, outerKm, narrow);
+  if (!ringTex && narrow) ringTex = makeNarrowRingTexture(innerKm, outerKm, narrow, phys.rings.diffuse);
   const SEG = 256;
 
   // 自定义环几何：uv.x = 径向归一化

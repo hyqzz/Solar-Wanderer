@@ -277,3 +277,38 @@ test('星场源码确实按银极方向做密度集中、按幂律抽流量', ()
   assert.ok(/0\.35 \+ Math\.exp\(-b \/ B0\)/.test(src), '缺少银道面密度函数');
   assert.ok(/Math\.pow\(1 - u \* 0\.999, -2 \/ 3\)/.test(src), '缺少幂律流量抽样');
 });
+
+// ── 批次 6：行星环系 ────────────────────────────────────────────────────────
+
+test('四颗巨行星都有环，且内半径不小于母星半径', () => {
+  const R = { jupiter: 71492, saturn: 60268, uranus: 25362, neptune: 24764 };
+  for (const [id, rKm] of Object.entries(R)) {
+    const r = BODIES[id].rings;
+    assert.ok(r, `${id} 缺少环系`);
+    assert.ok(r.innerKm > rKm, `${id} 环内半径 ${r.innerKm} 不应小于母星半径 ${rKm}`);
+    assert.ok(r.outerKm > r.innerKm, `${id} 环外半径应大于内半径`);
+  }
+});
+
+test('木星与海王星的暗环用极低弥漫基底（不能套用天王星的 0.03）', () => {
+  assert.ok((BODIES.jupiter.rings.diffuse ?? 0.03) < 0.01,
+    '木星环光学深度 ~10⁻⁶，弥漫基底必须极低，否则会假亮成第二条土星环');
+  assert.ok((BODIES.neptune.rings.diffuse ?? 0.03) < 0.01, '海王星环同样极暗');
+  assert.ok((BODIES.uranus.rings.diffuse ?? 0.03) >= 0.02, '天王星环相对亮，应保留默认基底');
+});
+
+test('木星环分层与真实结构一致（Halo / Main / 两条 Gossamer）', () => {
+  const n = BODIES.jupiter.rings.narrow;
+  assert.equal(n.length, 4, '木星环应为 4 层');
+  // Main 层（1.72–1.81 R_J ≈ 126,000 km）是木星环里最亮的一层
+  const main = n.reduce((a, b) => (b[2] > a[2] ? b : a));
+  assert.ok(Math.abs(main[0] - 126000) < 3000, `最亮层应在 Main 环附近，实际 ${main[0]}`);
+});
+
+test('海王星环含五条命名环（Galle/Le Verrier/Lassell/Arago/Adams）', () => {
+  const n = BODIES.neptune.rings.narrow;
+  assert.equal(n.length, 5);
+  const radii = n.map((x) => x[0]).sort((a, b) => a - b);
+  assert.ok(Math.abs(radii[0] - 41900) < 200, 'Galle 环应在 41,900 km');
+  assert.ok(Math.abs(radii[4] - 62930) < 200, 'Adams 环应在 62,930 km');
+});
