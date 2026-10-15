@@ -39,7 +39,7 @@ const SOURCES = {
     toMeters: (v) => v,                 // 已是米
     lonRange: [0, 360],
     heightOffset: -9, heightScale: 31,  // km（赫拉斯 −8.2 ~ 奥林帕斯 +21.2，留裕量）
-    maxLevel: 4,                        // L5 垂直方向已超源分辨率，体积翻倍而无实质细节
+    maxLevel: 5,                        // 源 11520×5760（32ppd）支撑到 L5：经度 8192 ≤ 11520，仍在下采样
   },
   earth: {
     url: 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO1/data/ice_surface/cell_registered/binary/etopo1_ice_c_i2.zip',
@@ -49,7 +49,7 @@ const SOURCES = {
     toMeters: (v) => v,
     lonRange: [-180, 180],              // -180–180°E
     heightOffset: -11, heightScale: 20, // km（马里亚纳 −10.9 ~ 珠峰 +8.85）
-    maxLevel: 4,                        // 与月/火一致；L5 体积翻倍而视觉增量有限
+    maxLevel: 4,                        // 源 21600 可支撑到 L6，但每层体积翻四倍，暂留在 L4
   },
 };
 

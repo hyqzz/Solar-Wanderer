@@ -28,6 +28,10 @@ export function createAtmosphere(phys, auroraMode = 0) {
     uBoost: { value: 1.0 },  // Rayleigh 密度增幅（天空底色，高值 → 明亮白昼天空）
     uBoostM: { value: 1.0 }, // Mie 密度增幅（独立控制，低值 → 太阳盘面不被前向散射淹没）
     uHaze: { value: a.haze ?? 0.0 }, // 近地面气溶胶/尘埃雾霾（火星沙尘、金星硫酸云、泰坦烟霾）
+    // 臭氧层（Chappuis 带吸收）：峰值约 25 km、半宽约 8 km 的高斯剖面。
+    // 它吸收黄红多于蓝，是暮光深蓝色带与"金星带"的成因；缺了它，黄昏只会偏橙红。
+    // 值 = 该天体的臭氧柱量相对地球的倍数（地球 1.0，火星约 0.1，其余 0 关闭）。
+    uOzone: { value: a.ozone ?? 0.0 },
     // 扁率（R8 #1）：气巨网格按 (1−ob) 压扁，大气求交必须用同一椭球，
     // 否则"地面辉光/遮挡"画在正球 Rg 上，与压扁的真实视边缘错开形成双边界。
     // uStretch = 1/(1−ob) − 1（沿极轴拉伸 → 椭球还原为球）；可登陆体网格未压扁 → 0（数学恒等）
@@ -73,6 +77,7 @@ export function createAtmosphere(phys, auroraMode = 0) {
       uniform vec3 uCenter;
       uniform vec3 uSunDir;
       uniform float uRg, uRa, uHR, uHM, uSunI, uBoost, uBoostM, uHaze, uStretch;
+      uniform float uOzone;
       uniform vec3 uBetaR, uBetaM, uG, uAxis; // uG 分光：蓝光前向峰更尖 → 日落蓝色光晕
       // === Issue #27/#29 uniforms ===
       uniform float uTime;
@@ -132,7 +137,7 @@ export function createAtmosphere(phys, auroraMode = 0) {
         const int N = ${QUALITY.atmoN};
         const int NL = ${QUALITY.atmoNL};
         float ds = (t1 - t0) / float(N);
-        float odR = 0.0, odM = 0.0;
+        float odR = 0.0, odM = 0.0, odO = 0.0;
         vec3 inscR = vec3(0.0), inscM = vec3(0.0);
         vec3 auroraL = vec3(0.0); // Issue #29：极光发射累积（非散射，独立于 BetaR/BetaM）
 
@@ -146,10 +151,12 @@ export function createAtmosphere(phys, auroraMode = 0) {
           float dM = (exp(-h / uHM) + hazeEff * exp(-h / max(uHM * 0.22, 0.5))) * uBoostM;
           odR += dR * ds;
           odM += dM * ds;
+          // 臭氧不在地表而在平流层：用峰值 25 km、半宽 8 km 的高斯层近似 Chapman 剖面
+          odO += exp(-pow((h - 25.0) / 8.0, 2.0)) * ds;
           // 向太阳的光学深度
           vec2 tS = raySphere(p, uSunDir, uCenter, uRa);
           float sl = max(tS.y, 0.0) / float(NL);
-          float olR = 0.0, olM = 0.0;
+          float olR = 0.0, olM = 0.0, olO = 0.0;
           bool shadowed = false;
           vec2 tSG = raySphere(p, uSunDir, uCenter, uRg * 0.998);
           if (tSG.x < tSG.y && tSG.y > 0.0 && tSG.x > 0.0) shadowed = true;
@@ -159,8 +166,13 @@ export function createAtmosphere(phys, auroraMode = 0) {
               float hq = hAbove(q);
               olR += exp(-hq / uHR) * sl;
               olM += exp(-hq / uHM) * sl;
+              olO += exp(-pow((hq - 25.0) / 8.0, 2.0)) * sl;
             }
-            vec3 T = exp(-(uBetaR * (odR + olR) + uBetaM * 1.1 * (odM + olM)));
+            // 臭氧消光系数（km⁻¹，层峰值处）：Chappuis 带在 600 nm 最强，
+            // 绿端约 1/3，蓝端几乎不吸收——这正是暮光蓝色带的来源。
+            vec3 betaO = vec3(1.25e-3, 4.4e-4, 2.5e-5) * uOzone;
+            vec3 T = exp(-(uBetaR * (odR + olR) + uBetaM * 1.1 * (odM + olM)
+                           + betaO * (odO + olO)));
             inscR += T * dR * ds;
             inscM += T * dM * ds; // 分光 Mie：保留各通道透射率，蓝光前向散射在日落处显现
           }

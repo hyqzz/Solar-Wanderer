@@ -51,6 +51,7 @@ export const BODIES = {
     rotation: 'iau', landable: true,
     surface: { ampKm: 2.5, roughness: 0.5, craters: 0, palette: 'earth', ocean: true },
     atmosphere: {
+                        ozone: 1,
       heightKm: 60, rayleighScaleKm: 8.5, mieScaleKm: 1.2,
       // multiplier 0.72：太空视角减弱盘面内散射（真实 Blue Marble 观感为深蓝海洋，
       // 强 Rayleigh 内散射把整个白昼面罩上一层淡青纱）；地表天空亮度由 interiorBoost 补偿回 1.0
@@ -66,6 +67,7 @@ export const BODIES = {
     rotation: 'iau', landable: true,
     surface: { ampKm: 8, roughness: 0.6, craters: 0.6, palette: 'mars' },
     atmosphere: {
+                        ozone: 0.12,
       // 白昼：Rayleigh 红>蓝（模拟尘埃主导的黄褐色调）+ Mie 漫射 → 奶油黄褐色天空。
       // 日落：Fe₂O₃ 尘埃（~1.5 µm）分光 mieG 使蓝光前向散射峰远强于红光，
       //       太阳周围形成标志性蓝色/青色光晕——Curiosity Sol-956、Perseverance Sol-257 实拍印证。

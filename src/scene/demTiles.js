@@ -34,6 +34,19 @@ import { resourceQueue, whenIdle } from '../engine/resourceQueue.js';
  * url 模板：{z}=层级, {x}=列, {y}=行（等距圆柱投影，与现有贴图一致）。
  * heightScale/heightOffset：将 16-bit 灰度值解码为 km 高程。
  *   高程 = heightOffset + (raw / 65535) * heightScale
+ *
+ * maxLevel 由**上游源数据的真实分辨率**决定，不是随手取的常数：
+ * 本方案的瓦片网格是 2^z × 2^z 方块，覆盖 360°×180°，所以第 z 层的经度分辨率为
+ * 360/(256·2^z) 度/像素——经度方向总是比纬度方向粗一倍，是短板。
+ * 取"经度分辨率不低于源分辨率"的最大 z 作为 maxLevel；再往上只是把源像素放大，
+ * 体积翻四倍而拿不到任何新信息。
+ *
+ *   moon  LOLA GDR ldem_16     5760×2880 → 0.0625°/px → maxLevel 4（已到源上限）
+ *   mars  MOLA MEGDR 32ppd    11520×5760 → 0.03125°/px → maxLevel 5（当前只用 4096，浪费 2.8×）
+ *   earth ETOPO1             21600×10800 → 0.01667°/px → maxLevel 6（当前只用 4096，浪费 5.3×）
+ *
+ * 注意：浏览器 canvas 每通道只有 8 位，所以 16-bit 高程必须拆进 R(高8位)+G(低8位)
+ * 才不会被降精度——这也是瓦片保持 RGBA PNG 而不是改用灰度 16 位 PNG 的原因。
  */
 export const DEM_SOURCES = {
   moon: {
@@ -44,6 +57,7 @@ export const DEM_SOURCES = {
     heightOffset: -9,
     tileSize: 256,
     maxLevel: 4,
+    sourcePx: 5760,
   },
   mars: {
     name: 'MOLA',
@@ -52,7 +66,8 @@ export const DEM_SOURCES = {
     heightScale: 31,
     heightOffset: -9,
     tileSize: 256,
-    maxLevel: 4,
+    maxLevel: 5,
+    sourcePx: 11520,
   },
   earth: {
     name: 'ETOPO1',
@@ -62,8 +77,15 @@ export const DEM_SOURCES = {
     heightOffset: -11,
     tileSize: 256,
     maxLevel: 4,
+    sourcePx: 21600,
   },
 };
+
+/** 该层级是否已经只是把源像素放大（用于诊断与断言，不参与渲染） */
+export function levelExceedsSource(cfg, level) {
+  if (!cfg?.sourcePx) return false;
+  return 360 / (cfg.tileSize * 2 ** level) < 360 / cfg.sourcePx * 0.75;
+}
 
 /** 将方向向量（+Y=北极, +X=本初子午线）转换为经纬度（度） */
 function dirToLatLon(dir) {

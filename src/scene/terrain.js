@@ -871,15 +871,27 @@ export class TerrainManager {
     return dem.isOffline || dem.cache.size > 0;
   }
 
-  /** 按相机距表面距离选择 DEM 分辨率层级（近=高分辨率，远=低分辨率） */
-  _demLevelForDistance(distKm) {
-    if (distKm < 1) return 8;   // 地表行走：最高分辨率
-    if (distKm < 5) return 7;
-    if (distKm < 20) return 6;
-    if (distKm < 80) return 5;
-    if (distKm < 200) return 4;
-    if (distKm < 500) return 3;
-    return 2; // 远距离：粗分辨率（大尺度地形形状）
+  /**
+   * 按相机距表面距离选择 DEM 分辨率层级（近=高分辨率，远=低分辨率）。
+   *
+   * 必须按上游数据的实际上限钳制：本函数想要 L8，但月球 LOLA 的全球源
+   * （5760×2880）只支撑到 L4，火星到 L5，地球到 L6（见 demTiles.js 的 maxLevel 说明）。
+   * 不做钳制的话，近地表时会持续去预取**根本不存在**的瓦片——既白费请求，
+   * 也让 LOD 逻辑误以为拿到了比实际更高的分辨率。
+   *
+   * @param {number} distKm 距表面距离
+   * @param {number} ceiling 该天体 DEM 的实际上限层级
+   */
+  _demLevelForDistance(distKm, ceiling = 8) {
+    let want;
+    if (distKm < 1) want = 8;        // 地表行走：最高分辨率
+    else if (distKm < 5) want = 7;
+    else if (distKm < 20) want = 6;
+    else if (distKm < 80) want = 5;
+    else if (distKm < 200) want = 4;
+    else if (distKm < 500) want = 3;
+    else want = 2;                   // 远距离：粗分辨率（大尺度地形形状）
+    return Math.min(want, ceiling);
   }
 
   /** 基底球可见性恢复（撤销可能的隐藏） */
@@ -925,7 +937,7 @@ export class TerrainManager {
         dem.preloadBase(); // retries are throttled in the tile source
         const dist = nearest ? nearest.distSurface : 100;
         dem.setPriority(1 / Math.max(0.1, dist)); // 近=高优先级
-        dem.requestTiles(camLocalDir, this._demLevelForDistance(dist));
+        dem.requestTiles(camLocalDir, this._demLevelForDistance(dist, dem.config?.maxLevel ?? 0));
         // 新瓦片到达 → 标记地形重建（下帧 update 拾取真实高程）
         if (dem.hasNewTiles) {
           this.active.patches.markDirty();

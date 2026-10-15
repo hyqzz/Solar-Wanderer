@@ -76,9 +76,16 @@ export function createSun(radiusKm, mapTex) {
         float spots = 1.0 - smoothstep(0.2, 0.32, fbm(p * 6.0 + 13.7 + uTime * 0.004));
         vec3 col = base * granule * (1.0 - 0.75 * spots);
         col *= vec3(1.0, 0.985, 0.97);
-        // 临边昏暗（真实光球物理：视线切向穿越更深更冷的大气层）
+        // 临边昏暗：Neckel & Labs (1994) 五阶多项式，而不是一阶线性近似。
+        // 真实光球在视线切向要穿过更厚的、更冷的层，边缘比中心暗且**明显偏红**
+        // （边缘有效温度低约 1000 K）。线性式在 μ≈0.2 处凑巧接近，中段偏暗约 6%，
+        // 且完全给不出边缘的红化。
         float mu = clamp(dot(normalize(vNormalV), normalize(vViewV)), 0.0, 1.0);
-        col *= 0.35 + 0.65 * mu;
+        float ld = 0.30 + 0.93 * mu - 0.23 * mu * mu + 0.14 * mu * mu * mu
+                 - 0.16 * mu * mu * mu * mu + 0.02 * mu * mu * mu * mu * mu;
+        // 波长依赖：蓝光临边变暗更快（瑞利散射与 H⁻ 不透明度在蓝端更强），
+        // 用逐通道幂次近似——μ 越小蓝通道衰减越快，边缘因此偏红。
+        col *= vec3(ld, pow(ld, 1.10), pow(ld, 1.30));
         gl_FragColor = vec4(col * 14.0, 1.0); // HDR 强度
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -162,9 +169,13 @@ export function createSun(radiusKm, mapTex) {
     update(timeSec, camDistKm, occulted = false) {
       uniforms.uTime.value = timeSec;
       coronaUniforms.uTime.value = timeSec;
-      // NASA: corona is ~10^6 times fainter than the photosphere. A bounded
-      // display adaptation reveals it when the photosphere is fully covered.
-      coronaUniforms.uVisibility.value = occulted ? 1 : 0.000001;
+      // 日冕亮度：K 冕在 1.2 R☉ 处约为光球的 10⁻⁶ 量级，所以"与光球同曝光"的
+      // 相机确实拍不到它——旧实现据此把它压到 10⁻⁶，只有日全食才显示。
+      // 但那对应的是相机，不是人眼：人眼动态范围约 10¹⁴，航天员在轨肉眼是能看到
+      // 日冕的。这里按"人眼观察"渲染：平时给一个很低的基准可见度，形成贴着日面
+      // 边缘的淡冕（远亮于无、远暗于日面），日全食时再提升到全强度。
+      // 这是显式的显示适配系数，不是物理比值。
+      coronaUniforms.uVisibility.value = occulted ? 1 : 0.02;
     },
   };
 }
