@@ -312,3 +312,14 @@ test('海王星环含五条命名环（Galle/Le Verrier/Lassell/Arago/Adams）',
   assert.ok(Math.abs(radii[0] - 41900) < 200, 'Galle 环应在 41,900 km');
   assert.ok(Math.abs(radii[4] - 62930) < 200, 'Adams 环应在 62,930 km');
 });
+
+// ── 月球天平动 ──────────────────────────────────────────────────────────────
+
+test('月球走 IAU 自转模型而非硬潮汐锁定（天平动的前提）', () => {
+  const rot = read('src/astro/rotation.js');
+  const builder = read('src/scene/builder.js');
+  assert.ok(/moon:\s*\[269\.9949, 0\.0031, 66\.5392, 0\.0130, 38\.3213, 13\.17635815\]/.test(rot),
+    '缺少月球 IAU 2015 自转常数');
+  assert.ok(/if \(!e\.isMoon \|\| id === 'moon'\)/.test(builder),
+    '月球仍走硬潮汐锁定——天平动不会出现，可见面会永远是 50%');
+});

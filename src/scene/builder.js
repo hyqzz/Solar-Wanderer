@@ -599,7 +599,12 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       e.posKm[0] = w[0]; e.posKm[1] = w[1]; e.posKm[2] = w[2];
 
       // 姿态
-      if (!e.isMoon) {
+      if (!e.isMoon || id === 'moon') {
+        // 月球走 IAU 2015 自转模型，而不是"本初子午线指向母星"的硬潮汐锁定。
+        // 差别不是细节：真实月球的自转是**匀速**的（恒星月），而它的轨道运动
+        // 不均匀且轨道面有倾角——两者之差就是光学天平动（经度 ±7.9°、
+        // 纬度 ±6.7°），使可见面达到 59% 而不是 50%。
+        // 其余卫星仍用潮汐锁定：它们的天平动更小，且缺乏同级 IAU 模型。
         const m = bodyToEclipticMatrix(id, jdTT);
         eclMatrixToWorldQuat(m, e.mesh.quaternion);
       } else {
