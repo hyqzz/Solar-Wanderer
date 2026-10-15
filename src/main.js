@@ -47,6 +47,7 @@ import { WebXRManager } from './engine/webxr.js';
 import { createSpacecraftModel, makeSpacecraftGlow, SPACECRAFT_TIMELINES } from './scene/spacecraft.js';
 import { createApolloLandmarks, createRoverSites } from './scene/landmarks.js';
 import { createEphemerisLoader } from './engine/ephemerisLoader.js';
+import { createCameraFeel } from './engine/cameraFeel.js';
 import { bootstrapRenderer } from './engine/rendererBootstrap.js';
 
 const renderBoot = await bootstrapRenderer({
@@ -146,6 +147,9 @@ let appMode = 'orbit'; // orbit | fly | walk
 const registry = new Map();
 let selectedId = null;
 const ephemerisLoader = createEphemerisLoader();
+// 相机语言：步态起伏 / 冲击抖动 / FOV 语言（见 engine/cameraFeel.js）
+const cameraFeel = createCameraFeel();
+let cameraFovBase = 58;   // 用户可调的基础 FOV，相机语言只在其上叠加偏移
 const voyagerEntries = [];
 const boundaryEntries = [];
 const IDENTITY_Q = new THREE.Quaternion();
@@ -745,6 +749,8 @@ function loop() {
     if ((autoLand || (input.tapped('KeyG') && nearest?.landable && nearest.distSurface < landRange &&
         terrainMgr.baseReady(nearest.id)))
       && !orbitCam.flight) {
+      // 落地冲击：由接近速度决定强度（0.004–0.03 rad，约 0.23°–1.7°）
+      cameraFeel.impulse(Math.min(0.03, 0.004 + ship.vel.length() * 0.0016), 24);
       ship.enterWalk(env); // 视向严格连续（yaw+pitch 自当前相机反解）
       appMode = 'walk';
       // 移动端：无指针锁定，行走使用单指拖拽环视
@@ -792,6 +798,19 @@ function loop() {
     }
   }
   camera.quaternion.copy(ship.quat);
+  // 相机语言：在基础姿态上叠加步态/冲击/高速微抖。
+  // 只改姿态与 FOV，绝不改视点位置——否则会破坏浮动原点精度与着陆判定。
+  const feel = cameraFeel.update(dtReal, {
+    mode: appMode,
+    walking: ship.audioState?.walking,
+    walkSpeedMS: (ship.audioState?.speed ?? 0) * 1000,   // km/s → m/s
+    submerged: ship.audioState?.submerged,
+    speedKmS: ship.vel.length(),
+    boosting: input.keys?.has?.('ShiftLeft') || input.keys?.has?.('ShiftRight'),
+  });
+  camera.quaternion.multiply(feel.quaternion);   // 模块只在返回值里给四元数，不是属性
+  camera.fov = THREE.MathUtils.clamp(cameraFovBase + feel.fovBiasDeg, 10, 100);
+  camera.updateProjectionMatrix();
 
   // 地形（try-catch 保护：DEM 集成改动较多）
   try {
@@ -987,7 +1006,8 @@ function loop() {
   // Shift+滚轮：FOV 变焦（10°–100°，等效全画幅焦距提示）
   try {
     if (input.fovWheel !== 0) {
-      camera.fov = THREE.MathUtils.clamp(camera.fov * Math.pow(1.12, input.fovWheel), 10, 100);
+      cameraFovBase = THREE.MathUtils.clamp(cameraFovBase * Math.pow(1.12, input.fovWheel), 10, 100);
+      camera.fov = cameraFovBase;
       camera.updateProjectionMatrix();
       const mm = 43.27 / (2 * Math.tan(camera.fov * Math.PI / 360));
       showActionTip(t('tip.fov', { deg: camera.fov.toFixed(0), mm: mm.toFixed(0) }), 1200);
