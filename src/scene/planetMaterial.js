@@ -525,8 +525,11 @@ export function createCloudMaterial(cloudTex, opts = {}) {
         vec3 nightTint = mix(vec3(0.010, 0.013, 0.020), vec3(0.004), dayF);
 
         // ── 轻量路径：单次采样 ───────────────────────────────────────
-        // Low / 移动端。体积步进在"全屏地球且贴近"时实测多花约 18% 帧时间，
-        // 集显会从 45 FPS 掉到 38——所以默认只在 High 档开启。
+        // Low / 移动端。SwiftShader 软件渲染下实测（地球充满画面，p50）：
+        //   云层关闭 92.4 ms ｜ 轻量 99.3 ms（+7%）｜ 体积 126.6 ms（+37%）
+        // 体积路径相对轻量多 27 ms，集显会把 45 FPS 拖到 30 出头——
+        // 所以默认只在 High 档（独显）开启。软件渲染的绝对值不能外推到真机，
+        // 但两条路径之间的比例关系可用。
         // 两条路径都输出**预乘**颜色，与材质的 premultipliedAlpha 一致。
         if (uVolumetric == 0) {
           float d = cloudDensity(latLonOf(ro + rd * tEnter), 0.5);
