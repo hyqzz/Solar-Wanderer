@@ -646,6 +646,7 @@ function setupTerrainMgr() {
 // ---------- 主循环 ----------
 const _rel = new THREE.Vector3();
 const _q = new THREE.Quaternion();
+const _sunLocal = new THREE.Vector3();
 let exposureTarget = 1;
 let nearestCache = null;
 let lastTakeoff = -1e9; // 滚轮起飞时间戳（自动登陆 0.8s 冷却，防滞回）
@@ -787,7 +788,9 @@ function loop() {
       );
       _q.copy(e.mesh.quaternion).invert();
       _rel.applyQuaternion(_q).normalize();
-      terrainMgr.update(nearest, _rel, performance.now() / 1000);
+      // 水面环境反射需要体固系的太阳方向：_q 已经是该天体四元数的逆
+      _sunLocal.copy(e.mat.userData.uniforms.uSunDir.value).applyQuaternion(_q);
+      terrainMgr.update(nearest, _rel, performance.now() / 1000, _sunLocal);
     } else {
       terrainMgr.update(null, null);
     }

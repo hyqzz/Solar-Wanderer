@@ -286,7 +286,7 @@ export class HeightField {
  * radiusKm: 用于缩放高频细节/凹凸幅度，避免小天体（Phobos 等）表面出现尖锐片元噪声。
  * 岸边泡沫：land/water 过渡区（vWater∈(0,1)）叠加动态白沫噪声。
  * 水面波纹：三向行进波叠加（SpaceEngine 式海面）。 */
-function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371, uWaterFade = null) {
+function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371, uWaterFade = null, uSunDir = null) {
   const detailScale = Math.min(1, radiusKm / 400); // 与 HeightField.height() 一致
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true, roughness: 0.95, metalness: 0.0, fog: true,
@@ -303,6 +303,7 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
     shader.uniforms.uFade = uFade;
     shader.uniforms.uDetailScale = uDetailScale;
     if (uWaterFade) shader.uniforms.uWaterFade = uWaterFade;
+    shader.uniforms.uSunDir = uSunDir ?? { value: new THREE.Vector3(1, 0, 0) };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
         uniform vec3 uPatchRel;
@@ -323,6 +324,7 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
         uniform float uTime;
         uniform float uFade;
         uniform float uDetailScale;
+        uniform vec3 uSunDir;        // 体固系下的太阳方向（水面环境反射用）
         uniform float uWaterFade;
         uniform mat3 normalMatrix;
         float thash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -439,7 +441,28 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
         // 掠射角产生菲涅尔白翳，而盘面海洋是紧凑耀斑模型——高空俯视同一片海
         // 两者亮度/饱和度不同，地形瓦片边界会显出一块方片。海面在 0.6→2.5km
         // 高度间淡出，交回盘面海洋；陆地不受影响（vWater=0）。
-        gl_FragColor.a *= uFade * mix(1.0, uWaterFade, vWater);`); // LOD 级淡入（#18）
+        gl_FragColor.a *= uFade * mix(1.0, uWaterFade, vWater);`) // LOD 级淡入（#18）
+      .replace('#include <opaque_fragment>',
+        `// === 水面：菲涅尔环境反射 + 逆光暖色 ===
+        // 水若没有任何可反射的环境，PBR 只会给出"哑光蓝"；真实海面在掠射角
+        // 近乎镜面（Schlick 菲涅尔，水的 F0 = 0.02），远处海面因此反射天空而
+        // 发白，近处仍透出水的本色——这个随视角的剧烈变化是"像不像水"的关键。
+        if (vWater > 0.001) {
+          vec3 V = normalize(vViewPosition);          // 片元 → 相机
+          float cosT = clamp(dot(V, normal), 0.0, 1.0);
+          float fres = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);
+          vec3 refl = reflect(-V, normal);
+          // 解析天空：天顶深蓝 → 地平灰白（同一个 Rayleigh 直觉，不必像大气步进那样精确）
+          float upR = clamp(dot(refl, normal), 0.0, 1.0);
+          vec3 skyCol = mix(vec3(0.72, 0.82, 0.92), vec3(0.16, 0.36, 0.80), pow(upR, 0.55));
+          // 太阳低垂时，反射方向朝向太阳的那片海面发橙红（日落海面）
+          float sunUp = dot(uSunDir, normal);
+          float lowSun = 1.0 - clamp(sunUp * 1.6, 0.0, 1.0);
+          skyCol = mix(skyCol, vec3(1.0, 0.55, 0.30),
+                       pow(clamp(dot(refl, uSunDir), 0.0, 1.0), 3.0) * lowSun * 0.85);
+          outgoingLight += skyCol * fres * smoothstep(0.0, 0.35, vWater) * uWaterFade;
+        }
+        #include <opaque_fragment>`);
   };
   return mat;
 }
@@ -587,6 +610,7 @@ export class TerrainPatchSet {
     this.levels = [];
     this.anchorDir = new THREE.Vector3(0, 1, 0);
     this.uTime = { value: 0 };
+    this.uSunDir = { value: new THREE.Vector3(1, 0, 0) };   // 体固系太阳方向
     // 海面高空淡出（0=隐去地形海面，交回盘面海洋材质；陆地不受影响）
     this.uWaterFade = { value: 1 };
     // 噪声原点：跟随玩家、每 2km 重新吸附（保证片元噪声参数始终小数精度充足）
@@ -615,7 +639,7 @@ export class TerrainPatchSet {
       // 级原点相对几何（R9-2a 修闪烁）：每级独立原点 + 独立材质（粗级 polygonOffset 后推）
       const uPatchRel = { value: new THREE.Vector3() };
       const uFade = { value: 0 }; // 新建级从 0 淡入，避免 LOD 突然弹出（#18）
-      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 2, R, this.uWaterFade);
+      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 2, R, this.uWaterFade, this.uSunDir);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.frustumCulled = false;
       mesh.receiveShadow = true; // 近场太阳阴影（岩石/地形自我投影）
@@ -649,9 +673,10 @@ export class TerrainPatchSet {
   /** dirLocal: 相机在天体本地系中的方向（单位）。timeSec: 水面波纹时基。
    * 每帧最多重建 1 级。首次激活由外向内（最大覆盖先出现）；后续正常内向外优先。
    * 每级重建后触发 0.8s 淡入，避免 LOD 突然弹出（#18）。 */
-  update(dirLocal, timeSec = 0) {
+  update(dirLocal, timeSec = 0, sunDirLocal = null) {
     const R = this.field.phys.radiusKm;
     this.uTime.value = timeSec;
+    if (sunDirLocal) this.uSunDir.value.copy(sunDirLocal);
     // 噪声原点吸附（>2km 偏移时跟随，细节噪声仅 90m 内可见，重排不可察觉）
     const px = dirLocal.x * R, py = dirLocal.y * R, pz = dirLocal.z * R;
     const o = this.noiseOriginU.value;

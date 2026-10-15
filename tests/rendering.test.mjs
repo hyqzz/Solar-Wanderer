@@ -108,3 +108,62 @@ test('臭氧只给确有臭氧层的天体开启', () => {
     assert.ok(o === 0, `${id} 不应有臭氧层（实际 ${o}）`);
   }
 });
+
+// ── 批次 6：云层（体积步进 + 面剔除） ────────────────────────────────────────
+
+test('云层体积步进：解析求壳区间 + 自阴影 + 银边', () => {
+  const src = read('src/scene/planetMaterial.js');
+  assert.ok(/vec2 raySphere\(vec3 ro/.test(src), '缺少射线-球求交');
+  assert.ok(/float t1 = min\(tRt\.y, \(tRb\.x > 0\.0 \? tRb\.x : tRt\.y\)\)/.test(src),
+    '缺少壳体区间解析求解');
+  assert.ok(/for \(int j = 1; j <= NL; j\+\+\)/.test(src), '缺少自阴影步进');
+  assert.ok(/silver/.test(src), '缺少前向散射银边项');
+  assert.ok(/smoothstep\(0\.0, 0\.18, hFrac\)/.test(src), '缺少云层垂直廓线（云顶才会锐）');
+});
+
+test('云壳面剔除：按相机在壳内/壳外保留正确的一面', () => {
+  const src = read('src/scene/planetMaterial.js');
+  // 只用 FrontSide 或只用 BackSide 都只能覆盖一半视角：球外要看正面（近半球在行星之前，
+  // 深度测试能过），球内要看背面（正面朝后会被整体剔除——那正是"从地面看不到云"）。
+  assert.ok(/if \(uCameraInside > 0\.5\) \{ if \(gl_FrontFacing\) discard; \}/.test(src),
+    '缺少按相机内外切换保留面');
+  assert.ok(/side: THREE\.DoubleSide/.test(src), '云材质应为 DoubleSide');
+  assert.ok(!/side: THREE\.BackSide/.test(src), '不应退回单面渲染');
+  assert.ok(/premultipliedAlpha: true/.test(src), '体积累加是预乘颜色，必须声明');
+});
+
+test('云层 UV 与 Three.js 球面 uv 一致（v 轴不得写反）', () => {
+  const src = read('src/scene/planetMaterial.js');
+  // SphereGeometry 的 uv.y = 1 在北极；写成 0.5 - asin(...)/π 会把云图上下翻转采样
+  assert.ok(/0\.5 \+ asin\(clamp\(rel\.y \/ rl, -1\.0, 1\.0\)\) \/ 3\.14159265/.test(src),
+    'latLonOf 的 v 轴方向不对');
+  assert.ok(!/0\.5 - asin\(clamp\(rel\.y \/ rl/.test(src), 'v 轴仍为翻转写法');
+});
+
+test('体积云只在 High 档开启（代价实测 +27%，集显会被拖垮）', () => {
+  const src = read('src/scene/planetMaterial.js');
+  assert.ok(/uVolumetric: \{ value: \(opts\.volumetric \?\? \(QUALITY\.tier === 'high' && QUALITY\.detail\)\)/.test(src),
+    '档位门控缺失');
+  assert.ok(/if \(uVolumetric == 0\)/.test(src), '缺少轻量回退路径');
+  assert.ok(/cloudN: 10, cloudNL: 4/.test(read('src/engine/quality.js')), 'High 档云步进数不对');
+});
+
+// ── 批次 6：水面菲涅尔反射 ──────────────────────────────────────────────────
+
+test('地形水面含菲涅尔环境反射（水的 F0 = 0.02）', () => {
+  const src = read('src/scene/terrain.js');
+  assert.ok(/float fres = 0\.02 \+ 0\.98 \* pow\(1\.0 - cosT, 5\.0\)/.test(src),
+    '缺少 Schlick 菲涅尔（水的 F0 应为 0.02）');
+  assert.ok(/vec3 refl = reflect\(-V, normal\)/.test(src), '缺少反射方向');
+  assert.ok(/outgoingLight \+= skyCol \* fres/.test(src), '反射未叠加到出射光');
+  assert.ok(/uniform vec3 uSunDir;/.test(src), '缺少体固系太阳方向 uniform');
+});
+
+test('水面的太阳方向以体固系传入（否则日落反射会错位）', () => {
+  const terrain = read('src/scene/terrain.js');
+  const main = read('src/main.js');
+  assert.ok(/update\(dirLocal, timeSec = 0, sunDirLocal = null\)/.test(terrain), 'update 未接收太阳方向');
+  assert.ok(/if \(sunDirLocal\) this\.uSunDir\.value\.copy\(sunDirLocal\)/.test(terrain), '未写入 uniform');
+  assert.ok(/_sunLocal\.copy\(e\.mat\.userData\.uniforms\.uSunDir\.value\)\.applyQuaternion\(_q\)/.test(main),
+    'main.js 未把世界太阳方向转到体固系');
+});
