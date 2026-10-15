@@ -331,7 +331,11 @@ test('日食遮蔽在接收体着色器内逐片元计算（而非只插一个�
   assert.ok(/uniform int uEclOn;/.test(src) && /uniform vec3 uEclPos;/.test(src), '缺少日食 uniform');
   assert.ok(/float aOcc = asin\(clamp\(uEclR \/ dOcc/.test(src), '缺少遮挡体角半径');
   assert.ok(/float aSun = asin\(clamp\(SUN_RADIUS_KM \/ max\(uSunDistKm/.test(src), '缺少太阳角半径');
-  assert.ok(/float cover = 1\.0 - smoothstep\(aSun - aOcc, aSun \+ aOcc, sep\)/.test(src),
+  // 重叠下界必须是 |aOcc−aSun|：写成 aSun−aOcc 时，遮挡体角半径远大于太阳
+  // （木星遮木卫，9.6° vs 0.05°）正对时只给 50%，而物理上是全遮。
+  assert.ok(/float lo = abs\(aOcc - aSun\)/.test(src),
+    '重叠下界应为 |aOcc−aSun|（写成 aSun−aOcc 会让大角径遮挡体只给 50%）');
+  assert.ok(/float cover = 1\.0 - smoothstep\(lo, hi, sep\)/.test(src),
     '缺少两圆盘重叠的遮蔽判据');
   assert.ok(/uSunI \* ringSh \* cloudShadow \* eclSh/.test(src), '遮蔽未进入最终着色');
   // 除零保护：片元与遮挡体重合时不能出 NaN
