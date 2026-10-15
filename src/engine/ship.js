@@ -12,6 +12,7 @@ import * as THREE from 'three';
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _v3 = new THREE.Vector3();
+const _v4 = new THREE.Vector3();
 const _q1 = new THREE.Quaternion();
 const _m1 = new THREE.Matrix4();
 
@@ -527,7 +528,18 @@ export class Ship {
       const n = env.nearest;
       _v1.set(this.posKm[0] - n.posKm[0], this.posKm[1] - n.posKm[1], this.posKm[2] - n.posKm[2]);
       const dist = _v1.length();
-      const minR = n.radiusKm + (n.landable ? 0.005 : n.radiusKm * 0.001);
+      let minR = n.radiusKm + (n.landable ? 0.005 : n.radiusKm * 0.001);
+      // === 地形碰撞 ===
+      // 只用"平均球半径 + 5 m"的话，可以贴着 5 m 高度**穿过山脉**——
+      // 碰撞体是球而不是地表。这里在接近地表时改用该方向上的真实地表半径
+      // （DEM 起伏 + 程序细节，与渲染同源），于是山体、悬崖、坑缘都是实体。
+      // 只在 dist < 1.05 R 时查询，避免高空每帧调用地形采样。
+      if (n.landable && env.heightFn && dist > 0 && dist < n.radiusKm * 1.05) {
+        _v1.normalize();
+        _v4.copy(_v1).applyQuaternion(_q1.copy(env.getBodyQuat(n.id)).invert());  // 世界→体固
+        const h = env.heightFn(n.id, _v4);
+        if (Number.isFinite(h) && h > 0) minR = h + 0.005;
+      }
       if (dist < minR && dist > 0) {
         _v1.normalize();
         this.posKm[0] = n.posKm[0] + _v1.x * minR;

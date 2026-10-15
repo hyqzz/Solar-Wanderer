@@ -108,3 +108,42 @@ test('引力模式：圆轨道半径稳定、速度守恒；街机模式作为�
   assert.ok(g.drift < 0.005, `引力模式圆轨道相对漂移 ${(g.drift * 100).toFixed(4)}%，应 <0.5%`);
   assert.ok(a.absV < 1, `街机模式无推力应衰减到零（对照组），实际 ${a.absV.toFixed(2)} km/s`);
 });
+
+test('地形碰撞：飞船被挡在山体表面，而不是平均球面（可穿过山脉）', async () => {
+  const { Ship } = await import('../src/engine/ship.js');
+  const THREE = await import('three');
+  const R = 1737.4;                 // 月球半径 km
+  const MOUNTAIN = 5;               // 该方向上地形高出平均球 5 km
+  const idle = {
+    dx: 0, dy: 0, wheel: 0, fovWheel: 0, locked: false,
+    drag: { active: false, dx: 0, dy: 0 }, pan: { active: false, dx: 0, dy: 0 },
+    look: { active: false, dx: 0, dy: 0 }, joystick: { x: 0, y: 0 },
+    touchAscend: false, touchDescend: false, touchSprint: false,
+    down: () => false, tapped: () => false,
+  };
+  const mkEnv = (withTerrain) => {
+    const moon = {
+      id: 'moon', posKm: new Float64Array([0, 0, 0]), radiusKm: R,
+      distSurface: 1, landable: true, phys: { gm: 4.9028e3, radiusKm: R },
+    };
+    return {
+      nearest: moon, get: () => moon, baseReady: () => true, phys: () => moon.phys,
+      getBodyQuat: () => new THREE.Quaternion(),           // 恒等：世界系 = 体固系
+      heightFn: withTerrain ? () => R + MOUNTAIN : undefined,
+    };
+  };
+  // 从平均球面之上 1 km 处朝内飞
+  const fly = (withTerrain) => {
+    const s = new Ship();
+    s.mode = 'fly';
+    s.posKm[0] = R + 1; s.vel.set(-0.05, 0, 0);
+    for (let i = 0; i < 200; i++) s.update(0.05, idle, mkEnv(withTerrain));
+    return Math.hypot(s.posKm[0], s.posKm[1], s.posKm[2]);
+  };
+  const withT = fly(true), without = fly(false);
+  assert.ok(Math.abs(withT - (R + MOUNTAIN + 0.005)) < 0.05,
+    `有地形时应停在 ${(R + MOUNTAIN).toFixed(1)} km 的山面，实际 ${withT.toFixed(3)}`);
+  assert.ok(without < R + MOUNTAIN - 4,
+    `无地形数据时（对照组）会停在平均球面 ${(R + 0.005).toFixed(3)}，即山体内部——` +
+    `这正是"可以 5 m 高度穿过山脉"的成因；实际 ${without.toFixed(3)}`);
+});
