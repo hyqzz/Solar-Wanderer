@@ -32,6 +32,10 @@ export function createAtmosphere(phys, auroraMode = 0) {
     // 它吸收黄红多于蓝，是暮光深蓝色带与"金星带"的成因；缺了它，黄昏只会偏橙红。
     // 值 = 该天体的臭氧柱量相对地球的倍数（地球 1.0，火星约 0.1，其余 0 关闭）。
     uOzone: { value: a.ozone ?? 0.0 },
+    // 地表反照率：阳光穿过整层大气打到地表后按它返回一部分。
+    // 这是低空天空偏亮、雪原/沙漠/云顶上方整片天光发白的主因，原实现完全缺失。
+    // 气巨与无固体表面者取 0（没有"地面"可反弹）。
+    uGroundAlbedo: { value: a.groundAlbedo ?? 0.0 },
     // 扁率（R8 #1）：气巨网格按 (1−ob) 压扁，大气求交必须用同一椭球，
     // 否则"地面辉光/遮挡"画在正球 Rg 上，与压扁的真实视边缘错开形成双边界。
     // uStretch = 1/(1−ob) − 1（沿极轴拉伸 → 椭球还原为球）；可登陆体网格未压扁 → 0（数学恒等）
@@ -78,6 +82,7 @@ export function createAtmosphere(phys, auroraMode = 0) {
       uniform vec3 uSunDir;
       uniform float uRg, uRa, uHR, uHM, uSunI, uBoost, uBoostM, uHaze, uStretch;
       uniform float uOzone;
+      uniform float uGroundAlbedo;
       uniform vec3 uBetaR, uBetaM, uG, uAxis; // uG 分光：蓝光前向峰更尖 → 日落蓝色光晕
       // === Issue #27/#29 uniforms ===
       uniform float uTime;
@@ -241,7 +246,22 @@ export function createAtmosphere(phys, auroraMode = 0) {
         // 能量占比 ≈ 1 − viewT（被多次散射"截留"的光），Frostbite 式一阶修正；
         // 效果：白昼面天空更亮更柔、临边过渡自然、晨昏圈不再突变死黑。
         vec3 msFrac = vec3(1.0) - viewT;
-        L += uSunI * (uBetaR * inscR + uBetaM * inscM) * (1.0 / (4.0 * PI)) * msFrac * msFrac * 0.35;
+        vec3 betaScat = uBetaR * inscR + uBetaM * inscM;
+        L += uSunI * betaScat * (1.0 / (4.0 * PI)) * msFrac * msFrac * 0.35;
+
+        // === 地面反照率反弹 ===
+        // 阳光穿过整层大气到达地表、被地表按反照率反射、再散射进视线。
+        // 它让低空天空整体提亮，并在雪原/沙漠/云顶上方把天光染白——
+        // 只做各向同性再散射给不出这一项。
+        // 这里用视线自身的光学深度作双程近似（下行与上行各一次），
+        // 并对朝向地表以下的视线加权：抬头看天时看到的主要是散射，
+        // 俯视/掠视时才大量看到"地面反上来的那一份"。
+        if (uGroundAlbedo > 0.0) {
+          vec3 up = normalize(uCenter - ro);          // 该点的"上"（指向行星中心）
+          float below = clamp(-dot(rd, up), 0.0, 1.0);
+          vec3 twoWay = exp(-(uBetaR * odR + uBetaM * 1.1 * odM) * 1.5);
+          L += uSunI * uGroundAlbedo * twoWay * (0.35 + 0.65 * below) * msFrac * (1.0 / PI);
+        }
 
         // 轻微抖动消除条带（×alpha：仅作用于有大气信号处。R8 #1 修复——
         // 旧实现无条件加在整个壳投影盘上，外太阳系高曝光下显形为以 Ra 为界的圆圈线）

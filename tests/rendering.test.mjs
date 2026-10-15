@@ -167,3 +167,26 @@ test('水面的太阳方向以体固系传入（否则日落反射会错位）',
   assert.ok(/_sunLocal\.copy\(e\.mat\.userData\.uniforms\.uSunDir\.value\)\.applyQuaternion\(_q\)/.test(main),
     'main.js 未把世界太阳方向转到体固系');
 });
+
+// ── 批次 6：大气地面反照率反弹 ──────────────────────────────────────────────
+
+test('大气含地面反照率反弹项（低空天光提亮的主因）', () => {
+  const src = read('src/scene/atmosphere.js');
+  assert.ok(/uniform float uGroundAlbedo;/.test(src), '缺少 uGroundAlbedo 声明');
+  assert.ok(/uGroundAlbedo: \{ value: a\.groundAlbedo \?\? 0\.0 \}/.test(src), 'uniform 未接线');
+  assert.ok(/vec3 twoWay = exp\(-\(uBetaR \* odR \+ uBetaM \* 1\.1 \* odM\) \* 1\.5\)/.test(src),
+    '缺少双程（下行+上行）光学深度近似');
+  assert.ok(/\(0\.35 \+ 0\.65 \* below\)/.test(src), '缺少朝向地表以下的加权');
+  assert.ok(/if \(uGroundAlbedo > 0\.0\)/.test(src), '缺少零值短路（气巨没有地面）');
+});
+
+test('地面反照率只给有固体表面或云顶的天体', () => {
+  assert.ok(BODIES.earth.atmosphere.groundAlbedo > 0.05, '地球应有海陆反照率');
+  assert.ok(BODIES.mars.atmosphere.groundAlbedo > BODIES.earth.atmosphere.groundAlbedo,
+    '火星（沙尘覆盖）反照率应高于以海洋为主的地球');
+  assert.ok(BODIES.venus.atmosphere.groundAlbedo > 0.5, '金星可见面是硫酸云顶，反照率很高');
+  for (const id of ['jupiter', 'saturn', 'uranus', 'neptune']) {
+    const g = BODIES[id]?.atmosphere?.groundAlbedo ?? 0;
+    assert.equal(g, 0, `${id} 没有固体表面，不应有地面反弹（实际 ${g}）`);
+  }
+});

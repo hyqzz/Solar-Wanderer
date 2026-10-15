@@ -51,6 +51,7 @@ export const BODIES = {
     rotation: 'iau', landable: true,
     surface: { ampKm: 2.5, roughness: 0.5, craters: 0, palette: 'earth', ocean: true },
     atmosphere: {
+                        groundAlbedo: 0.12,
                         ozone: 1,
       heightKm: 60, rayleighScaleKm: 8.5, mieScaleKm: 1.2,
       // multiplier 0.72：太空视角减弱盘面内散射（真实 Blue Marble 观感为深蓝海洋，
@@ -67,6 +68,7 @@ export const BODIES = {
     rotation: 'iau', landable: true,
     surface: { ampKm: 8, roughness: 0.6, craters: 0.6, palette: 'mars' },
     atmosphere: {
+                        groundAlbedo: 0.2,
                         ozone: 0.12,
       // 白昼：Rayleigh 红>蓝（模拟尘埃主导的黄褐色调）+ Mie 漫射 → 奶油黄褐色天空。
       // 日落：Fe₂O₃ 尘埃（~1.5 µm）分光 mieG 使蓝光前向散射峰远强于红光，
@@ -94,6 +96,7 @@ export const BODIES = {
     radiusKm: 69911, gm: 1.26686534e8, oblateness: 0.06487,
     rotation: 'iau', landable: false,
     atmosphere: {
+      groundAlbedo: 0.7,
       heightKm: 350, rayleighScaleKm: 27, mieScaleKm: 27,
       rayleigh: [4e-7, 3.5e-7, 2.5e-7], mie: 3e-7, mieG: 0.7, multiplier: 0.8,
     },
@@ -215,7 +218,7 @@ export const MOON_PHYS = {
   titan:     { nameZh: '土卫六', nameEn: 'Titan', parent: 'saturn', radiusKm: 2574.7, gm: 8.978e3,
                landable: true, surface: { ampKm: 1.5, roughness: 0.4, craters: 0.1, palette: 'titan' },
                textures: { map: 'titan.jpg' },
-               atmosphere: { heightKm: 200, rayleighScaleKm: 20, mieScaleKm: 30,
+               atmosphere: { groundAlbedo: 0.10, heightKm: 200, rayleighScaleKm: 20, mieScaleKm: 30,
                              // multiplier 1.6：太空视角降低霾层盘面内散射（旧值 3.0 把橙色霾
                              // 洗成粉米色；卡西尼实拍为饱和橙黄盘）；地表橙色天空由 interiorBoost 补偿
                              // 分光 mie：tholin 霾强烈吸收蓝光（红>绿>蓝散射），
