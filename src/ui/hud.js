@@ -107,6 +107,24 @@ export class HUD {
     this.elNav.innerHTML = rows.join('');
   }
 
+  /** 常驻错误角标：主循环只做兜底捕获，没有它用户看不到任何异常 */
+  setErrorCount(n, lastTag) {
+    let el = document.getElementById('hud-err');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'hud-err';
+      el.title = t('hud.errHint');
+      el.addEventListener('click', () => {
+        const log = (window.__errLog ?? []).map((e) => `${e.tag}: ${e.msg}`).join(String.fromCharCode(10));
+        navigator.clipboard?.writeText(log).catch(() => {});
+        el.title = t('hud.errCopied');
+      });
+      document.getElementById('hud')?.appendChild(el);
+    }
+    el.style.display = n ? 'block' : 'none';
+    if (n) el.textContent = t('hud.errCount', { n, tag: lastTag ?? '' });
+  }
+
   updateTarget(info) {
     if (!info) {
       this.elTarget.innerHTML = `<div class="dim">${t('tgt.none')}</div>`;

@@ -870,6 +870,14 @@ html.touch .help-inner { touch-action: pan-y; }
 /* ── 汉堡菜单：宽度适中 ── */
 .touch #tc-menu { min-width: 160px; max-width: 220px; }
 
+/* 常驻错误角标：默认隐藏，出现运行时异常才显示（见 hud.setErrorCount） */
+#hud-err {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  background: rgba(90, 24, 24, 0.86); border: 1px solid rgba(255, 120, 120, 0.55);
+  color: #ffd9d9; font-size: 12px; padding: 4px 12px; border-radius: 6px;
+  pointer-events: auto; cursor: pointer; display: none; z-index: 20;
+}
+
 /* ── 电影/纯净模式（Z 键，或 ?clean=1）────────────────────────────────
    一次性隐藏全部叠加层，留下"只有宇宙"的画面：截图、录屏、演示、VR 都需要。
    与逐元素开关（L 标签 / O 轨道 / C 罗盘）不同，这里连 HUD、目录、准星、

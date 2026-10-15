@@ -806,17 +806,19 @@ function loop() {
   camera.quaternion.copy(ship.quat);
   // 相机语言：在基础姿态上叠加步态/冲击/高速微抖。
   // 只改姿态与 FOV，绝不改视点位置——否则会破坏浮动原点精度与着陆判定。
-  const feel = cameraFeel.update(dtReal, {
-    mode: appMode,
-    walking: ship.audioState?.walking,
-    walkSpeedMS: (ship.audioState?.speed ?? 0) * 1000,   // km/s → m/s
-    submerged: ship.audioState?.submerged,
-    speedKmS: ship.vel.length(),
-    boosting: input.keys?.has?.('ShiftLeft') || input.keys?.has?.('ShiftRight'),
-  });
-  camera.quaternion.multiply(feel.quaternion);   // 模块只在返回值里给四元数，不是属性
-  camera.fov = THREE.MathUtils.clamp(cameraFovBase + feel.fovBiasDeg, 10, 100);
-  camera.updateProjectionMatrix();
+  try {
+    const feel = cameraFeel.update(dtReal, {
+      mode: appMode,
+      walking: ship.audioState?.walking,
+      walkSpeedMS: (ship.audioState?.speed ?? 0) * 1000,   // km/s → m/s
+      submerged: ship.audioState?.submerged,
+      speedKmS: ship.vel.length(),
+      boosting: input.keys?.has?.('ShiftLeft') || input.keys?.has?.('ShiftRight'),
+    });
+    camera.quaternion.multiply(feel.quaternion);   // 模块只在返回值里给四元数，不是属性
+    camera.fov = THREE.MathUtils.clamp(cameraFovBase + feel.fovBiasDeg, 10, 100);
+    camera.updateProjectionMatrix();
+  } catch (e) { loopErr('cameraFeel', e); }
 
   // 地形（try-catch 保护：DEM 集成改动较多）
   try {
@@ -877,6 +879,16 @@ function loop() {
     if (d > r && r / d > 0.002) occluders.push({ id: bid, pos: gp, r: r * 0.999 });
   }
   labels.update(selectedId, occluders);
+  // 错误角标：主循环各区段由 try-catch 兜底，屏幕不会冻结，但用户也就无从知道
+  // 出了事（本轮就踩过一次：每帧抛异常被吞，表现为"60 FPS 但画面静止"）。
+  // 这里把累计错误数常驻显示，只在变化时改 DOM。
+  try {
+    const errN = window.__errLog?.length ?? 0;
+    if (errN !== loop._errShown) {
+      loop._errShown = errN;
+      hud.setErrorCount(errN, errN ? window.__errLog[errN - 1].tag : null);
+    }
+  } catch { /* 角标失败不影响主循环 */ }
   document.getElementById('crosshair').style.display =
     appMode === 'orbit' ? 'none' : '';
 
