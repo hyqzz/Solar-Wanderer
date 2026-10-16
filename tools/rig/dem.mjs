@@ -13,11 +13,18 @@ import { fileURLToPath } from 'node:url';
 
 const DEM_ROOT = new URL('../../public/dem/', import.meta.url);
 
-/** 解码非隔行 PNG → { width, height, channels, data(Uint8Array) } */
+/** 解码非隔行 PNG → { width, height, channels, data(Uint8Array), palette?, alphaTable? }
+ *
+ * 支持灰度/真彩/灰度+alpha/真彩+alpha，以及**调色板（颜色类型 3）**。
+ * 调色板是后加的：GIBS 的云量产品就是以调色板 PNG 发布的，把它当成"不支持"
+ * 会挡住整个真实云图数据源。返回的 palette 是 256×3 的 RGB 表、alphaTable 是
+ * 每索引的 alpha，供调用方**反查索引**（索引往往就等于数据值本身）。
+ */
 export function decodePng(buffer) {
   if (buffer.readUInt32BE(0) !== 0x89504e47) throw new Error('不是 PNG');
   let pos = 8, width = 0, height = 0, bitDepth = 0, colorType = 0, interlace = 0;
   const idat = [];
+  let palette = null, alphaTable = null;
   while (pos < buffer.length) {
     const len = buffer.readUInt32BE(pos);
     const type = buffer.toString('ascii', pos + 4, pos + 8);
@@ -25,12 +32,40 @@ export function decodePng(buffer) {
     if (type === 'IHDR') {
       width = body.readUInt32BE(0); height = body.readUInt32BE(4);
       bitDepth = body[8]; colorType = body[9]; interlace = body[12];
-    } else if (type === 'IDAT') idat.push(body);
+    } else if (type === 'PLTE') palette = Uint8Array.from(body);
+    else if (type === 'tRNS') alphaTable = Uint8Array.from(body);
+    else if (type === 'IDAT') idat.push(body);
     else if (type === 'IEND') break;
     pos += 12 + len;
   }
-  if (bitDepth !== 8) throw new Error('只支持 8 位深度，实际 ' + bitDepth);
   if (interlace !== 0) throw new Error('不支持隔行 PNG');
+  if (colorType === 3) {
+    if (bitDepth !== 8) throw new Error('调色板 PNG 只支持 8 位索引，实际 ' + bitDepth);
+    if (!palette) throw new Error('调色板 PNG 缺 PLTE');
+    const idx = inflateSync(Buffer.concat(idat));
+    const out = new Uint8Array(height * width);
+    let prev = new Uint8Array(width);
+    for (let y = 0; y < height; y++) {
+      const filter = idx[y * (width + 1)];
+      const line = idx.subarray(y * (width + 1) + 1, y * (width + 1) + 1 + width);
+      const cur = out.subarray(y * width, (y + 1) * width);
+      for (let i = 0; i < width; i++) {
+        const a = i >= 1 ? cur[i - 1] : 0, b = prev[i], c = i >= 1 ? prev[i - 1] : 0;
+        let v = line[i];
+        if (filter === 1) v += a;
+        else if (filter === 2) v += b;
+        else if (filter === 3) v += (a + b) >> 1;
+        else if (filter === 4) {
+          const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+          v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+        }
+        cur[i] = v & 0xff;
+      }
+      prev = cur;
+    }
+    return { width, height, channels: 1, data: out, palette, alphaTable, indexed: true };
+  }
+  if (bitDepth !== 8) throw new Error('只支持 8 位深度，实际 ' + bitDepth);
   const channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[colorType];
   if (!channels) throw new Error('不支持的颜色类型 ' + colorType);
 

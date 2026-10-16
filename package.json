@@ -7,7 +7,18 @@
     "type": "git",
     "url": "git+https://github.com/hyqzz/Solar-Wanderer.git"
   },
-  "keywords": ["solar-system", "threejs", "webgl", "astronomy", "space", "simulation", "ephemeris", "nasa", "3d", "game"],
+  "keywords": [
+    "solar-system",
+    "threejs",
+    "webgl",
+    "astronomy",
+    "space",
+    "simulation",
+    "ephemeris",
+    "nasa",
+    "3d",
+    "game"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -26,7 +37,8 @@
     "verify": "node tools/verify-ephemeris.mjs",
     "make-fixtures": "node tools/make-fixtures.mjs",
     "fetch-moon-textures": "node tools/fetch-moon-textures.mjs",
-    "rig": "node tools/rig/frontier.mjs"
+    "rig": "node tools/rig/frontier.mjs",
+    "fetch-clouds": "node tools/fetch-clouds.mjs"
   },
   "dependencies": {
     "three": "^0.165.0"

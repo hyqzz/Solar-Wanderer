@@ -190,6 +190,37 @@ test('云密度是连续幂律而非阈值截断（阈值化会压出硬边白�
   assert.ok(/1\.0 - exp\(-cloudTau\(cl\) \* 1\.9\)/.test(src), '缺少 Beer–Lambert 不透明度');
 });
 
+// ── 批次 9：GIBS 真实日期云图 ────────────────────────────────────────────────
+
+test('真实云图资产与清单存在且自洽，并已在贴图清单里登记', () => {
+  const meta = JSON.parse(readFileSync(
+    new URL('../public/textures/clouds_real.json', import.meta.url), 'utf8'));
+  assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(meta.date), `资产日期格式不对：${meta.date}`);
+  assert.equal(meta.layer, 'MODIS_Terra_Cloud_Fraction_Day');
+  assert.ok(meta.coverage > 0.9, `有效覆盖仅 ${(meta.coverage * 100).toFixed(1)}%，缺口没补齐`);
+  // 全球平均云量：实测约 0.67。这是"颜色→数值映射没错"的关键证据——
+  // 映射错了这个数会明显偏离（生成脚本里也有同一道自检）。
+  assert.ok(meta.meanFraction > 0.5 && meta.meanFraction < 0.85,
+    `全球平均云量 ${meta.meanFraction} 偏离实测范围`);
+  // 必须登记进 textures/manifest.json：加载器对未登记的文件是**直接跳过**的，
+  // 漏登记会让云层静默回落到合成图（实测踩过：画面照出，只是云不是当天的）
+  const manifest = JSON.parse(readFileSync(
+    new URL('../public/textures/manifest.json', import.meta.url), 'utf8').replace(/^﻿/, ''));
+  assert.equal(manifest['clouds_real.png'], true, 'clouds_real.png 未登记进贴图清单');
+  const png = readFileSync(new URL('../public/textures/clouds_real.png', import.meta.url));
+  assert.equal(png.readUInt32BE(0), 0x89504e47, 'clouds_real.png 不是 PNG');
+});
+
+test('云层优先用真实日期云图，缺文件时回落合成图', () => {
+  assert.ok(BODIES.earth.textures.cloudsReal, '地球贴图未声明真实云图');
+  const src = read('src/scene/builder.js');
+  assert.ok(/phys\.textures\?\.cloudsReal && cache\.has\(phys\.textures\.cloudsReal\)/.test(src),
+    '未优先选真实云图');
+  // 回落分支必须保留——真实云图是可选的增强，缺了不能让地球没有云
+  assert.ok(/phys\.textures\?\.clouds && !phys\.textures\.cloudsOpaque/.test(src),
+    '缺少回落合成云图的分支');
+});
+
 test('云层经纬度在体固系里算（否则云挂在惯性系不随自转）', () => {
   const src = read('src/scene/planetMaterial.js');
   const builder = read('src/scene/builder.js');

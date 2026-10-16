@@ -1,0 +1,12 @@
+{
+ "date": "2026-10-15",
+ "layer": "MODIS_Terra_Cloud_Fraction_Day",
+ "size": [
+  2048,
+  1024
+ ],
+ "coverage": 0.9984,
+ "meanFraction": 0.722,
+ "blurPx": 1,
+ "generated": "2026-10-16T06:56:20.465Z"
+}

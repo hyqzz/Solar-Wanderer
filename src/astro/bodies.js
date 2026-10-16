@@ -76,7 +76,11 @@ export const BODIES = {
       rayleigh: [5.802e-6, 13.558e-6, 33.1e-6], mie: 3.996e-6, mieG: 0.76, multiplier: 0.66,
       interiorBoost: 1.52, // ≈1/0.66：补偿 multiplier 降低对地表/低空无散射天空亮度的影响
     },
-    textures: { map: 'earth_day.jpg', night: 'earth_night.jpg', clouds: 'earth_clouds.jpg' },
+    // cloudsReal：由 tools/fetch-clouds.mjs 从 NASA GIBS 的 MODIS 云量产品生成的
+    // **真实日期**云图（灰度＝云量百分数）。存在时优先于合成的 earth_clouds.jpg；
+    // 缺文件时自动回落到合成图，不影响启动（云图是可选的增强）。
+    textures: { map: 'earth_day.jpg', night: 'earth_night.jpg', clouds: 'earth_clouds.jpg',
+      cloudsReal: 'clouds_real.png' },
     desc: '已知唯一存在生命的行星。71% 表面被液态水覆盖，氮氧大气，一颗大卫星稳定着自转轴。你的家园。',
   },
   mars: {

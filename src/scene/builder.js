@@ -375,8 +375,12 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     const visualMapFile = phys.textures?.clouds && phys.textures?.cloudsOpaque
       ? phys.textures.clouds : phys.textures?.map;
     // Issue #26：提前解析云层贴图，同时传给行星材质（地表投影）与云层网格
-    const cloudFile = phys.textures?.clouds && !phys.textures.cloudsOpaque && cache.has(phys.textures.clouds)
-      ? phys.textures.clouds : null;
+    // 真实日期云图优先（tools/fetch-clouds.mjs 产物，灰度＝云量）；
+    // 没有就回落合成云图。两张都是灰度/亮度定云量，着色器读 luminance，无需分支。
+    const cloudFile = phys.textures?.cloudsReal && cache.has(phys.textures.cloudsReal)
+      ? phys.textures.cloudsReal
+      : (phys.textures?.clouds && !phys.textures.cloudsOpaque && cache.has(phys.textures.clouds)
+        ? phys.textures.clouds : null);
     const cloudTex = cloudFile ? cache.get(cloudFile) : null;
     const mat = createPlanetMaterial({
       map: texOf(cache, visualMapFile, id, phys),
@@ -402,6 +406,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     const entry = {
       id, phys, isMoon: false, parentId: 'sun', group, mesh,
       posKm: new Float64Array(3), mat,
+      cloudFile,   // 实际选用的云图文件名（真实日期图 or 合成图），供诊断
     };
 
     // 云层（地球；金星云已作为主贴图）
