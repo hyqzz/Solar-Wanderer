@@ -9,6 +9,8 @@ import { SphereGeometry } from 'three';
 import { DEM_SOURCES, levelExceedsSource } from '../src/scene/demTiles.js';
 import { parseStarCatalog, bvToRgb, magToIntensity } from '../src/astro/starCatalog.js';
 import { CATALOG_COUNT } from '../src/astro/stars.generated.js';
+import { MOON_PHYS } from '../src/astro/bodies.js';
+import { PRESETS } from '../src/scene/proceduralTextureData.js';
 import { BODIES } from '../src/astro/bodies.js';
 import { TNO_DATA } from '../src/astro/tno.js';
 
@@ -592,6 +594,27 @@ test('近地地面必须有可见质感（否则落地是一片平板）', () =>
   assert.ok(/tnoise2\(vObjPos \* 90\.0 \+ vec3\(7\.3, 2\.1, 5\.7\)\)/.test(src),
     '缺少坐标安全的中尺度（约 11 m）细节档');
   assert.ok(!/float dm = 0\.78 \+ 0\.46 \*/.test(src), '旧的弱调制仍在');
+});
+
+test('每颗卫星都有自己的地表底色（不能都落在同一个 gray 上）', () => {
+  // 扩充批次加的 28 颗卫星一开始全部用 palette:'gray'，从轨道看是同一种灰色噪声球。
+  // 它们没有贴图，但反照率与色调是有实测值的——按现有资料合理生成就落在这里。
+  const NEW = ['amalthea','thebe','metis','adrastea','hyperion','phoebe','janus','epimetheus',
+    'prometheus','pandora','pan','cordelia','ophelia','bianca','cressida','desdemona',
+    'juliet','portia','rosalind','belinda','puck','nereid','naiad','thalassa','despina',
+    'galatea','larissa','proteus'];
+  const gray = NEW.filter((id) => (MOON_PHYS[id]?.surface?.palette ?? 'gray') === 'gray');
+  assert.equal(gray.length, 0, `${gray.length} 颗新卫星仍用 gray：${gray.join(' ')}`);
+  // 每个引用到的预设都必须存在，否则静默回落到 gray
+  const missing = [];
+  for (const [id, m] of Object.entries(MOON_PHYS)) {
+    const pal = m.surface?.palette;
+    if (pal && !PRESETS[pal]) missing.push(`${id}→${pal}`);
+  }
+  assert.equal(missing.length, 0, `引用了不存在的预设：${missing.join(' ')}`);
+  // 底色档数：新卫星应显著拉开花样，而不是挤在少数几档
+  const bases = new Set(NEW.map((id) => PRESETS[MOON_PHYS[id].surface.palette].base.join(',')));
+  assert.ok(bases.size >= 6, `28 颗新卫星只用了 ${bases.size} 种底色，区分度不足`);
 });
 
 test('木星与海王星的暗环用极低弥漫基底（不能套用天王星的 0.03）', () => {
