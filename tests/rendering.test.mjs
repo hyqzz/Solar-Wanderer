@@ -517,6 +517,25 @@ test('四颗巨行星都有环，且内半径不小于母星半径', () => {
   }
 });
 
+test('环系按单层粒子的 Seeliger 定律受光（不是与视角无关的常数）', () => {
+  const src = read('src/scene/rings.js');
+  // vNormalW 是**环面法向**（整环相同），所以旧写法 max(ndl,0)+… 算出来是个常数：
+  // 环的亮度不随观察仰角变化，也没有相位角依赖——丢掉的正是环系最著名的两个
+  // 光变特征（侧视增亮、冲日增亮）。
+  assert.ok(/float mu0 = abs\(dot\(nrm, uSunDir\)\);/.test(src), '缺少太阳在环面上的仰角');
+  assert.ok(/float mu = abs\(dot\(nrm, toCam\)\);/.test(src), '缺少观察者在环面上的仰角');
+  assert.ok(/float seeliger = mu0 \/ max\(mu0 \+ mu, 1e-4\);/.test(src), '缺少 Seeliger 定律 μ0/(μ0+μ)');
+  assert.ok(!/float lit = max\(ndl, 0\.0\) \+ pow\(max\(-ndl, 0\.0\), 0\.7\)/.test(src),
+    '旧的"常数受光"仍在');
+  // 冲日增亮：相位角趋零时相干背散射 + 阴影隐藏，环显著变亮
+  assert.ok(/float surge = 1\.0 \+ 0\.5 \* exp\(-\(1\.0 - cosA\) \* 25\.0\);/.test(src),
+    '缺少冲日增亮');
+  // 前向散射必须并入 phase，不能另起一项重复计（旧实现另有一处 pow(...,8)*2.5）
+  assert.ok(/0\.9 \* pow\(max\(-cosA, 0\.0\), 3\.0\)/.test(src), '缺少前向散射项');
+  assert.ok(!/float fwd = pow\(max\(dot\(viewRay, uSunDir\), 0\.0\), 8\.0\)/.test(src),
+    '前向散射被重复计算了两处');
+});
+
 test('木星与海王星的暗环用极低弥漫基底（不能套用天王星的 0.03）', () => {
   assert.ok((BODIES.jupiter.rings.diffuse ?? 0.03) < 0.01,
     '木星环光学深度 ~10⁻⁶，弥漫基底必须极低，否则会假亮成第二条土星环');
