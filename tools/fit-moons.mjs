@@ -23,6 +23,27 @@ const MOON_IDS = {
   ariel: ['701', '500@799'], umbriel: ['702', '500@799'], titania: ['703', '500@799'],
   oberon: ['704', '500@799'], miranda: ['705', '500@799'],
   triton: ['801', '500@899'], charon: ['901', '500@999'],
+
+  // ── 扩充批次：木星内卫星与不规则卫星、土星中小组、天卫内侧、海卫内群、冥卫 ──
+  // 编号是 NAIF 标准 ID（按各行星的发现顺序），父体用 500@<行星NAIF>。
+  amalthea: ['505', '500@599'], thebe: ['514', '500@599'],
+  metis: ['516', '500@599'], adrastea: ['515', '500@599'],
+  hyperion: ['607', '500@699'], phoebe: ['609', '500@699'],
+  janus: ['610', '500@699'], epimetheus: ['611', '500@699'],
+  prometheus: ['616', '500@699'], pandora: ['617', '500@699'], pan: ['618', '500@699'],
+  // 天王星内侧小卫星的 NAIF 编号是**由内向外**排的（与"按发现顺序"的直觉相反）：
+  // 706=Cordelia(最内) … 715=Puck(最外)。第一版按发现顺序猜成 706=Puck，拟合出的 a
+  // 恰好等于 9 个编号之外那颗的真实轨道——是数据自己把正确映射说清楚的。
+  cordelia: ['706', '500@799'], ophelia: ['707', '500@799'], bianca: ['708', '500@799'],
+  cressida: ['709', '500@799'], desdemona: ['710', '500@799'], juliet: ['711', '500@799'],
+  portia: ['712', '500@799'], rosalind: ['713', '500@799'], belinda: ['714', '500@799'],
+  puck: ['715', '500@799'],
+  nereid: ['802', '500@899'], naiad: ['803', '500@899'], thalassa: ['804', '500@899'],
+  despina: ['805', '500@899'], galatea: ['806', '500@899'], larissa: ['807', '500@899'],
+  proteus: ['808', '500@899'],
+  // 冥卫二/三/四/五 暂不纳入：902–905 在 Horizons 里解析不到正确目标
+  // （拟合出的 a 与实测差 78%–209%，且与自身拟合周期都不满足开普勒关系）。
+  // 编号需逐个核对后再补；宁可少四颗，也不能把错轨道当真的发。
 };
 
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -136,6 +157,7 @@ const FIT_OFFSETS_DAYS = [-240, -120, -10, 0, 10, 120, 240];
 const out = {};
 let epochJd = null;
 
+const rejected = [];
 for (const [id, [cmd, center]] of Object.entries(MOON_IDS)) {
   const phys = MOON_PHYS[id];
   const parentGm = BODIES[phys.parent].gm + (phys.gm || 0);
@@ -185,13 +207,34 @@ for (const [id, [cmd, center]] of Object.entries(MOON_IDS)) {
   el.nodeDotDegPerDay = nodeDot;
   el.periDotDegPerDay = periDot;
 
-  out[id] = el;
+  // ── 对实测半长轴校验 ────────────────────────────────────────────────────
+  // 上面那个"周期估计误差"只是**自洽性**检查（拟合出的周期 vs 同一批数据算出的
+  // 周期），它小并不代表对。必须拿实测半长轴比：拟合跑偏时它会立刻暴露——
+  // 实测中 Cordelia 拟合出 717 万 km（真实 4.98 万 km）、冥卫四颗全偏 60% 以上，
+  // 而自洽性误差都小于 1%。不合格的**不写入**，宁可少几颗也不能把错轨道当真的发。
+  const REF_A = {
+    amalthea: 181400, thebe: 221900, metis: 128000, adrastea: 129000,
+    hyperion: 1500933, phoebe: 12947779, janus: 151460, epimetheus: 151410,
+    prometheus: 139380, pandora: 141720, pan: 133580,
+    puck: 86004, portia: 66100, juliet: 64360, ophelia: 53764, cordelia: 49770,
+    bianca: 59165, cressida: 61780, desdemona: 62680, rosalind: 69940, belinda: 75260,
+    nereid: 5513800, naiad: 48227, thalassa: 50075, despina: 52526,
+    galatea: 61953, larissa: 73548, proteus: 117647,
+    nix: 48694, hydra: 64738, kerberos: 57783, styx: 42656,
+  };
+  // 不规则卫星的实测 a 本身有较大离散（受太阳摄动），容差放宽
+  const TOL = { phoebe: 0.25, nereid: 0.15, hyperion: 0.10 };
+  const refA = REF_A[id];
+  const dev = refA ? Math.abs(el.aKm - refA) / refA : 0;
+  const tol = TOL[id] ?? 0.05;
+  const ok = !refA || dev <= tol;
   console.log(
-    `${id.padEnd(10)} a=${(el.aKm / 1000).toFixed(1).padStart(8)}千km  e=${el.e.toFixed(4)}  ` +
-    `i=${el.iDeg.toFixed(2).padStart(7)}°  P=${(360 / lamDot).toFixed(4).padStart(9)}天  ` +
-    `(周期估计误差 ${((360 / lamDot / periodDays0 - 1) * 100).toFixed(4)}%)  ` +
-    `Ω̇=${nodeDot.toFixed(4).padStart(8)}°/天  ϖ̇=${periDot.toFixed(4).padStart(8)}°/天`
+    `${ok ? '✓' : '✗'} ${id.padEnd(10)} a=${(el.aKm / 1000).toFixed(1).padStart(9)}千km  ` +
+    (refA ? `(实测 ${(refA / 1000).toFixed(1)}千km，偏差 ${(dev * 100).toFixed(1)}%)  ` : '(无实测基准) ') +
+    `e=${el.e.toFixed(4)}  i=${el.iDeg.toFixed(2).padStart(7)}°  P=${(360 / lamDot).toFixed(4).padStart(9)}天`
   );
+  if (ok) out[id] = el;
+  else rejected.push(`${id}(偏差 ${(dev * 100).toFixed(1)}%)`);
 }
 
 const banner = `// 本文件由 tools/fit-moons.mjs 自动生成 — 请勿手改。
@@ -207,4 +250,8 @@ writeFileSync(
   banner + `export const MOON_EPOCH_JD = ${epochJd};\n` +
   `export const MOON_ELEMENTS = ${JSON.stringify(out, null, 2)};\n`
 );
-console.log('\n已写入 src/astro/moonsData.generated.js');
+if (rejected.length) {
+  console.log(`\n未写入（对不上实测半长轴）：${rejected.join('  ')}`);
+  console.log('  这些卫星的天体编号在 Horizons 里可能解析成了别的目标，需逐个核对。');
+}
+console.log(`已写入 ${Object.keys(out).length} 颗卫星`);
