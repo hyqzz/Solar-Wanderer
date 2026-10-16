@@ -57,12 +57,14 @@ const st = await p.evaluate((bid) => new Promise((res) => {
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
     const L = (x, y) => { const i = ((h-1-y)*w + x)*4; return (buf[i]*0.299 + buf[i+1]*0.587 + buf[i+2]*0.114); };
     // 近地（画面下部 25%）
-    let sum = 0, n = 0, mn = 999, mx = -1;
+    let sum = 0, n = 0, mn = 999, mx = -1, chroma = 0;
     for (let y = Math.floor(h*0.78); y < Math.floor(h*0.97); y++)
       for (let x = 20; x < w-20; x++) {
         const d = Math.abs(L(x+1,y) - L(x,y));
         sum += d; n++;
         const v = L(x,y); if (v < mn) mn = v; if (v > mx) mx = v;
+        const i0 = ((h-1-y)*w + x)*4;
+        chroma += Math.max(buf[i0],buf[i0+1],buf[i0+2]) - Math.min(buf[i0],buf[i0+1],buf[i0+2]);
       }
     const tm = g.terrainMgr;
     const act = tm.active;
@@ -71,12 +73,12 @@ const st = await p.evaluate((bid) => new Promise((res) => {
       const P = act.patches;
       levels = P.levels?.map(l => ({ f: +(l.uFade?.value ?? -1).toFixed(2), g: l.geo?.attributes?.position?.count ?? 0 })).slice(0, 6);
     }
-    res({ adjacent: sum/n, mn: +mn.toFixed(1), mx: +mx.toFixed(1), levels,
+    res({ adjacent: sum/n, mn: +mn.toFixed(1), mx: +mx.toFixed(1), levels, chroma: chroma/n,
       activeBody: act?.bodyId ?? null, mode: g.getMode() });
   };
 }));
 console.log(`${id}: 模式 ${st.mode}  地形激活 ${st.activeBody}`);
-console.log(`  近地亮度范围 ${st.mn}–${st.mx}（跨 ${(st.mx-st.mn).toFixed(0)}）  相邻像素差均值 ${st.adjacent.toFixed(3)}`);
+console.log(`  近地亮度范围 ${st.mn}–${st.mx}（跨 ${(st.mx-st.mn).toFixed(0)}）  相邻像素差 ${st.adjacent.toFixed(3)}  平均彩度 ${st.chroma.toFixed(1)}`);
 console.log('  各级 uFade/顶点数:', JSON.stringify(st.levels));
 console.log('错误:', errs.length, errs[0] ?? '');
 await b.close();

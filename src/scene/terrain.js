@@ -493,7 +493,17 @@ function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371
           float dm = clamp(1.0 + 2.2 * (nsum - 0.5), 0.62, 1.38)
                    + (1.0 - g1) * 0.21
                    + (1.0 - g2) * 0.075 + (1.0 - g3) * 0.05 + (1.0 - g4) * 0.02;
-          diffuseColor.rgb *= mix(dm, 1.0, vWater);
+          // 细微色偏：真实表土不是单一色。矿物、冰、尘的混合在**米级尺度**上就有
+          // 冷暖深浅的差异，而贴图在这个尺度上只有一两个像素（整片区域一个色），
+          // 所以落地后地面看着像一块色卡。这里用同一套噪声做一次轻微的色彩调制：
+          // 一档噪声在"冷调/暖调"两极之间插值，成本只多一次采样。
+          // 幅度刻意压得很小（±6%），是"同一种土的不同地方"，不是另换一种材质。
+          float c1 = tnoise2(vObjPos * 90.0 + vec3(3.1, 9.4, 1.7)) * g1;
+          vec3 tintVar = mix(vec3(1.06, 1.00, 0.94), vec3(0.94, 0.99, 1.05), c1);
+          // 第二档更细（约 2 m），只在近处生效，避免行走时地面像同一张贴图在平移
+          float c2 = tnoise2(vObjPos * 420.0 + vec3(21.7, 4.9, 13.3)) * g2 * uDetailScale;
+          tintVar *= mix(vec3(0.97), vec3(1.03, 1.0, 0.97), c2);
+          diffuseColor.rgb *= mix(dm, 1.0, vWater) * tintVar;
           // 岸边泡沫：land→water 过渡区（vWater 0..1 内插）叠加白色浪沫（#21）
           float foam = smoothstep(0.05, 0.38, vWater) * (1.0 - smoothstep(0.62, 0.95, vWater));
           if (foam > 0.01) {
