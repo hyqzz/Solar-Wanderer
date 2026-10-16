@@ -10,6 +10,8 @@ export function createSun(radiusKm, mapTex) {
 
   const uniforms = {
     uTime: { value: 0 },
+    // 太阳活动 0..1（实测周期极值表插值，见 astro/solarCycle.js）——调制黑子覆盖率
+    uSolarActivity: { value: 0.5 },
     uMap: { value: mapTex },
   };
 
@@ -36,6 +38,7 @@ export function createSun(radiusKm, mapTex) {
       #include <common>
       #include <logdepthbuf_pars_fragment>
       uniform float uTime;
+      uniform float uSolarActivity;
       uniform sampler2D uMap;
       varying vec2 vUv;
       varying vec3 vPos;
@@ -72,8 +75,17 @@ export function createSun(radiusKm, mapTex) {
         float g1 = a1 > 0.01 ? vnoise(p * 700.0 + uTime * 0.001) : 0.5;
         float g2 = a2 > 0.01 ? vnoise(p * 1450.0 - uTime * 0.002) : 0.5;
         float granule = 1.0 + (g1 - 0.5) * 0.25 * a1 + (g2 - 0.5) * 0.1 * a2;
-        // 暗化的"黑子"区域
-        float spots = 1.0 - smoothstep(0.2, 0.32, fbm(p * 6.0 + 13.7 + uTime * 0.004));
+        // 黑子区域：覆盖率随太阳活动周期变化。
+        // 旧实现是固定阈值，等于一年四季黑子数不变——而"此刻太阳活动"
+        // 恰恰是观察者最容易注意到的太阳变化：极小年日面可以整月无黑子，
+        // 极大年则成群成片。阈值越低，被判为黑子的区域越多。
+        //
+        // 频率取 17：黑子群相对日面很小（单个本影只占日面千分之几），
+        // 旧值 6.0 画出来是几块占日面一成的大斑，一眼就不像太阳。
+        // 边界随之收紧（±0.02/±0.03）：真实黑子本影与光球的交界是锐的。
+        float spotThr = mix(0.14, 0.30, clamp(uSolarActivity, 0.0, 1.0));
+        float spots = 1.0 - smoothstep(spotThr - 0.02, spotThr + 0.03,
+                                       fbm(p * 13.0 + 13.7 + uTime * 0.004));
         vec3 col = base * granule * (1.0 - 0.75 * spots);
         col *= vec3(1.0, 0.985, 0.97);
         // 临边昏暗：Neckel & Labs (1994) 五阶多项式，而不是一阶线性近似。
@@ -165,10 +177,11 @@ export function createSun(radiusKm, mapTex) {
   group.add(corona);
 
   return {
-    group, mesh, corona,
-    update(timeSec, camDistKm, occulted = false) {
+    group, mesh, corona, uniforms,
+    update(timeSec, camDistKm, occulted = false, solarActivity = null) {
       uniforms.uTime.value = timeSec;
       coronaUniforms.uTime.value = timeSec;
+      if (solarActivity !== null) uniforms.uSolarActivity.value = solarActivity;
       // 日冕亮度：K 冕在 1.2 R☉ 处约为光球的 10⁻⁶ 量级，所以"与光球同曝光"的
       // 相机确实拍不到它——旧实现据此把它压到 10⁻⁶，只有日全食才显示。
       // 但那对应的是相机，不是人眼：人眼动态范围约 10¹⁴，航天员在轨肉眼是能看到

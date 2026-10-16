@@ -118,7 +118,6 @@ export function createPlanetMaterial({
     uTime: { value: 0 },           // 秒（实时，驱动云层/条带/极光帘幕动画）
     uLs: { value: 0 },             // 火星太阳黄经（度，驱动尘暴季节性）
     uSubsolarLat: { value: 0 },    // 日下点纬度（度，驱动冰冠/季节变化）
-    uSolarActivity: { value: 0.7 },// 太阳活动 0..1（调制极光强度）
     uBodyId: { value: BODY_ID_MAP[bodyId] ?? 0 }, // 天体 ID（着色器分支）
     uCloudTex: { value: cloudTex ?? DUMMY_TEX },  // 地球云层贴图（地表投影用）
     uHasClouds: { value: cloudTex ? 1 : 0 },
@@ -182,7 +181,6 @@ export function createPlanetMaterial({
       uniform float uTime;
       uniform float uLs;
       uniform float uSubsolarLat;
-      uniform float uSolarActivity;
       uniform int uBodyId;
       uniform sampler2D uCloudTex;
       uniform int uHasClouds;

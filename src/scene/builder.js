@@ -25,6 +25,7 @@ export function drawTextureForSampling(ctx, image, width, height) {
   ctx.drawImage(image, 0, 0, width, height);
 }
 import { BODIES, MOON_PHYS } from '../astro/bodies.js';
+import { solarActivityAt } from '../astro/solarCycle.js';
 import { planetPosition, PLANETS, orbitPoints } from '../astro/planets.js';
 import { moonGeocentric } from '../astro/moon.js';
 import { jdUTtoTT } from '../astro/time.js';
@@ -340,6 +341,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   const sunEntry = {
     id: 'sun', phys: sunPhys, isMoon: false, parentId: null,
     group: sun.group, mesh: sun.mesh, posKm: new Float64Array(3),
+    uniforms: sun.uniforms,   // 供诊断读取（太阳表面着色器的 uniform）
   };
   // 太阳点光源（物理上太阳是光源本身；行星用自定义着色器，光源供地形 StandardMaterial 用）
   // 太阳光基准色 = 纯白：行星盘面材质（planetMaterial）用的是无染色白光照，
@@ -525,6 +527,11 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   // 光速（km/天）：光行时视位置修正用
   const C_KM_PER_DAY = 299792.458 * 86400;
 
+  // 当前太阳活动 0..1。在 update() 里按 jdTT 算出，postWorldUpdate() 里要用——
+  // 两个函数各自的作用域不通，写成局部 const 会让后者每帧抛 ReferenceError，
+  // 而主循环的 try/catch 会把错误**静默吞掉**（太阳从此不再更新，画面上看不出来）。
+  let solarActivityNow = 0.5;
+
   /** 光行时视位置：按 t − d/c 回退，2 次迭代收敛。camEcl 缺省时退回几何位置 */
   function apparentAt(fn, camEcl, jdTT) {
     let p = fn(jdTT);
@@ -568,8 +575,10 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     // Issue #27/#29/#36：全局季节量（每帧一次，所有天体共享）
     // 火星太阳黄经 Ls（度，0-360）
     let ls = marsLs(jdTT);
-    // 太阳活动：11 年周期近似（调制极光强度）
-    const solarActivity = 0.5 + 0.3 * Math.sin((jdTT - 2451545.0) / (365.25 * 11) * Math.PI * 2);
+    // 太阳活动：由实测周期极值年表插值（调制极光强度与日冕）。
+    // 旧写法是从 J2000 起算的 11 年正弦，周期长度对、**相位差 3–4 年**——
+    // 会把极大放在 2005.5/2016.5/2027.5，而实测是 2000.3/2014.3/2024.9。
+    solarActivityNow = solarActivityAt(jdTT);
     // 火星尘暴强度（Ls 180-360 风暴季）
     const marsDust = Math.max(0,
       THREE.MathUtils.smoothstep(ls, 180, 220) * (1 - THREE.MathUtils.smoothstep(ls, 330, 360)));
@@ -674,11 +683,10 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
         const u = e.mat.userData.uniforms;
         u.uLs.value = ls;
         u.uSubsolarLat.value = subsolarLat;
-        u.uSolarActivity.value = solarActivity;
       }
       if (e.atmoMesh) {
         const u = e.atmoMesh.material.userData.uniforms;
-        u.uSolarActivity.value = solarActivity;
+        u.uSolarActivity.value = solarActivityNow;
         u.uAuroraStrength.value = auroraStrength;
         // 火星尘暴：boost 大气雾霾（仅火星）
         u.uDustStorm.value = (id === 'mars') ? marsDust : 0;
@@ -773,7 +781,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       sunShadow.intensity = 0;
     }
     sun.update(simTimeSec, dSunKm, isSunOcculted(shipPosKm, sunPhys.radiusKm,
-      [...bodies.values()].filter(b => b.phys.id !== 'sun')));
+      [...bodies.values()].filter(b => b.phys.id !== 'sun')), solarActivityNow);
   }
 
   // 地形颜色采样数据（真实贴图 → ImageData）

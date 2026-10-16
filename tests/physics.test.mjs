@@ -5,6 +5,7 @@ import { BODIES, MOON_PHYS, surfaceGravity } from '../src/astro/bodies.js';
 import { MOON_ELEMENTS } from '../src/astro/moonsData.generated.js';
 import { moonLocalPosition, moonOrbitNormal, MOON_IDS } from '../src/astro/moons.js';
 import { makeNoise, hashSeed } from '../src/util/noise.js';
+import { solarActivityAt, SOLAR_CYCLE_EXTREMA } from '../src/astro/solarCycle.js';
 
 test('表面重力：地球 9.81、月球 1.62、火星 3.71 m/s²', () => {
   assert.ok(Math.abs(surfaceGravity(BODIES.earth) - 9.81) < 0.03);
@@ -79,6 +80,44 @@ test('可登陆天体渲染为正球：radiusKm 应是体积平均半径而非�
   assert.ok(Math.abs(BODIES.mars.radiusKm - 3389.5) < 1, `火星 ${BODIES.mars.radiusKm} 应为平均半径 3389.5`);
   // 太阳接近正球，赤道与平均几乎无差
   assert.ok(Math.abs(BODIES.sun.radiusKm - 695700) < 1);
+});
+
+// ── 太阳活动周期 ─────────────────────────────────────────────────────────────
+//
+// 旧实现是从 J2000 起算的 11 年正弦，周期长度对、**相位差 3–4 年**：
+// 它把极大放在 2005.5/2016.5/2027.5，而实测是 2000.3/2014.3/2024.9。
+
+test('太阳活动在实测的周期极值处取到极小/极大', () => {
+  const jd = (y) => 2451545.0 + (y - 2000) * 365.25;
+  // 极小：第 24 周 2008.9、第 25 周 2019.9
+  assert.ok(solarActivityAt(jd(2008.9)) < 0.08, `2008.9（SC24 极小）活动度应为最低，实际 ${solarActivityAt(jd(2008.9))}`);
+  assert.ok(solarActivityAt(jd(2019.9)) < 0.08, `2019.9（SC25 极小）活动度应为最低`);
+  // 极大：第 24 周 2014.3、第 25 周 2024.9
+  assert.ok(solarActivityAt(jd(2014.3)) > 0.35, `2014.3（SC24 极大）应显著高于极小`);
+  assert.ok(solarActivityAt(jd(2024.9)) > 0.6, `2024.9（SC25 极大）应接近最强周的量级`);
+  // 强度排序应与实测黑子数一致：SC24(81.9) 弱于 SC25(144.0) 弱于 SC19(201.3)
+  assert.ok(solarActivityAt(jd(2014.3)) < solarActivityAt(jd(2024.9)), 'SC24 应弱于 SC25');
+  assert.ok(solarActivityAt(jd(1958.2)) > solarActivityAt(jd(2024.9)), 'SC19（有记录最强）应最强');
+});
+
+test('太阳活动曲线连续、有界，且相位不退回旧的正弦模型', () => {
+  const jd = (y) => 2451545.0 + (y - 2000) * 365.25;
+  let prev = solarActivityAt(jd(1950));
+  let maxJump = 0;
+  for (let y = 1950; y <= 2035; y += 0.02) {
+    const v = solarActivityAt(jd(y));
+    assert.ok(v >= 0.04 && v <= 1.0, `${y.toFixed(2)} 年活动度 ${v} 越界`);
+    maxJump = Math.max(maxJump, Math.abs(v - prev));
+    prev = v;
+  }
+  // 每 0.02 年的最大变化应远小于 1；分段插值若有断点会在这里暴露
+  assert.ok(maxJump < 0.02, `曲线有跳变（单步最大 ${maxJump.toFixed(4)}）`);
+  // 旧正弦在 2014.3 附近给的是下降段，真实是极大
+  assert.ok(solarActivityAt(jd(2014.3)) > 0.35, '2014.3 应处于极大附近');
+  // 极值表本身要与 SILSO 的量级一致
+  for (const [, , maxV] of SOLAR_CYCLE_EXTREMA) {
+    assert.ok(maxV > 60 && maxV <= 210, `周期极大黑子数 ${maxV} 不在实测范围`);
+  }
 });
 
 test('地形噪声：确定性（同种子同输出）且有界', () => {
