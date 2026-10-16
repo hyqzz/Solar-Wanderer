@@ -67,6 +67,13 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
     const tex = proceduralMapLazy(id, d.palette ?? 'gray', 512, 256);
     const mat = createPlanetMaterial({ map: tex, detailMode: 0, radiusKm: d.radiusKm });
     const mesh = new THREE.Mesh(geo, mat);
+    // 三轴椭球：把单位球按半轴比例缩放（几何半径仍是 radiusKm，
+    // 于是物理/标签用的等体积球与渲染出的形状体积一致）。
+    if (d.axes) {
+      const [a, b, c] = d.axes;
+      const R = d.radiusKm;
+      mesh.scale.set(a / R, c / R, b / R);   // 体固系 +Y 为极轴（最短轴）
+    }
     group.add(mesh);
 
     // 彗星式柔光头（远距主视觉，始终叠加在球体之上）

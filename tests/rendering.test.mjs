@@ -10,6 +10,7 @@ import { DEM_SOURCES, levelExceedsSource } from '../src/scene/demTiles.js';
 import { parseStarCatalog, bvToRgb, magToIntensity } from '../src/astro/starCatalog.js';
 import { CATALOG_COUNT } from '../src/astro/stars.generated.js';
 import { BODIES } from '../src/astro/bodies.js';
+import { TNO_DATA } from '../src/astro/tno.js';
 
 const read = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
@@ -473,6 +474,35 @@ test('星场源码确实用真实星表，且没有残留的虚构星', () => {
   const main = read('src/main.js');
   assert.ok(/const dirWorld = raDecToWorld\(/.test(main), '标签方向未按星各自持有');
   assert.ok(/getRelPos: \(v\) => v\.copy\(dirWorld\)/.test(main), '标签仍闭包共享方向向量');
+});
+
+// ── 批次 8：小天体形状 ──────────────────────────────────────────────────────
+
+test('妊神星按三轴椭球渲染（说明里写着"橄榄球形"，画面不能是正球）', () => {
+  const haumea = TNO_DATA.haumea;
+  assert.ok(Array.isArray(haumea.axes) && haumea.axes.length === 3, '缺少三轴半轴');
+  const [a, b, c] = haumea.axes;
+  assert.ok(a > b && b > c, `半轴应满足 a > b > c，实际 ${a}/${b}/${c}`);
+  // 自转周期 3.9 小时把它是拉扁的：长短轴比应显著大于 1
+  assert.ok(a / c > 1.8, `长短轴比 ${(a / c).toFixed(2)} 不足以体现"橄榄球形"`);
+  // radiusKm 应是三轴的几何平均（等体积球）——高度/距离/碰撞都用它，
+  // 用长轴或平均算术值会让物理与形状对不上
+  const geoMean = Math.cbrt(a * b * c);
+  assert.ok(Math.abs(haumea.radiusKm - geoMean) / geoMean < 0.01,
+    `radiusKm ${haumea.radiusKm} 不是三轴几何平均 ${geoMean.toFixed(1)}`);
+  const src = read('src/scene/tnoScene.js');
+  assert.ok(/if \(d\.axes\) \{/.test(src), '渲染器未处理三轴形状');
+  assert.ok(/mesh\.scale\.set\(a \/ R, c \/ R, b \/ R\)/.test(src),
+    '短轴应对应体固系 +Y（极轴）');
+  // 说明文字里的尺寸要与半轴一致（2320×1700×1030 ≈ 2a×2b×2c）
+  assert.ok(/2320×1700×1030/.test(haumea.desc), '说明文字里的尺寸与半轴不一致');
+});
+
+test('其余海外天体保持正球（没有实测形状的不要编）', () => {
+  for (const [id, d] of Object.entries(TNO_DATA)) {
+    if (id === 'haumea') continue;
+    assert.ok(!d.axes, `${id} 凭空给了三轴形状——没有实测形状就保持正球`);
+  }
 });
 
 // ── 批次 6：行星环系 ────────────────────────────────────────────────────────
