@@ -58,6 +58,9 @@ export function createRings(phys, ringTex) {
     uSunDir: { value: new THREE.Vector3(1, 0, 0) },
     uCenter: { value: new THREE.Vector3() }, // 行星中心（相机相对）
     uPlanetR: { value: phys.radiusKm },
+    // 环自阴影要在环面内径向步进，需要内外半径（km）
+    uRingInner: { value: innerKm },
+    uRingOuter: { value: outerKm },
     uSunI: { value: 1.0 },
     uOpacity: { value: opacity },
     uTint: { value: new THREE.Vector3(tint[0], tint[1], tint[2]) },
@@ -91,6 +94,7 @@ export function createRings(phys, ringTex) {
       uniform vec3 uSunDir;
       uniform vec3 uCenter;
       uniform float uPlanetR, uSunI, uOpacity;
+      uniform float uRingInner, uRingOuter;
       uniform vec3 uTint;
       varying vec2 vUv;
       varying vec3 vPosW;
@@ -137,6 +141,39 @@ export function createRings(phys, ringTex) {
         // 两处重复计同一种物理，会把背光侧抬得过高。
         // 系数 3.2 是把 Seeliger 压低的那部分补偿回来（典型视角下 seeliger·phase ≈ 0.28，
         // 旧常数 ≈ 0.45），使整体亮度与改前一致——改的是**相对关系**，不是整体明暗。
+        // ── 环自阴影：环挡环自己 ──────────────────────────────────────────
+        // 环不是一张薄纸，是有限光学厚度的粒子层，所以环上的点会被**更靠近太阳
+        // 的那一侧环物质**遮住。卡西尼在环系高开角（分点前后）拍到的"环上的暗带"
+        // 就是它——B 环在 A 环上投下的影。旧实现完全没有这一项。
+        //
+        // 做法：把太阳方向投影到环面上，沿该方向在环面内径向步进，累计沿途的
+        // 光学深度；再按 1/μ0 做斜程改正（斜着穿过同样厚度的层，光程更长）。
+        // 步数少（10 步）——环的径向尺度很大而结构平缓，够了。
+        vec3 sunInPlane = uSunDir - nrm * dot(uSunDir, nrm);
+        float sunInPlaneLen = length(sunInPlane);
+        if (sunInPlaneLen > 1e-4 && mu0 > 0.02) {
+          vec3 mdir = sunInPlane / sunInPlaneLen;
+          float rSpan = uRingOuter - uRingInner;
+          float dstep = rSpan / 24.0;
+          float tau = 0.0;
+          for (int i = 1; i <= 10; i++) {
+            vec3 q = vPosW + mdir * (float(i) * dstep);
+            vec3 rq = q - uCenter;
+            float rr = length(rq - nrm * dot(rq, nrm));   // 到自转轴的距离
+            if (rr < uRingInner || rr > uRingOuter) continue;
+            float uu = (rr - uRingInner) / max(rSpan, 1.0);
+            tau += texture2D(uMap, vec2(uu, 0.5)).a * dstep;
+          }
+          // 归一化成无量纲后再衰减：tau 是"沿程累计的 τ×Δr"，直接乘系数没有意义
+          // （Δr 是几千公里，一乘就爆成全黑——第一版把环吃得只剩一条线）。
+          // 除以环跨度后，tau 的物理含义是"沿途平均光学深度 × 走过的跨度占比"，
+          // 与环系绝对尺度无关。斜程改正用 1/μ0；下限防止掠射时爆掉。
+          tau /= max(rSpan, 1.0);
+          // 限幅：环挡环本就是十几到几十个百分点的调制（卡西尼实测 B 环在 A 环上
+          // 的投影约暗 20–40%），不该把整条环吃掉。不限幅时最暗处会衰减到 0.29 以下，
+          // 环系整体变灰——那已经不是自阴影而是"环变薄了"。
+          shadow *= 1.0 - 0.35 * (1.0 - exp(-tau * 1.2 / max(mu0, 0.06)));
+        }
         vec3 col = tex.rgb * uTint * (lit * shadow * uSunI * 3.2 + 0.002);
         gl_FragColor = vec4(col, tex.a * uOpacity);
         #include <tonemapping_fragment>

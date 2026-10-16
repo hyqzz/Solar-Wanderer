@@ -567,6 +567,20 @@ test('环系按单层粒子的 Seeliger 定律受光（不是与视角无关的�
     '前向散射被重复计算了两处');
 });
 
+test('环自阴影：环挡环（卡西尼在环系高开角拍到的暗带）', () => {
+  const src = read('src/scene/rings.js');
+  // 旧实现只有"行星本影投在环上"，没有"环挡环自己"
+  assert.ok(/vec3 sunInPlane = uSunDir - nrm \* dot\(uSunDir, nrm\);/.test(src),
+    '缺少太阳方向在环面内的投影');
+  assert.ok(/for \(int i = 1; i <= 10; i\+\+\)/.test(src), '缺少环面内径向步进');
+  assert.ok(/uRingInner/.test(src) && /uRingOuter/.test(src), '缺少内外半径 uniform');
+  // 必须归一化成无量纲：tau 是"沿程累计的 τ×Δr"，直接乘系数会因 Δr 是几千公里而爆掉
+  assert.ok(/tau \/= max\(rSpan, 1\.0\);/.test(src), 'tau 未按环跨度归一化');
+  // 必须限幅：环挡环是十几到几十个百分点的调制，不该把整条环吃掉
+  assert.ok(/shadow \*= 1\.0 - 0\.35 \* \(1\.0 - exp\(-tau \* 1\.2/.test(src),
+    '自阴影未限幅——会衰减到把环系整体变灰');
+});
+
 test('木星与海王星的暗环用极低弥漫基底（不能套用天王星的 0.03）', () => {
   assert.ok((BODIES.jupiter.rings.diffuse ?? 0.03) < 0.01,
     '木星环光学深度 ~10⁻⁶，弥漫基底必须极低，否则会假亮成第二条土星环');
