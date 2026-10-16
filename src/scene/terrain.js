@@ -58,6 +58,78 @@ export class HeightField {
     this.noise = makeNoise(hashSeed(bodyId));
     this.map = mapImageData; // {data,width,height} 用于颜色与海洋掩码
     this.demSource = null;   // DEM 瓦片源（月球 LOLA / 火星 MOLA），由 setDEMSource 注入
+    this._alb = null;        // 贴图亮度的高通场，见 _albedoReliefAt
+  }
+
+  /**
+   * 由**贴图亮度**导出的局部起伏（高通场）。
+   *
+   * 为什么需要它：没有 DEM 的天体，颜色来自真实贴图、起伏来自程序噪声，两者**互不
+   * 相关**——贴图上的坑、月海、山脊落在无关的随机起伏上，落到地面一眼就假。
+   * 这里把亮度场的高通分量（局部亮 − 低频亮）作为局部起伏：撞击坑壁、山脊、断崖
+   * 在影像上本就是亮的，凹地被阴影压暗，所以"局部亮 ≈ 局部凸起"这个对应在无气
+   * 天体影像上普遍成立。
+   *
+   * 这不是"真实高程"——没有 DEM 就是没有。它是把**已有的可见地貌与起伏关联起来**，
+   * 按现有资料合理生成，而不是凭空另起一套随机地形。
+   * 场按 256×128 预计算（贴图全分辨率存两份浮点太重），只用于中低频起伏。
+   */
+  _buildAlbedoField() {
+    const m = this.map;
+    if (!m) return null;
+    const W = 256, H = 128;
+    const lum = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      const sy = Math.min(m.height - 1, ((y + 0.5) / H * m.height) | 0);
+      for (let x = 0; x < W; x++) {
+        const sx = Math.min(m.width - 1, ((x + 0.5) / W * m.width) | 0);
+        const i = (sy * m.width + sx) * 4;
+        lum[y * W + x] = (m.data[i] * 0.299 + m.data[i + 1] * 0.587 + m.data[i + 2] * 0.114) / 255;
+      }
+    }
+    // 可分离盒式模糊得到低频（半径 4，环向按经度环绕，否则反经线上出现一条缝）
+    const R = 4;
+    const tmp = new Float32Array(W * H), low = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let s = 0;
+        for (let k = -R; k <= R; k++) s += lum[y * W + ((x + k + W) % W)];
+        tmp[y * W + x] = s / (2 * R + 1);
+      }
+    }
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let s = 0;
+        for (let k = -R; k <= R; k++) s += tmp[Math.min(H - 1, Math.max(0, y + k)) * W + x];
+        low[y * W + x] = s / (2 * R + 1);
+      }
+    }
+    // 归一化到 ×2 标准差：让不同天体的对比度可比，免得有的天体毫无关联、有的过冲
+    let mean = 0;
+    for (let i = 0; i < lum.length; i++) mean += lum[i];
+    mean /= lum.length;
+    let varr = 0;
+    for (let i = 0; i < lum.length; i++) { const d = lum[i] - mean; varr += d * d; }
+    const sd = Math.max(Math.sqrt(varr / lum.length), 1e-3);
+    const hi = new Float32Array(W * H);
+    for (let i = 0; i < hi.length; i++) {
+      hi[i] = Math.max(-1.5, Math.min(1.5, (lum[i] - low[i]) / (2 * sd)));
+    }
+    return { W, H, hi };
+  }
+
+  /** 该方向的贴图高通值（-1.5..1.5）；无贴图返回 0 */
+  _albedoReliefAt(dir) {
+    if (!this._alb) {
+      this._alb = this._buildAlbedoField() ?? { none: true };
+    }
+    if (this._alb.none) return 0;
+    const { W, H, hi } = this._alb;
+    const lat = Math.asin(Math.max(-1, Math.min(1, dir.y)));
+    const lon = Math.atan2(-dir.z, dir.x);
+    const x = Math.min(W - 1, Math.max(0, (((lon / Math.PI + 1) * 0.5) * W) | 0));
+    const y = Math.min(H - 1, Math.max(0, ((0.5 - lat / Math.PI) * H) | 0));
+    return hi[y * W + x];
   }
 
   /** 注入 DEM 瓦片源：启用后 height() 优先查询真实高程，未命中时回退到程序化噪声 */
@@ -153,6 +225,10 @@ export class HeightField {
     h += 0.05 * detailScale * n.fbm(dir.x * 900, dir.y * 900, dir.z * 900, 3);
     h += 0.022 * detailScale * n.fbm(dir.x * 8000, dir.y * 8000, dir.z * 8000, 2);
     h += 0.009 * detailScale * n.fbm(dir.x * 42000, dir.y * 42000, dir.z * 42000, 2);
+    // 与可见地貌关联的起伏：把贴图亮度的高通分量当作局部起伏（见 _buildAlbedoField）。
+    // 权重给 0.45——足以让"贴图上的坑"在实地是坑，又不至于喧宾夺主取代程序地形。
+    // 有 DEM 的天体不走这里（height() 命中 DEM 时提前返回），所以不会与真实高程打架。
+    h += 0.45 * this._albedoReliefAt(dir);
     // 安全上限：噪声幅度不超过天体平均半径的 5%，防止小天体（Phobos 等）山脉过高
     const effAmp = Math.min(sp.ampKm, this.phys.radiusKm * 0.05);
     // 抬升保证地形在全球光滑球面之上
