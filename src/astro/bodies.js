@@ -240,23 +240,23 @@ export const MOON_PHYS = {
                landable: true,
                // 降低起伏与坑缘锐度：真实 Mimas 以巨大赫歇尔坑为主，但程序 crater rim 会生成尖峰；
                // 目标为月球般平滑的撞击坑表面（amp ≈ 0.4% R）。
-               surface: { ampKm: 0.8, roughness: 0.5, craters: 0.8, palette: 'gray' },
+               surface: { ampKm: 0.8, roughness: 0.5, craters: 0.8, palette: 'iceBright' },
                textures: { map: 'mimas.jpg' },
                desc: '巨大的赫歇尔撞击坑使它酷似“死星”。' },
   enceladus: { nameZh: '土卫二', nameEn: 'Enceladus', parent: 'saturn', radiusKm: 252.1, gm: 7.211,
-               landable: true, surface: { ampKm: 1, roughness: 0.35, craters: 0.3, palette: 'ice' },
+               landable: true, surface: { ampKm: 1, roughness: 0.35, craters: 0.3, palette: 'iceBright' },
                textures: { map: 'enceladus.jpg' },
                desc: '南极“虎纹”裂缝喷出冰羽流，形成土星 E 环，冰下海洋含有机分子。反照率接近 1，是太阳系最白的天体。' },
   tethys:    { nameZh: '土卫三', nameEn: 'Tethys', parent: 'saturn', radiusKm: 531.1, gm: 41.21,
-               landable: true, surface: { ampKm: 2, roughness: 0.5, craters: 1.0, palette: 'ice' },
+               landable: true, surface: { ampKm: 2, roughness: 0.5, craters: 1.0, palette: 'iceMid' },
                textures: { map: 'tethys.jpg' },
                desc: '几乎完全由水冰构成，密度仅 0.98 g/cm³。' },
   dione:     { nameZh: '土卫四', nameEn: 'Dione', parent: 'saturn', radiusKm: 561.4, gm: 73.116,
-               landable: true, surface: { ampKm: 2, roughness: 0.5, craters: 0.9, palette: 'ice' },
+               landable: true, surface: { ampKm: 2, roughness: 0.5, craters: 0.9, palette: 'iceBright' },
                textures: { map: 'dione.jpg' },
                desc: '冰崖纵横的冰质卫星，尾随半球有明亮的冰崖网络。' },
   rhea:      { nameZh: '土卫五', nameEn: 'Rhea', parent: 'saturn', radiusKm: 763.8, gm: 153.94,
-               landable: true, surface: { ampKm: 2, roughness: 0.5, craters: 1.1, palette: 'ice' },
+               landable: true, surface: { ampKm: 2, roughness: 0.5, craters: 1.1, palette: 'iceBright' },
                textures: { map: 'rhea.jpg' },
                desc: '土星第二大卫星，古老而布满撞击坑的冰球。' },
   titan:     { nameZh: '土卫六', nameEn: 'Titan', parent: 'saturn', radiusKm: 2574.7, gm: 8.978e3,
@@ -282,11 +282,11 @@ export const MOON_PHYS = {
                landable: true,
                // Miranda 虽有维罗纳断崖，但程序噪声在高 roughness 下会生成尖锐山脊；
                // 降低为月球般的平滑撞击坑地貌（amp ≈ 0.4% R）。
-               surface: { ampKm: 0.9, roughness: 0.5, craters: 0.6, palette: 'gray' },
+               surface: { ampKm: 0.9, roughness: 0.5, craters: 0.6, palette: 'iceMid' },
                textures: { map: 'miranda.jpg' },
                desc: '地质最混乱的卫星，拥有太阳系最高的悬崖维罗纳断崖（20 km）。' },
   ariel:     { nameZh: '天卫一', nameEn: 'Ariel', parent: 'uranus', radiusKm: 578.9, gm: 86.4,
-               landable: true, surface: { ampKm: 2, roughness: 0.5, craters: 0.7, palette: 'ice' },
+               landable: true, surface: { ampKm: 2, roughness: 0.5, craters: 0.7, palette: 'iceDim' },
                textures: { map: 'ariel.jpg' },
                desc: '天王星最亮的卫星，表面有年轻的峡谷与平原。' },
   umbriel:   { nameZh: '天卫二', nameEn: 'Umbriel', parent: 'uranus', radiusKm: 584.7, gm: 81.5,
@@ -413,15 +413,18 @@ export const HAPKE_PARAMS = {
   // 硫/硅酸盐混合
   io:         { w: 0.55, B0: 1.1, h: 0.07, g: -0.30 },
   // 冰质伽利略卫星：反照率较高，冲日效应弱
-  europa:     { w: 0.62, B0: 0.8, h: 0.05, g: -0.25 },
+  europa:     { w: 0.8, B0: 0.8, h: 0.05, g: -0.25 },
   ganymede:   { w: 0.45, B0: 0.8, h: 0.05, g: -0.25 },
   callisto:   { w: 0.22, B0: 1.0, h: 0.06, g: -0.28 },
-  // 土星冰卫星：极亮（Enceladus 接近 1），冲日效应弱
-  mimas:      { w: 0.70, B0: 0.7, h: 0.05, g: -0.22 },
-  enceladus:  { w: 0.92, B0: 0.5, h: 0.04, g: -0.20 },
-  tethys:     { w: 0.80, B0: 0.6, h: 0.05, g: -0.22 },
-  dione:      { w: 0.65, B0: 0.7, h: 0.05, g: -0.24 },
-  rhea:       { w: 0.72, B0: 0.7, h: 0.05, g: -0.24 },
+  // 土星冰卫星：极亮，冲日效应弱。
+  // **w 必须对上实测几何反照率**——此前给低了（土卫一实测 0.962 只给 0.70、
+  // 土卫四实测 0.998 只给 0.65），于是太阳系最亮的几颗冰卫星被渲染成深灰，
+  // 从轨道看是个暗球。这是星球级视角不逼真最直接的一条。
+  mimas:      { w: 0.99, B0: 0.7, h: 0.05, g: -0.22 },
+  enceladus:  { w: 0.98, B0: 0.5, h: 0.04, g: -0.20 },
+  tethys:     { w: 0.95, B0: 0.6, h: 0.05, g: -0.22 },
+  dione:      { w: 0.99, B0: 0.7, h: 0.05, g: -0.24 },
+  rhea:       { w: 0.98, B0: 0.7, h: 0.05, g: -0.24 },
   // 阴阳脸：这里取两半球折中值，暗区由贴图反照率承担
   iapetus:    { w: 0.45, B0: 0.9, h: 0.05, g: -0.28 },
   // 天卫：中等反照率冰岩混合
@@ -431,7 +434,7 @@ export const HAPKE_PARAMS = {
   titania:    { w: 0.30, B0: 0.9, h: 0.05, g: -0.27 },
   oberon:     { w: 0.25, B0: 1.0, h: 0.06, g: -0.28 },
   // 海卫一与冥族：氮/甲烷冰，反照率较高
-  triton:     { w: 0.72, B0: 0.8, h: 0.05, g: -0.25 },
+  triton:     { w: 0.9, B0: 0.8, h: 0.05, g: -0.25 },
   pluto:      { w: 0.45, B0: 0.9, h: 0.05, g: -0.27 },
   charon:     { w: 0.35, B0: 0.9, h: 0.05, g: -0.27 },
 };

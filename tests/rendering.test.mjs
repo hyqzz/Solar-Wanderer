@@ -9,7 +9,7 @@ import { SphereGeometry } from 'three';
 import { DEM_SOURCES, levelExceedsSource } from '../src/scene/demTiles.js';
 import { parseStarCatalog, bvToRgb, magToIntensity } from '../src/astro/starCatalog.js';
 import { CATALOG_COUNT } from '../src/astro/stars.generated.js';
-import { MOON_PHYS } from '../src/astro/bodies.js';
+import { MOON_PHYS, HAPKE_PARAMS } from '../src/astro/bodies.js';
 import { PRESETS } from '../src/scene/proceduralTextureData.js';
 import { BODIES } from '../src/astro/bodies.js';
 import { TNO_DATA } from '../src/astro/tno.js';
@@ -594,6 +594,22 @@ test('近地地面必须有可见质感（否则落地是一片平板）', () =>
   assert.ok(/tnoise2\(vObjPos \* 90\.0 \+ vec3\(7\.3, 2\.1, 5\.7\)\)/.test(src),
     '缺少坐标安全的中尺度（约 11 m）细节档');
   assert.ok(!/float dm = 0\.78 \+ 0\.46 \*/.test(src), '旧的弱调制仍在');
+});
+
+test('亮冰卫星的单元反照率与底色都要对上实测几何反照率', () => {
+  // 土卫一实测几何反照率 0.962（太阳系最高）、土卫四 0.998、土卫二 0.99、
+  // 土卫五 0.95——但它们此前 w 只给 0.65–0.92、底色用中灰 [120,118,116]，
+  // 从轨道看是暗球。这是星球级视角不逼真最直接的一条。
+  const REF = { mimas: 0.962, dione: 0.998, enceladus: 0.99, rhea: 0.95, tethys: 0.80 };
+  for (const [id, geo] of Object.entries(REF)) {
+    const w = HAPKE_PARAMS[id]?.w;
+    assert.ok(w !== undefined, `${id} 缺少 Hapke 参数`);
+    // 单元反照率 w 应不低于几何反照率太多（Hapke 下 w→1 时几何反照率才接近 1）
+    assert.ok(w >= geo * 0.9, `${id}: w=${w} 远低于实测几何反照率 ${geo}`);
+    const base = PRESETS[MOON_PHYS[id].surface.palette].base;
+    const lum = (base[0] * 0.299 + base[1] * 0.587 + base[2] * 0.114);
+    assert.ok(lum > 170, `${id} 底色亮度 ${lum.toFixed(0)} 太低（实测反照率 ${geo}）`);
+  }
 });
 
 test('每颗卫星都有自己的地表底色（不能都落在同一个 gray 上）', () => {
