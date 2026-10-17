@@ -41,6 +41,7 @@ export const BODIES = {
       // 金星可见的"地面"就是硫酸云顶，反照率约 0.7
       groundAlbedo: 0.7,
       skyFraction: 0.65,   // 硫酸云顶：漫射是主要照明
+      rho0: 65.0,          // 地面大气密度 kg/m³（约地球 53 倍）
       // 太空视角：multiplier 从 6 降到 1.5，使云层贴图不被散射光淹没，终结线可见
       heightKm: 90, rayleighScaleKm: 15.9, mieScaleKm: 5,
       // Rayleigh 橙色偏向：CO₂ + H₂SO₄ 云层优先吸收蓝光（Venera 着陆器实拍：橙琥珀色天空）
@@ -94,6 +95,7 @@ export const BODIES = {
       groundAlbedo: 0.2,
       ozone: 0.12,
       skyFraction: 0.45,   // 尘埃大气：漫射占比高于地球（沙尘期可达一半）
+      rho0: 0.020,         // 地面大气密度 kg/m³（地球的 1.6%）
       // 白昼：Rayleigh 红>蓝（模拟尘埃主导的黄褐色调）+ Mie 漫射 → 奶油黄褐色天空。
       // 日落：Fe₂O₃ 尘埃（~1.5 µm）分光 mieG 使蓝光前向散射峰远强于红光，
       //       太阳周围形成标志性蓝色/青色光晕——Curiosity Sol-956、Perseverance Sol-257 实拍印证。

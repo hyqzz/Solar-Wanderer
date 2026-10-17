@@ -938,3 +938,19 @@ body.cinematic #directory, body.cinematic .compass-widget { opacity: 0; }
     transition-duration: 0.001ms !important;
   }
 }
+
+/* 再入等离子鞘 / 气动加热的屏幕辉光（强度由 main.js 按 Sutton–Graves 律写入）。
+   从画面边缘向内的暖橙径向渐变：真实再入时等离子体在迎风面外沿最亮，
+   视觉上表现为四周泛橙、中心仍能看见前方。 */
+#reentry-glow {
+  position: fixed; inset: 0; pointer-events: none; z-index: 40;
+  opacity: 0; transition: opacity 0.12s linear;
+  background:
+    radial-gradient(ellipse at 50% 50%,
+      rgba(255, 150, 60, 0) 38%,
+      rgba(255, 120, 40, 0.18) 62%,
+      rgba(255, 90, 25, 0.42) 82%,
+      rgba(255, 70, 15, 0.62) 100%);
+  mix-blend-mode: screen;
+}
+body.cinematic #reentry-glow { z-index: 40; } /* 纯净模式下保留：它是画面的一部分 */

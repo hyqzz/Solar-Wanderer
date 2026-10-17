@@ -24,6 +24,25 @@ const isTyping = (e) => {
 // 指针锁定 movementX/Y 已知尖峰 → 每事件钳制
 const clampMove = (m) => Math.max(-150, Math.min(150, m));
 
+/**
+ * 指数大气模型（纯函数，便于验证）。
+ *   ρ(h) = ρ₀·exp(−h/H)，H 取该天体的 Rayleigh 标高（地球 8.5km、火星 11.1km——
+ *   与实测的大气密度标高同量级），ρ₀ 为该天体**地面密度**（地球 1.225 kg/m³、
+ *   火星 0.020、金星 65）。
+ *   q = ½ρv²（动压，Pa）；对流加热按 Sutton–Graves 律 q̇ ∝ √ρ·v³。
+ *
+ * 早期版本把标高写成 rayleighScaleKm·2.4（地球 20.4km）：这在 30km 以下还算贴合，
+ * 但 60km 处密度比真实值高约 200 倍，动压算出来是 MPa 量级、加热峰值落在 120km
+ * ——完全不对。标高必须用实测值。
+ */
+export function aeroAt(altKm, speedKmS, atm) {
+  const H = atm.rayleighScaleKm ?? 8;
+  const rho0 = atm.rho0 ?? 1.225;
+  const rho = rho0 * Math.exp(-Math.max(altKm, 0) / H);
+  const vMS = speedKmS * 1000;
+  return { rho, q: 0.5 * rho * vMS * vMS, heat: Math.sqrt(Math.max(rho, 0)) * vMS * vMS * vMS };
+}
+
 export class Input {
   constructor(dom, canvas = null) {
     this.keys = new Set();
@@ -510,6 +529,33 @@ export class Ship {
       this.vel.addScaledVector(_v1, cap * boost * 0.5 * dt);
     }
     if (!this.gravityMode && input.tapped('KeyX')) this.vel.set(0, 0, 0);
+
+    // === 大气阻力与气动加热 ===
+    // 此前只有音效层（audio.js 的再入轰鸣），**没有任何物理**：以 7 km/s 冲进
+    // 地球大气，既没有阻力、也没有加热、没有过载。这是"相机漫游"与"飞行模拟"
+    // 的分界，也是最容易一眼看穿的缺失之一。
+    //
+    // 模型：指数大气 ρ(h)=ρ0·exp(-h/H)；阻力加速度 a = q/β（q=½ρv²，β 为弹道
+    // 系数）；对流加热按 Sutton–Graves 律 q̇ ∝ √ρ·v³。
+    // 这些量同时驱动相机抖动与等离子鞘的强度（见 main.js）。
+    this.aero = this.aero || { q: 0, heat: 0, rho: 0, alt: Infinity };
+    {
+      const nb = env.nearest;
+      const atmN = nb?.phys?.atmosphere;
+      if (atmN && Number.isFinite(nb.distSurface)) {
+        const alt = Math.max(nb.distSurface, 0);            // km
+        const a = aeroAt(alt, this.vel.length(), atmN);
+        this.aero.rho = a.rho; this.aero.alt = alt; this.aero.q = a.q; this.aero.heat = a.heat;
+        if (a.q > 1e-6) {
+          // 弹道系数 β = m/(Cd·A) ≈ 500 kg/m²（钝头返回舱量级）
+          const aMS = a.q / 500;
+          const dv = Math.min(this.vel.length(), aMS * 1e-3 * dt);   // km/s
+          if (this.vel.length() > 0) this.vel.multiplyScalar(1 - dv / this.vel.length());
+        }
+      } else {
+        this.aero.q = 0; this.aero.heat = 0; this.aero.rho = 0; this.aero.alt = Infinity;
+      }
+    }
 
     // 记录积分前的位置：碰撞要做**扫掠**判定（见下方），只判"移动之后的位置"
     // 会让高速飞船直接穿过天体。

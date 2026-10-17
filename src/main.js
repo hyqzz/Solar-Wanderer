@@ -882,6 +882,28 @@ function loop() {
       boosting: input.keys?.has?.('ShiftLeft') || input.keys?.has?.('ShiftRight'),
     });
     camera.quaternion.multiply(feel.quaternion);   // 模块只在返回值里给四元数，不是属性
+    // 再入过载抖动：动压 q = ½ρv² 驱动。与"相机语言"的冲击抖动分开——
+    // 那是离散事件的衰减脉冲，这里是**持续**的湍流抖动，只有在大气里高速穿行时才有。
+    {
+      const q = ship.aero?.q ?? 0;
+      if (q > 150) {
+        const amp = Math.min(0.022, q * 2.2e-5);
+        const t = performance.now() * 0.001;
+        _shakeE.set(Math.sin(t * 37.0) * amp, Math.sin(t * 29.0 + 1.7) * amp, Math.sin(t * 43.0 + 3.1) * amp * 0.6);
+        _shakeQ.setFromEuler(_shakeE);
+        camera.quaternion.multiply(_shakeQ);
+      }
+    }
+    // 等离子鞘 / 气动加热的屏幕辉光：Sutton–Graves 律 q̇ ∝ √ρ·v³。
+    // 归一化到 2e10（60km/7.8km/s 量级为 1），从 ~85km 开始可见。
+    {
+      const heat = ship.aero?.heat ?? 0;
+      const plasma = Math.min(1, Math.max(0, heat / 2e10));
+      if (Math.abs(plasma - _plasmaShown) > 0.004) {
+        _plasmaShown = plasma;
+        reentryGlow.style.opacity = plasma.toFixed(3);
+      }
+    }
     camera.fov = THREE.MathUtils.clamp(cameraFovBase + feel.fovBiasDeg, 10, 100);
     camera.updateProjectionMatrix();
   } catch (e) { loopErr('cameraFeel', e); }
@@ -1134,6 +1156,9 @@ function findNearest() {
       best = {
         id, posKm: e.posKm, radiusKm: e.phys.radiusKm,
         landable: !!e.phys.landable, distSurface: ds,
+        // 带上 phys：飞船的大气阻力/气动加热要用 nearest.phys.atmosphere。
+        // 此前只有 id，各处只能绕道 builder.bodies.get(id).phys。
+        phys: e.phys,
       };
     }
   }
@@ -1542,6 +1567,17 @@ function applyLocationHash() {
 }
 
 // ── VR 控制器事件（WebXRManager 回调）─────────────────────────────────
+const _shakeE = new THREE.Euler();
+const _shakeQ = new THREE.Quaternion();
+let _plasmaShown = -1;
+// 再入等离子鞘的屏幕辉光（DOM 覆盖层：比后期通道便宜，且不影响 HDR 管线）
+const reentryGlow = (() => {
+  const d = document.createElement('div');
+  d.id = 'reentry-glow';
+  d.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(d);
+  return d;
+})();
 const _xrOrigin = new THREE.Vector3();
 const _xrDir = new THREE.Vector3();
 const _xrV = new THREE.Vector3();

@@ -1213,3 +1213,31 @@ test('有环天体有环照（土星夜面不是全黑）', () => {
   assert.ok(/uRingShine/.test(mat) && /uRingShine\.value = /.test(b), '缺少环照强度');
   assert.ok(/col \+= albedo \* uRingShine \* ringSide;/.test(mat), '缺少环照贡献项');
 });
+
+// ── 再入：大气模型必须与实测密度同量级 ──────────────────────────────────────
+// 早期把标高写成 rayleighScaleKm·2.4（地球 20.4km）：30km 以下还算贴合，
+// 但 60km 处密度比真实值高约 200 倍，动压算出来是 MPa、加热峰值落在 120km。
+
+test('再入大气模型：60km 处动压落在真实峰值量级（10–40 kPa）', async () => {
+  const { aeroAt } = await import('../src/engine/ship.js');
+  const earth = { rayleighScaleKm: 8.5, rho0: 1.225 };
+  const a60 = aeroAt(60, 7.8, earth);
+  assert.ok(a60.q > 1e4 && a60.q < 4e4,
+    `60km/7.8km/s 的动压 ${(a60.q / 1000).toFixed(1)} kPa 不在 10–40 kPa 区间`);
+  // 120km 应当几乎真空
+  assert.ok(aeroAt(120, 7.8, earth).q < 100, '120km 处动压应接近零（<100 Pa，对比 60km 的 32 kPa）');
+  // 加热随密度平方根 × 速度立方增长
+  assert.ok(aeroAt(60, 7.8, earth).heat > aeroAt(120, 7.8, earth).heat);
+  // 火星（稀薄大气）同高度动压应远低于地球
+  const mars = { rayleighScaleKm: 11.1, rho0: 0.020 };
+  assert.ok(aeroAt(60, 7.8, mars).q < a60.q / 20, '火星 60km 动压应远低于地球');
+});
+
+test('再入有物理实现，不只是音效', () => {
+  const s = read('src/engine/ship.js');
+  const m = read('src/main.js');
+  assert.ok(/export function aeroAt/.test(s), '缺少 aeroAt 模型');
+  assert.ok(/this\.vel\.multiplyScalar\(1 - dv \/ this\.vel\.length\(\)\)/.test(s), '缺少阻力减速');
+  assert.ok(/ship\.aero\?\.q/.test(m), '相机抖动未接动压');
+  assert.ok(/reentry-glow/.test(m), '缺少等离子鞘辉光');
+});
