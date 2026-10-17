@@ -350,6 +350,14 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   // 与灰盘面在交界处形成色块）。改为纯白后两侧一致，月面呈中性灰（阿波罗实拍）。
   const sunLight = new THREE.PointLight(0xffffff, 1, 0, 0);
   sun.group.add(sunLight);
+  // 天空光：大气散射照亮的**地面**。真实地表不只受直射阳光——整片天空是一个
+  // 大面光源。黄昏时太阳高度低、直射光几乎消失，而天空仍然亮，地面因此不会全黑；
+  // 没有这一项时，火星/地球的黄昏地面是一片死黑（实测 mars-ground-dusk 前景
+  // 几乎纯黑，只有地平线一条亮边）。
+  // 颜色直接取该天体大气的 Rayleigh 分光系数——地球偏蓝、火星橙、金星琥珀，
+  // 是同一个物理量，不是手挑的颜色。强度取直射光的 skyFraction（晴空散射占比）。
+  const skyLight = new THREE.HemisphereLight(0x8fb4ff, 0x40382e, 0);
+  scene.add(skyLight);
   // 近场太阳阴影装置：行走/超低空时把光照从点光源平滑移交到跟随玩家的
   // 平行光（地表尺度上阳光本就近似平行），由它投射岩石/地形自我阴影——
   // 无阴影的岩石像贴图浮在地上（地表审查"照片级"缺口之首）。
@@ -774,6 +782,25 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
         1.0 + (gt[2] - 1.0) * w);
     } else {
       sunLight.color.setHex(0xffffff);
+    }
+    // 天空光强度与颜色（见 sunLight 处的说明）
+    {
+      const atm = nearestE?.phys.atmosphere;
+      if (atm) {
+        const r = atm.rayleigh ?? [1, 1, 1];
+        const mx = Math.max(r[0], r[1], r[2], 1e-12);
+        // 天空色 = Rayleigh 分光系数的归一化（同一个物理量，不是手挑的颜色）
+        skyLight.color.setRGB(r[0] / mx, r[1] / mx, r[2] / mx);
+        // 地面反射色取该天体的地面反照率灰阶
+        const ga = atm.groundAlbedo ?? 0.15;
+        skyLight.groundColor.setRGB(ga * 1.1, ga * 0.95, ga * 0.8);
+        // skyFraction：晴空下漫射/总辐照 ≈ 0.1–0.15；尘埃大气的火星更高；
+        // 金星（硫酸云顶）与土卫六（厚霾）接近一半。
+        const frac = atm.skyFraction ?? 0.12;
+        skyLight.intensity = Math.PI * li * frac;
+      } else {
+        skyLight.intensity = 0;
+      }
     }
     // 近场阴影移交：可登陆天体表面 2.7km 以下，光照平滑从点光源切到平行光
     // 阴影装置（局部阳光本就近似平行）；0.3km 以下完全由装置接管。

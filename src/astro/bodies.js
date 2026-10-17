@@ -40,6 +40,7 @@ export const BODIES = {
     atmosphere: {
       // 金星可见的"地面"就是硫酸云顶，反照率约 0.7
       groundAlbedo: 0.7,
+      skyFraction: 0.65,   // 硫酸云顶：漫射是主要照明
       // 太空视角：multiplier 从 6 降到 1.5，使云层贴图不被散射光淹没，终结线可见
       heightKm: 90, rayleighScaleKm: 15.9, mieScaleKm: 5,
       // Rayleigh 橙色偏向：CO₂ + H₂SO₄ 云层优先吸收蓝光（Venera 着陆器实拍：橙琥珀色天空）
@@ -68,8 +69,9 @@ export const BODIES = {
     rotation: 'iau', landable: true,
     surface: { ampKm: 2.5, roughness: 0.5, craters: 0, palette: 'earth', ocean: true },
     atmosphere: {
-                        groundAlbedo: 0.12,
-                        ozone: 1,
+      groundAlbedo: 0.12,
+      ozone: 1,
+      skyFraction: 0.20,   // 晴空漫射/总辐照（地面被天空照亮的那一份）
       heightKm: 60, rayleighScaleKm: 8.5, mieScaleKm: 1.2,
       // multiplier 0.72：太空视角减弱盘面内散射（真实 Blue Marble 观感为深蓝海洋，
       // 强 Rayleigh 内散射把整个白昼面罩上一层淡青纱）；地表天空亮度由 interiorBoost 补偿回 1.0
@@ -89,8 +91,9 @@ export const BODIES = {
     rotation: 'iau', landable: true,
     surface: { ampKm: 8, roughness: 0.6, craters: 0.6, palette: 'mars' },
     atmosphere: {
-                        groundAlbedo: 0.2,
-                        ozone: 0.12,
+      groundAlbedo: 0.2,
+      ozone: 0.12,
+      skyFraction: 0.45,   // 尘埃大气：漫射占比高于地球（沙尘期可达一半）
       // 白昼：Rayleigh 红>蓝（模拟尘埃主导的黄褐色调）+ Mie 漫射 → 奶油黄褐色天空。
       // 日落：Fe₂O₃ 尘埃（~1.5 µm）分光 mieG 使蓝光前向散射峰远强于红光，
       //       太阳周围形成标志性蓝色/青色光晕——Curiosity Sol-956、Perseverance Sol-257 实拍印证。
@@ -262,7 +265,7 @@ export const MOON_PHYS = {
   titan:     { nameZh: '土卫六', nameEn: 'Titan', parent: 'saturn', radiusKm: 2574.7, gm: 8.978e3,
                landable: true, surface: { ampKm: 1.5, roughness: 0.4, craters: 0.1, palette: 'titan' },
                textures: { map: 'titan.jpg' },
-               atmosphere: { groundAlbedo: 0.10, heightKm: 200, rayleighScaleKm: 20, mieScaleKm: 30,
+               atmosphere: { groundAlbedo: 0.10, skyFraction: 0.55, heightKm: 200, rayleighScaleKm: 20, mieScaleKm: 30,
                              // multiplier 1.6：太空视角降低霾层盘面内散射（旧值 3.0 把橙色霾
                              // 洗成粉米色；卡西尼实拍为饱和橙黄盘）；地表橙色天空由 interiorBoost 补偿
                              // 分光 mie：tholin 霾强烈吸收蓝光（红>绿>蓝散射），

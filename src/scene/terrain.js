@@ -50,12 +50,134 @@ const sstep = (a, b, x) => {
 };
 
 /** 高度/颜色场：每个可登陆天体一个，懒创建 */
+/** 整数哈希 → [0,1)。用于按格号确定性地决定"这一格有没有坑、坑心在哪、多大"。 */
+function ihash(x, y, z, s) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263)
+        ^ Math.imul(z | 0, 2147483647) ^ Math.imul(s | 0, 144665);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** 坑深（km）。观测到的形态转变，不是可调参数：
+ *  简单坑（D<15km）是碗形，深径比 ~0.2（线性）；
+ *  过了 15km 进入复杂坑，深度-直径关系**不再是线性的**——平底、中央峰、阶地
+ *  出现，深径比迅速下降。用幂律拟合实测：Orientale（930km）约 6km 深、
+ *  Caloris（1550km）约 8km，都远浅于线性外推（那会得到 190/310km，直接穿模）。 */
+function craterDepth(D) {
+  return D < 15 ? 0.20 * D : 2.4 * Math.pow(D / 15, 0.28);
+}
+
+/** 归一化剖面（x = r/R，返回值为 depth 的倍数）。 */
+function craterProfile(x, complex) {
+  if (x >= 2.4) return 0;
+  if (x >= 1.0) {
+    // 溅射毯：外侧缓坡抬升，幂律衰减（真实坑的溅射毯可延伸约一个坑半径）
+    const t = (2.4 - x) / 1.4;
+    return 0.18 * t * t * t;
+  }
+  // 坑缘环（抬升）
+  const rim = 0.24 * Math.exp(-((x - 0.94) ** 2) / 0.012);
+  let bowl;
+  if (complex) {
+    // 复杂坑：平底 + 中央峰 + 阶地
+    bowl = x < 0.62 ? -1 : -(1 - ((x - 0.62) / 0.38) ** 2);
+    bowl += 0.35 * Math.exp(-(x * x) / 0.012);
+    if (x > 0.62) bowl += 0.09 * Math.cos(x * 22);
+  } else {
+    bowl = -(1 - x * x);   // 碗形
+  }
+  return bowl + rim;
+}
+
+/**
+ * 撞击坑场：按**尺寸-频率分布**分层放置具有真实形态的坑。
+ *
+ * 为什么不能用噪声等值线（原实现 `crater()` 的做法）：真实撞击坑有确定的形态学——
+ * 碗形/平底、抬升的坑缘、中央峰、外侧溅射毯，以及随直径变化的形态转变。噪声等值线
+ * 给不出这些，落到地面一眼就假。
+ *
+ * 分布用经典的主带观测律 **N(>D) ∝ D⁻²**：单位面积上直径 ≥D 的坑数与 D² 成反比。
+ * 它等价于"每一档的平均间距 ∝ D"，所以这条律同时约束了坑的**数量**与**尺寸**，
+ * 不是随手调的——间距比例常数取 3.2（坑心间距约为直径的 3.2 倍，互相不重叠）。
+ */
+class CraterField {
+  constructor(seed, radiusKm, maxD, minDOverride = null) {
+    this.R = radiusKm;
+    this.salt = seed >>> 0;
+    this.classes = [];
+    // 最小档取 8m 与 R/40000 中较大者：再小的坑在顶点分辨率下只会变成噪声
+    // （行走尺度的起伏由 8–50m 这几档承担——真实月面在**所有**尺度上都有坑，
+    //  只到 50m 的话落到地面仍然是一片平坡）。
+    // minDOverride：细尺度场要的是**绝对**下限（8m，行走尺度），不能按半径缩放——
+    // 按 R/40000 算的话月球上是 43m，恰恰把行走尺度的那几档砍掉了。
+    const minD = minDOverride ?? Math.max(0.008, radiusKm / 40000);
+    let i = 0;
+    for (let D = maxD; D > minD; D /= 2.2, i++) {
+      this.classes.push({ D, cell: D * 2.6, depth: craterDepth(D), complex: D >= 15, k: i });
+    }
+  }
+
+  /** dir: 体固系单位向量。返回该处的高程贡献（km）。 */
+  at(dir) {
+    const R = this.R;
+    const lat = Math.asin(Math.max(-1, Math.min(1, dir.y)));
+    const lon = Math.atan2(-dir.z, dir.x);
+    const cosLat = Math.max(Math.cos(lat), 1e-3);
+    let h = 0;
+    for (const c of this.classes) {
+      // 该档的格网：纬度方向 cell/R 弧度，经度方向按 cosLat 展宽（近似等面积）
+      const dLat = c.cell / R;
+      const dLon = c.cell / (R * cosLat);
+      const iLat = Math.floor(lat / dLat), iLon = Math.floor(lon / dLon);
+      const seed = this.salt + c.k * 7919;
+      for (let a = -1; a <= 1; a++) {
+        const gi = iLat + a;
+        for (let b = -1; b <= 1; b++) {
+          const gj = iLon + b;
+          if (ihash(gi, gj, c.k, seed) > 0.62) continue;   // 该格没有坑
+          const u = ihash(gi, gj, c.k + 101, seed);
+          const v = ihash(gi, gj, c.k + 202, seed);
+          const rr = ihash(gi, gj, c.k + 303, seed);
+          // 坑心落在格内（留出边距，避免坑心贴着格边导致剖面被切断）
+          const cLat = (gi + 0.15 + u * 0.7) * dLat;
+          const cLon = (gj + 0.15 + v * 0.7) * dLon;
+          // 坑半径在 [0.55, 1.0]·D/2 内变化
+          const cr = c.D * (0.275 + rr * 0.225);
+          // 与坑心的角距 → 弧长（km）
+          const dLatA = lat - cLat;
+          const dLonA = lon - cLon;
+          const cosD = Math.sin(lat) * Math.sin(cLat)
+                     + Math.cos(lat) * Math.cos(cLat) * Math.cos(dLonA);
+          const ang = Math.acos(Math.max(-1, Math.min(1, cosD)));
+          const rKm = ang * R;
+          if (rKm > cr * 2.4) continue;
+          h += c.depth * craterProfile(rKm / cr, c.complex);
+        }
+      }
+    }
+    return h;
+  }
+}
+
 export class HeightField {
   constructor(bodyId, phys, mapImageData = null) {
     this.bodyId = bodyId;
     this.phys = phys;
     this.sp = phys.surface ?? { ampKm: 2, roughness: 0.5, craters: 0.5, palette: 'gray' };
     this.noise = makeNoise(hashSeed(bodyId));
+    // 撞击坑场：有 craters 权重的天体才建。直径上限取半径的 45%——真实的巨型
+    // 盆地确实有这么大（土卫一的 Herschel 139km = 0.7R、水星的 Caloris 1550km
+    // = 0.64R），而它们的深度由上面的幂律压得很浅，不会把星球挖穿。
+    this.craterField = (this.sp.craters ?? 0) > 0
+      ? new CraterField(hashSeed(bodyId + ':crater'), phys.radiusKm, phys.radiusKm * 0.45)
+      : null;
+    // 细尺度坑场：DEM 只覆盖到它的源分辨率（月球 2.67km/px、火星 2.60、地球 9.77），
+    // **以下就什么都没有了**——而真实地表在所有尺度上都有坑。这一层专门补 DEM
+    // 分辨率之下的坑，与真实高程不打架（它只活在 DEM 看不见的那一段）。
+    this.craterFine = (this.sp.craters ?? 0) > 0
+      ? new CraterField(hashSeed(bodyId + ':crater-fine'), phys.radiusKm,
+          { moon: 2.6, mars: 2.5, earth: 9.5 }[bodyId] ?? 2.5, 0.008)
+      : null;
     this.map = mapImageData; // {data,width,height} 用于颜色与海洋掩码
     this.demSource = null;   // DEM 瓦片源（月球 LOLA / 火星 MOLA），由 setDEMSource 注入
     this._alb = null;        // 贴图亮度的高通场，见 _albedoReliefAt
@@ -199,7 +321,11 @@ export class HeightField {
     // body's kilometre-scale mountain amplitude. This is detail, not measured DEM.
     const detail = 0.001 * n.fbm(dir.x * 8000, dir.y * 8000, dir.z * 8000, 2)
       + 0.0006 * n.fbm(dir.x * 42000, dir.y * 42000, dir.z * 42000, 2);
-    return R + demH + detail;
+    // DEM 分辨率以下的撞击坑（见 craterFine 的说明）。量级是物理的（km），单独相加。
+    const fine = this.craterFine
+      ? Math.max(-0.5, Math.min(0.5, this.craterFine.at(dir) * (this.sp.craters ?? 0)))
+      : 0;
+    return R + demH + detail + fine;
   }
 
   /** 纯程序化噪声地形（现有行为，DEM 不可用时回退到此） */
@@ -207,15 +333,19 @@ export class HeightField {
     const R = this.baseRadius(dir);
     const sp = this.sp;
     const n = this.noise;
+    let hCrater = 0;   // 撞击坑贡献（km，物理量级）
     // 大尺度构造（高原/盆地）
     let h = 0.42 * n.fbm(dir.x * 1.6, dir.y * 1.6, dir.z * 1.6, 4);
     // 山地掩码：山脉成链而非满地皆山（NMS 式地貌分区）
     const mMask = sstep(-0.05, 0.5, n.fbm(dir.x * 2.7 + 31.7, dir.y * 2.7, dir.z * 2.7, 3));
     h += mMask * 0.6 * sp.roughness * (n.ridged(dir.x * 7, dir.y * 7, dir.z * 7, 5) * 2 - 1);
     h += 0.16 * n.fbm(dir.x * 30, dir.y * 30, dir.z * 30, 4);
-    // 双尺度撞击坑
-    if (sp.craters > 0) {
-      h += sp.craters * (this.crater(dir, 22) * 0.9 + this.crater(dir, 85) * 0.45);
+    // 撞击坑：由 CraterField 按尺寸-频率分布给出**真实形态**的高程（km），
+    // 不再用噪声等值线。它的量级是物理的（深度由直径决定），所以不乘 ampKm；
+    // 只按 craters 权重缩放，并给一个"总起伏不超过半径 8%"的安全上限。
+    if (this.craterField) {
+      const cap = this.phys.radiusKm * 0.08;
+      hCrater = Math.max(-cap, Math.min(cap, this.craterField.at(dir) * sp.craters));
     }
     // 细节频率（行走尺度起伏：~2km / ~200m / ~40m 波长）。
     // 小天体（R < 400 km）上固定振幅的高频细节会按半径比例放大尖刺感，
@@ -231,8 +361,8 @@ export class HeightField {
     h += 0.45 * this._albedoReliefAt(dir);
     // 安全上限：噪声幅度不超过天体平均半径的 5%，防止小天体（Phobos 等）山脉过高
     const effAmp = Math.min(sp.ampKm, this.phys.radiusKm * 0.05);
-    // 抬升保证地形在全球光滑球面之上
-    return R + effAmp * (h * 0.5 + 0.62);
+    // 抬升保证地形在全球光滑球面之上。撞击坑是物理量级（km），单独相加。
+    return R + effAmp * (h * 0.5 + 0.62) + hCrater;
   }
 
   isOcean(dir) {

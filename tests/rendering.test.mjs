@@ -1039,3 +1039,36 @@ test('曝光律：uSunI = 1/d²、曝光 = K·d²，两者相乘与距离无关'
     assert.ok(Math.abs(p - K) < 1e-6, `d=${d} AU 时 sunI×曝光 = ${p}，应为常数 ${K}`);
   }
 });
+
+// ── 地貌生成器：撞击坑必须按尺寸-频率分布、且有真实形态 ──────────────────────
+// 原实现用噪声等值线（`crater()`），给不出碗形/平底、抬升的坑缘、中央峰、溅射毯，
+// 也谈不上尺寸分布——落到地面一眼就假。
+
+test('撞击坑场：尺寸-频率分布 N(>D) ∝ D⁻²，且形态随直径转变', async () => {
+  const { HeightField } = await import('../src/scene/terrain.js');
+  const { MOON_PHYS } = await import('../src/astro/bodies.js');
+  const f = new HeightField('moon', MOON_PHYS.moon);
+  assert.ok(f.craterField, '月球应有撞击坑场');
+  const cs = f.craterField.classes;
+  assert.ok(cs.length >= 10, `坑的尺寸档数应足够（实测 ${cs.length}）`);
+  // 相邻档的间距比应 ≈ 尺寸比（N(>D)∝D⁻² 的直接推论）
+  for (let i = 1; i < cs.length; i++) {
+    const ratio = cs[i - 1].cell / cs[i].cell;
+    assert.ok(ratio > 1.5 && ratio < 3.0, `第 ${i} 档间距比 ${ratio.toFixed(2)} 偏离尺寸分布律`);
+  }
+  // 深度-直径关系：小坑线性（0.2D），大坑进入复杂坑后显著变浅
+  const small = cs.find((c) => c.D < 10);
+  const big = cs[0];
+  assert.ok(Math.abs(small.depth / small.D - 0.2) < 1e-6, '简单坑深径比应为 0.2');
+  assert.ok(big.depth / big.D < 0.05, `最大坑的深径比 ${(big.depth / big.D).toFixed(3)} 应远小于 0.2（复杂坑/盆地）`);
+});
+
+test('DEM 分辨率以下也有撞击坑（否则落地仍是平坡）', async () => {
+  const { HeightField } = await import('../src/scene/terrain.js');
+  const { MOON_PHYS } = await import('../src/astro/bodies.js');
+  const f = new HeightField('moon', MOON_PHYS.moon);
+  assert.ok(f.craterFine, '应有 DEM 分辨率以下的细坑场');
+  // 最细档应到行走尺度（约 10m），而不是停在 50m
+  const minD = f.craterFine.classes[f.craterFine.classes.length - 1].D;
+  assert.ok(minD <= 0.012, `细坑场最细档 ${minD}km 太粗，行走尺度仍是平坡`);
+});

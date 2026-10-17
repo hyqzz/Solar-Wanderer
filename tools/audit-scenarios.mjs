@@ -165,6 +165,11 @@ const SCENARIOS = [
   ['titan-ground-up', async () => { await look(1.15, 0); await wait(3000); }],
   ['moon-ground-horizon', async () => { await land('moon', 8, 0); await look(0.05, 0); await wait(10000); }],
   ['moon-ground-up', async () => { await look(1.15, 0); await wait(3000); }],
+  // 低太阳角机位：日下点正顶照时起伏不投影、看不见——判"地面有没有地貌"
+  // 必须在斜射光下看。偏 80° 经度约等于太阳高度 10°。
+  ['moon-ground-dusk', async () => { await land('moon', 8, 80); await look(0.05, 0); await wait(10000); }],
+  ['mars-ground-dusk', async () => { await land('mars', 18, 80); await look(0.05, 0); await wait(10000); }],
+  ['mercury-ground-horizon', async () => { await land('mercury', 20, 0); await look(0.05, 0); await wait(10000); }],
   ['europa-ground-horizon', async () => { await land('europa', 12, 0); await look(0.05, 0); await wait(10000); }],
   ['enceladus-ground-horizon', async () => { await land('enceladus', 5, 0); await look(0.05, 0); await wait(10000); }],
   ['io-ground-horizon', async () => { await land('io', 15, 0); await look(0.05, 0); await wait(10000); }],
