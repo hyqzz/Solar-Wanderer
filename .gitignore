@@ -57,6 +57,8 @@ docs/sdlc/screenshots/*
 
 tools/.cache-dem/
 tools/.shot-*
+tools/.bench/
+tools/.audit-scenarios/
 
 # ---- 本地审计产物 ----
 .audit-reports/
