@@ -150,13 +150,21 @@ const state = () => p.evaluate(() => {
 
 const SCENARIOS = [
   ['earth-space', async () => { await orbit('earth', 6371 * 3.2, null, null); await wait(7000); }],
+  ['earth-space-late', async () => { await orbit('earth', 6371 * 3.2, null, null); await wait(22000); }],
   ['earth-leo', async () => { await orbit('earth', 6371 + 400, null, null); await wait(9000); }],
   ['earth-night', async () => { const s = await localOf('earth', 'anti'); await orbit('earth', 6371 * 3.2, s.lat, s.lon); await wait(7000); }],
   ['earth-ground-horizon', async () => { await land('earth', 30, 0); await look(0.03, 0); await wait(9000); }],
   ['earth-ground-up', async () => { await look(1.15, 0); await wait(3000); }],
   ['earth-underwater', async () => {
-    await p.evaluate(() => { const s = window.__game.ship; if (s?.walk) s.walk.underwater = true; const w = window.__game.ship.walk; if (w) w.pitch = 0.1; });
-    await wait(6000);
+    // 先真的落到海面（每个场景都会重开页面，不能依赖上一个场景的状态），
+    // 再下潜：陆地上设 underwater 是无效的——水下环境由 isWater 决定。
+    await land('earth', 12, 0);
+    await p.evaluate(() => {
+      const g = window.__game;
+      g.ship.posKm[0] -= 0.06; g.ship.posKm[1] -= 0.06;   // 下沉 ~60m
+      if (g.ship.walk) g.ship.walk.pitch = 0.35;
+    });
+    await wait(9000);
   }],
   ['mars-space', async () => { await orbit('mars', 3390 * 3.0, null, null); await wait(7000); }],
   ['mars-ground-horizon', async () => { await land('mars', 18, 0); await look(0.04, 0); await wait(10000); }],
