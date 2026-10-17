@@ -1266,7 +1266,18 @@ let lastBoosted = null; // 上一个被密度增幅的大气网格（离开时�
 function updateAtmosphereFogAndExposure(nearest, dt) {
   const dSunAU = Math.hypot(ship.posKm[0], ship.posKm[1], ship.posKm[2]) / KM_PER_AU;
   // 近日处压低曝光以保留米粒组织细节；行星处≈1；外太阳系适度提亮
-  exposureTarget = THREE.MathUtils.clamp(Math.pow(Math.max(dSunAU, 0.004), 0.85), 0.25, 12);
+  // 曝光 = 相机到太阳距离的平方（纯测光）。与各天体的 uSunI = 1/d² 相乘后恒为 1，
+  // 于是"表面亮度只由反照率决定"——这才是相机的行为，也是"身临其境"的前提：
+  // 飞到冥王星，相机自己会开大光圈，冥王星看起来仍是一颗正常亮度的星球；
+  // 而在同一视野里比较远近两个天体时，远处那个正确地更暗。
+  //
+  // 原来是 pow(dAU, 0.85) 且钳在 [0.25, 12]：13 AU 以上不再补偿，而 uSunI 仍在
+  // 按 (1/d²)^0.55 下降 → 外太阳系盘面持续变暗（冥王星渲染近黑）。
+  //
+  // 系数 0.75 是**色调映射的标定**：反照率 1（纯白面）在相机所在距离处应当落在
+  // ACES 压缩拐点（约 0.8 线性）之下，这样比平均更亮的地貌（冥王星"心形"亮区
+  // 反照率 ~0.86）才不会被削成白斑。取 1.0 时冥王星盘面 10.6% 过曝、亮心糊成一片白。
+  exposureTarget = THREE.MathUtils.clamp(0.75 * Math.max(dSunAU, 0.004) ** 2, 0.02, 2000);
 
   let fogDensity = 0;
   let skyFade = 1; // 白昼大气内星空淡出（日光散射淹没星光，物理正确）

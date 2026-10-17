@@ -1013,3 +1013,29 @@ test('统计点云用小精灵贴图而不是方块（密集时方块肉眼可�
   assert.ok(/softDotTexture/.test(src), '缺少软边点精灵');
   assert.ok(/map:\s*softDotTexture\(\)/.test(src), 'PointsMaterial 未使用软边贴图');
 });
+
+// ── 曝光律：表面亮度必须只由反照率决定 ────────────────────────────────────────
+// 此前 sunI 与曝光各带一个经验指数（(1/d²)^0.55 与 d^0.85），两者相乘后仍随
+// 日心距变化，于是**跨距离的亮度排序是错的**：水星（反照率 0.106）渲染出来
+// 比火星（0.25）还亮，因为水星拿到 2.77 的光照系数而火星只有 0.588。
+
+test('曝光律：uSunI = 1/d²、曝光 = K·d²，两者相乘与距离无关', () => {
+  const b = read('src/scene/builder.js');
+  const m = read('src/main.js');
+  assert.ok(/const sunI = 1 \/ \(dAU \* dAU\);/.test(b),
+    'uSunI 必须是纯反平方律，不能再带 ^0.55 的暗适应压缩');
+  assert.ok(!/Math\.pow\(sunIRaw, 0\.55\)/.test(b), '旧的暗适应压缩仍在');
+  assert.ok(/sunLight\.intensity = Math\.PI \* li;/.test(b),
+    '地形光必须与盘面同一条律（原来取 pow(li,0.55)，水星上地形比盘面暗 2.4 倍）');
+  const e = m.match(/exposureTarget = THREE\.MathUtils\.clamp\(([\d.]+) \* Math\.max\(dSunAU, 0\.004\) \*\* 2, ([\d.]+), ([\d.]+)\);/);
+  assert.ok(e, '曝光必须写成 K·d² 的形式');
+  const K = Number(e[1]);
+  assert.ok(K > 0.3 && K < 1.2, `曝光标定系数 ${K} 应在 (0.3, 1.2)：太小画面发灰、太大亮部削顶`);
+  // 数值验算：乘积 = K，与 dAU 无关
+  const sunI = (d) => 1 / (d * d);
+  const expo = (d) => Math.min(2000, Math.max(0.02, K * d * d));
+  for (const d of [0.39, 1.0, 1.58, 5.31, 9.43, 35.6]) {
+    const p = sunI(d) * expo(d);
+    assert.ok(Math.abs(p - K) < 1e-6, `d=${d} AU 时 sunI×曝光 = ${p}，应为常数 ${K}`);
+  }
+});

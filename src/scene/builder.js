@@ -639,10 +639,17 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       const dKm = Math.hypot(e.posKm[0], e.posKm[1], e.posKm[2]);
       const dAU = Math.max(dKm / KM_PER_AU, 1e-6);
       _sunDir.set(-e.posKm[0] / dKm, -e.posKm[1] / dKm, -e.posKm[2] / dKm);
-      // 人眼暗适应补偿（R7 #4，SpaceEngine 观感）：辐照低于地球时按 I^0.55 部分提亮，
-      // 仅作用于太阳光照通道（星空/曝光不受影响）；地球处 =1、内太阳系不变
-      const sunIRaw = 1 / (dAU * dAU);
-      const sunI = sunIRaw >= 1 ? sunIRaw : Math.pow(sunIRaw, 0.55);
+      // 辐照度按物理反平方律，**不做任何压缩**。
+      //
+      // 此前是"人眼暗适应补偿"：dAU>1 时按 (1/d²)^0.55 提亮。它和曝光律
+      // （main.js 的 d^0.85）叠在一起，使 `sunI × 曝光` 随日心距变化——
+      // 于是**跨距离的亮度排序是错的**：水星（反照率 0.106）渲染出来比
+      // 火星（0.25）还亮，因为水星拿到了 2.77 的光照系数而火星只有 0.588。
+      //
+      // 现在 sunI = 1/d²，曝光 = d²（相机按日心距自动曝光），两者的乘积恒为 1，
+      // 表面亮度**只由反照率决定**：站在哪个天体上，它都按自己的反照率呈现；
+      // 而在同一视野里比较两个不同距离的天体时，远处那个正确地更暗。
+      const sunI = 1 / (dAU * dAU);
       if (e.mat) {
         e.mat.userData.uniforms.uSunDir.value.copy(_sunDir);
         e.mat.userData.uniforms.uSunI.value = sunI;
@@ -751,8 +758,10 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     // 系数 π：StandardMaterial 的漫反射含 1/π 因子，而行星盘面材质（planetMaterial）
     // 是 albedo·NdotL·uSunI 无该因子。取 2.5 时地表恒比盘面暗 ~20%，同一处
     // 地面高度看与盘面同色区出现暗斑（月球 200km 的地形斑块）；取 π 后两侧一致。
+    // 与盘面同一条律：StandardMaterial 的漫反射含 1/π，取 π/d² 后两侧一致
+    // （原来取 pow(li, 0.55)，与盘面的 1/d² 不同源，水星上地形比盘面暗 2.4 倍）
     const li = 1 / (dAU * dAU);
-    sunLight.intensity = Math.PI * Math.pow(li, 0.55);
+    sunLight.intensity = Math.PI * li;
     // 地表光照穿霾色滤：厚霾天体（金星/土卫六）的阳光被气溶胶滤成橙色并衰减
     // （Venera 橙琥珀原野 / Huygens 橙色漫射光实拍）；随高度指数恢复为自然阳光
     const gt = nearestE?.phys.atmosphere?.groundTint;
