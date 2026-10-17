@@ -1,8 +1,13 @@
 // Display adaptation approximation, not a calibrated spectral camera model.
 // A camera exposed for sunlit terrain cannot also show the faint star field.
-export function photoSkyVisibility({ radiusKm, distanceKm, sunElevation, phaseCosine = 1, viewCosine = 1, dSunAU = 1 }) {
+export function photoSkyVisibility({ radiusKm, distanceKm, sunElevation, phaseCosine = 1, viewCosine = 1, dSunAU = 1, airless = false }) {
   const angularRadius = radiusKm / Math.max(radiusKm, distanceKm);
   const nearSurface = angularRadius > 0.97;
+  // 无气天体：白昼天空本来就是黑的，星光**不会**被散射淹没。
+  // 这条此前缺失，于是站在月球正午地面时星空被完全压掉——与项目自己在
+  // sun.js 里的立场矛盾（那里按"人眼动态范围 10¹⁴、航天员肉眼可见日冕"处理）。
+  // 阿波罗照片里白昼的月面天空确实是黑的、亮星可见。
+  if (airless) return 1;
   const illuminated = nearSurface ? Math.max(0, Math.min(1, sunElevation * 6)) : Math.max(0, (1 + phaseCosine) * 0.5);
   const inView = nearSurface ? 1 : Math.max(0, Math.min(1, (viewCosine - 0.65) / 0.2));
   const glare = angularRadius * illuminated * inView * 12 / Math.sqrt(Math.max(0.1, dSunAU));

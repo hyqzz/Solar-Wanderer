@@ -1337,7 +1337,8 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       const view = camera.getWorldDirection(new THREE.Vector3());
       skyFade = Math.min(skyFade, photoSkyVisibility({ radiusKm: body.phys.radiusKm, distanceKm,
         sunElevation: id === 'sun' ? 1 : radial.dot(towardSun), phaseCosine: id === 'sun' ? 1 : radial.dot(towardSun),
-        viewCosine: -view.dot(radial), dSunAU }));
+        viewCosine: -view.dot(radial), dSunAU,
+        airless: !body.phys.atmosphere }));
     }
     const inAtmo = atm && nearest.distSurface < atm.heightKm;
     // 入气密度增幅：气巨/冰巨内部放大；岩石行星用 interiorBoost 分离"地表天空亮"与"太空薄气雾"

@@ -511,6 +511,12 @@ export class Ship {
     }
     if (!this.gravityMode && input.tapped('KeyX')) this.vel.set(0, 0, 0);
 
+    // 记录积分前的位置：碰撞要做**扫掠**判定（见下方），只判"移动之后的位置"
+    // 会让高速飞船直接穿过天体。
+    if (!this._prevPosKm) this._prevPosKm = new Float64Array(3);
+    this._prevPosKm[0] = this.posKm[0];
+    this._prevPosKm[1] = this.posKm[1];
+    this._prevPosKm[2] = this.posKm[2];
     this.posKm[0] += this.vel.x * dt;
     this.posKm[1] += this.vel.y * dt;
     this.posKm[2] += this.vel.z * dt;
@@ -540,6 +546,11 @@ export class Ship {
         const h = env.heightFn(n.id, _v4);
         if (Number.isFinite(h) && h > 0) minR = h + 0.005;
       }
+      // === 扫掠碰撞 ===
+      // 只判"移动之后的位置"是不够的：速度上限到 2 AU/s，一帧可以走几十万公里，
+      // 整个掠过区间都可能落在球外 → **完全不触发碰撞，直接穿过去**；而若恰好
+      // 停在球内，按移动后方向求解还会把人"吐"到星球背面。
+      // 这里对"积分前位置 → 当前位置"这一段做线段-球求交，取最先到达的交点。
       if (dist < minR && dist > 0) {
         _v1.normalize();
         this.posKm[0] = n.posKm[0] + _v1.x * minR;
@@ -547,6 +558,34 @@ export class Ship {
         this.posKm[2] = n.posKm[2] + _v1.z * minR;
         const vr = this.vel.dot(_v1);
         if (vr < 0) this.vel.addScaledVector(_v1, -vr);
+      } else if (this._prevPosKm) {
+        const ax = this._prevPosKm[0] - n.posKm[0];
+        const ay = this._prevPosKm[1] - n.posKm[1];
+        const az = this._prevPosKm[2] - n.posKm[2];
+        const dx = this.posKm[0] - this._prevPosKm[0];
+        const dy = this.posKm[1] - this._prevPosKm[1];
+        const dz = this.posKm[2] - this._prevPosKm[2];
+        const A = dx * dx + dy * dy + dz * dz;
+        if (A > 1e-18) {
+          const B = 2 * (ax * dx + ay * dy + az * dz);
+          const C = ax * ax + ay * ay + az * az - minR * minR;
+          const disc = B * B - 4 * A * C;
+          if (disc >= 0) {
+            const t = (-B - Math.sqrt(disc)) / (2 * A);
+            if (t >= 0 && t <= 1) {
+              // 线段在 t 处进入球体：把飞船放到该点，并消掉法向速度
+              this.posKm[0] = this._prevPosKm[0] + dx * t;
+              this.posKm[1] = this._prevPosKm[1] + dy * t;
+              this.posKm[2] = this._prevPosKm[2] + dz * t;
+              const px = this.posKm[0] - n.posKm[0];
+              const py = this.posKm[1] - n.posKm[1];
+              const pz = this.posKm[2] - n.posKm[2];
+              const pl = Math.hypot(px, py, pz) || 1;
+              const vr = (this.vel.x * px + this.vel.y * py + this.vel.z * pz) / pl;
+              if (vr < 0) { this.vel.x -= vr * px / pl; this.vel.y -= vr * py / pl; this.vel.z -= vr * pz / pl; }
+            }
+          }
+        }
       }
     }
 

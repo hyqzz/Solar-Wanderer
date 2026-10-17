@@ -6,6 +6,7 @@ import { TNO_IDS, TNO_DATA, tnoPosition, tnoOrbitPoints } from '../astro/tno.js'
 import { createPlanetMaterial } from './planetMaterial.js';
 import { proceduralMapLazy } from './proceduralTextures.js';
 import { eclToWorldArr } from '../config.js';
+import { J2000 } from '../astro/time.js';
 import { QUALITY } from '../engine/quality.js';
 
 const KM_PER_AU = 149597870.7;
@@ -114,6 +115,13 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
   // 光速（km/天）：光行时视位置修正（与 builder 一致）
   const C_KM_PER_DAY = 299792.458 * 86400;
 
+  // 实测自转周期（小时）。只收有可靠观测的；没有的保持静止——
+  // 宁可不转，也不拿猜的数假装它转。
+  const TNO_ROT_HOURS = {
+    pluto: 153.29, eris: 15.77, haumea: 3.92, makemake: 22.83, quaoar: 17.68,
+    orcus: 13.19, sedna: 10.27, varuna: 6.34, ixion: 12.4, salacia: 6.09,
+    az84: 6.76, ms4: 7.33, varda: 5.91, gonggong: 22.4, huya: 17.1,
+  };
   function update(jdTT, shipPosKm) {
     for (const [id, e] of entries) {
       // 位置（含光行时回退：相机看到 t − d/c 时刻的位置；shipPosKm 为世界系 km）
@@ -135,11 +143,21 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
       const dKm = Math.hypot(e.posKm[0], e.posKm[1], e.posKm[2]);
       const dAU = Math.max(dKm / KM_PER_AU, 1e-6);
       _sunDir.set(-e.posKm[0] / dKm, -e.posKm[1] / dKm, -e.posKm[2] / dKm);
-      const sunIRaw = 1 / (dAU * dAU);
-      const sunI = sunIRaw >= 1 ? sunIRaw : Math.pow(sunIRaw, 0.55);
+      // 与其余天体同一条曝光律：纯反平方，不做 d>1 时的 ^0.55 压缩。
+      // 曝光 = 0.75·d² 会把它乘回来，于是表面亮度只由反照率决定。
+      const sunI = 1 / (dAU * dAU);
       const u = e.mat.userData.uniforms;
       u.uSunDir.value.copy(_sunDir);
       u.uSunI.value = sunI;
+
+      // 自转：此前整颗 TNO **完全不转**（tnoScene 里没有任何 rotation 赋值），
+      // 而信息面板写着妊神星"自转周期仅 3.9 小时"、伐楼那"6.3 小时自转带来
+      // 明显光变"——说明与画面直接矛盾。按实测周期绕极轴旋转。
+      const rotH = TNO_ROT_HOURS[id];
+      if (rotH > 0) {
+        const ang = ((jdTT - J2000) * 24 / rotH) % 1 * Math.PI * 2;
+        e.mesh.rotation.y = ang;
+      }
 
       // 彗星式辉光头：保持 ~恒定屏幕尺寸，远距始终可见，近距淡出让球体接管
       const dist = Math.hypot(

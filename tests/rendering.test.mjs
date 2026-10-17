@@ -1159,3 +1159,27 @@ test('行走有坡度限制（不能垂直爬崖）', () => {
   assert.ok(/rise > run \* 1\.73/.test(s), '缺少坡度限制（tan60°）');
   assert.ok(/if \(rise > run \* 1\.73\) move\.set\(0, 0, 0\);/.test(s), '坡度超限应拒绝这一步');
 });
+
+// ── 无气天体白昼星空 / 扫掠碰撞 / TNO 自转 ────────────────────────────────────
+test('无气天体白昼天空仍能看见星星（阿波罗照片里月面天空是黑的）', async () => {
+  const { photoSkyVisibility } = await import('../src/scene/photoExposure.js');
+  // 月球正午、站在地面
+  const v = photoSkyVisibility({ radiusKm: 1737, distanceKm: 1737.002, sunElevation: 1, airless: true });
+  assert.equal(v, 1, `无气天体不应压制星空，实际 ${v}`);
+  // 有大气的地球同样条件应被压暗
+  const e = photoSkyVisibility({ radiusKm: 6371, distanceKm: 6371.002, sunElevation: 1, airless: false });
+  assert.ok(e < 0.2, `有大气白昼应压制星空，实际 ${e}`);
+});
+
+test('高速飞行有扫掠碰撞（否则一帧走几千公里会直接穿过去）', () => {
+  const s = read('src/engine/ship.js');
+  assert.ok(/_prevPosKm/.test(s), '缺少积分前位置记录');
+  assert.ok(/disc >= 0/.test(s) && /线段-球求交|扫掠碰撞/.test(s), '缺少线段-球求交');
+});
+
+test('TNO 会自转，且用纯反平方光照（与曝光律一致）', () => {
+  const s = read('src/scene/tnoScene.js');
+  assert.ok(/TNO_ROT_HOURS/.test(s), '缺少自转周期表');
+  assert.ok(/e\.mesh\.rotation\.y = ang/.test(s), 'TNO 仍未自转');
+  assert.ok(!/Math\.pow\(sunIRaw, 0\.55\)/.test(s), 'TNO 仍用旧的 ^0.55 光照压缩');
+});
