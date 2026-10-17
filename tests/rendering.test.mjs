@@ -923,3 +923,45 @@ test('地表明暗调制保留增益与限幅（否则噪声方差太小，看�
     'dm 的增益与限幅应保持（±38% 表土质感，不死黑不过曝）');
 });
 
+
+// ── 反照率标定：贴图只承载相对结构，绝对亮度锚在实测反照率上 ──────────────────
+// 此前表面亮度就等于贴图像素值，于是亮度排序完全错：土卫二贴图均值 0.136、
+// 火星 0.219，渲染出来土卫二甚至比火星更暗——而实测几何反照率是 0.99 对 0.25。
+// 太阳系最白的固体表面被画成了一个灰球。
+
+test('反照率标定：标定后各天体的有效反照率与实测值一致', async () => {
+  const { albedoScaleOf, TEXTURE_LIN_MEAN, SURFACE_ALBEDO } = await import('../src/scene/planetMaterial.js');
+  const fileOf = { earth: 'earth_day.jpg', europa: 'europa.png', venus: 'venus_atmosphere.jpg' };
+  for (const [id, a] of Object.entries(SURFACE_ALBEDO)) {
+    const f = fileOf[id] ?? `${id}.jpg`;
+    const m = TEXTURE_LIN_MEAN[f];
+    assert.ok(m > 0, `${id} 的贴图 ${f} 缺少线性均值实测`);
+    const eff = albedoScaleOf(f, id) * m;
+    assert.ok(Math.abs(eff - a) < 1e-6, `${id} 标定后有效反照率 ${eff} ≠ 实测 ${a}`);
+  }
+});
+
+test('亮冰卫星必须比火星亮（旧实现的排序是反的）', async () => {
+  const { TERRAIN_GRADE } = await import('../src/scene/planetMaterial.js');
+  const lum = (id) => {
+    const g = TERRAIN_GRADE[id]?.grade ?? [1, 1, 1];
+    return 0.2126 * g[0] + 0.7152 * g[1] + 0.0722 * g[2];
+  };
+  assert.ok(lum('enceladus') > lum('mars') * 2,
+    `土卫二（反照率 0.99）应显著亮于火星（0.25），实际 ${lum('enceladus').toFixed(2)} vs ${lum('mars').toFixed(2)}`);
+  assert.ok(lum('mimas') > lum('mars'),
+    `土卫一（0.962）应亮于火星，实际 ${lum('mimas').toFixed(2)} vs ${lum('mars').toFixed(2)}`);
+  assert.ok(lum('mercury') < lum('mars'),
+    `水星（0.106）应暗于火星（0.25），实际 ${lum('mercury').toFixed(2)} vs ${lum('mars').toFixed(2)}`);
+  assert.ok(lum('moon') < 1, `月球地面不应再是白的，实际分级 ${lum('moon').toFixed(2)}`);
+});
+
+test('盘面与地形用同一张分级表（否则同一天体两种亮度）', async () => {
+  const { TERRAIN_GRADE, displayGradeOf } = await import('../src/scene/planetMaterial.js');
+  for (const id of ['earth', 'mars', 'moon', 'enceladus', 'mercury', 'uranus']) {
+    const d = displayGradeOf(id), t = TERRAIN_GRADE[id];
+    if (!d && !t) continue;
+    assert.ok(d && t, `${id} 盘面与地形分级应同时存在`);
+    for (let i = 0; i < 3; i++) assert.equal(d.grade[i], t.grade[i], `${id} 第 ${i} 通道盘面/地形不一致`);
+  }
+});

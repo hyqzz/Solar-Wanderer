@@ -97,9 +97,84 @@ const BODY_GRADE = {
 // 地形层（terrain.js 顶点色采样同一份贴图）需要同步这份反照率校正，
 // 否则从太空看分级正确的暗天体（水星 0.40×），落到地表却是未分级的亮贴图色。
 // sat 一并导出（地球：盘面靠 uSat 补偿 ACES 去饱和，地形若无同款饱和度陆地会发灰）。
-export const TERRAIN_GRADE = Object.fromEntries(
-  Object.entries(BODY_GRADE).filter(([, v]) => v.grade).map(([k, v]) => [k, { grade: v.grade, sat: v.sat ?? 1 }])
-);
+
+// ── 反照率标定：贴图只承载"相对"结构，绝对亮度由实测反照率给定 ──────────────
+//
+// 贴图是"显示参考"的中间调，它的绝对亮度没有物理含义。此前整条链路的表面亮度
+// 就等于贴图的像素值（乘光照），于是亮度排序完全错：土卫二的贴图均值 0.136、
+// 火星 0.219，两者相近，渲染出来土卫二甚至比火星更暗——而实测几何反照率是
+// 0.99 对 0.25（差 4 倍）。太阳系最白的固体表面被画成了一个灰球。
+//
+// 标定方式：albedo = 贴图 × (实测反照率 / 贴图线性均值)。这样贴图保留全部
+// 相对结构（坑、月海、条带），绝对亮度锚在实测值上。
+//
+// 两个输入：
+//   TEXTURE_LIN_MEAN —— tools/audit-texmean.mjs 实测（sRGB 解码到线性后取均值）
+//   SURFACE_ALBEDO   —— 实测几何反照率。注意要填**贴图所描绘的那一层**：
+//                       地球贴图是无云地表（≈0.20），不是含云的行星几何反照率 0.434；
+//                       金星贴图是云顶，所以填 0.67 是对的。
+// 表里没有的天体（无实测值 / 程序化贴图）标定系数为 1，即保持原样——宁可不改，
+// 也不拿猜的数去改。
+export const TEXTURE_LIN_MEAN = {
+  'enceladus.jpg': 0.1363, 'mimas.jpg': 0.1653, 'tethys.jpg': 0.1887, 'dione.jpg': 0.2106,
+  'rhea.jpg': 0.1709, 'iapetus.jpg': 0.2244, 'titan.jpg': 0.2477, 'charon.jpg': 0.1664,
+  'europa.png': 0.5171, 'io.jpg': 0.2872, 'callisto.jpg': 0.1669, 'ganymede.jpg': 0.2076,
+  'moon.jpg': 0.3026, 'mercury.jpg': 0.2277, 'mars.jpg': 0.2186, 'earth_day.jpg': 0.1958,
+  'pluto.jpg': 0.3975, 'jupiter.jpg': 0.3613, 'saturn.jpg': 0.5440, 'uranus.jpg': 0.5505,
+  'neptune.jpg': 0.1010, 'triton.jpg': 0.3096, 'venus_atmosphere.jpg': 0.5543,
+};
+
+/** 实测几何反照率（贴图所描绘的那一层）。无实测值的天体不列，标定系数取 1。 */
+export const SURFACE_ALBEDO = {
+  mercury: 0.106, venus: 0.67, earth: 0.20, moon: 0.136, mars: 0.25,
+  jupiter: 0.538, saturn: 0.499, uranus: 0.488, neptune: 0.442, pluto: 0.52,
+  io: 0.63, europa: 0.67, ganymede: 0.43, callisto: 0.17,
+  mimas: 0.962, enceladus: 0.99, tethys: 0.80, dione: 0.998, rhea: 0.949,
+  titan: 0.22, iapetus: 0.25, triton: 0.76, charon: 0.38,
+};
+
+/** 贴图 → 标定系数。无贴图 / 无实测值 / 无实测反照率时返回 1（不改）。 */
+export function albedoScaleOf(texFile, bodyId) {
+  const m = texFile ? TEXTURE_LIN_MEAN[texFile] : undefined;
+  const a = bodyId ? SURFACE_ALBEDO[bodyId] : undefined;
+  if (!(m > 0) || !(a > 0)) return 1;
+  return a / m;
+}
+
+// 天体 → 贴图文件名（反照率标定要按贴图查线性均值；只有三个不符合 <id>.jpg 的约定）
+const TEX_FILE_BY_BODY = { earth: 'earth_day.jpg', europa: 'europa.png', venus: 'venus_atmosphere.jpg' };
+const texFileOf = (id) => TEX_FILE_BY_BODY[id] ?? `${id}.jpg`;
+
+/** 显示分级表：**亮度**全部由实测反照率给定，BODY_GRADE 只保留**色相**。
+ *
+ * 为什么要把 BODY_GRADE 的亮度归一掉：它的 grade 里本来就混着"亮度校正"——
+ * 水星 0.40 与反照率标定算出来的 0.466 几乎是同一个数，是同一件事的手调版本。
+ * 直接相乘会把这份校正计入两次（水星变成 0.19，比物理值暗一倍多）。
+ * 归一掉亮度、只留色相，再乘物理标定系数，就既没有重复计入、又保住了原色。
+ *
+ * 盘面（uGrade）与地形（TERRAIN_GRADE）必须用**同一张表**，否则同一天体
+ * 在太空与落地两种亮度。 */
+const DISPLAY_GRADE = (() => {
+  const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const ids = new Set([...Object.keys(BODY_GRADE), ...Object.keys(SURFACE_ALBEDO)]);
+  const out = {};
+  for (const id of ids) {
+    const g = BODY_GRADE[id] ?? {};
+    const s = albedoScaleOf(texFileOf(id), id);
+    const base = g.grade ?? [1, 1, 1];
+    const l = lum(base) || 1;
+    const grade = base.map((v) => (v / l) * s);
+    if (!g.grade && s === 1) continue;   // 既无手调分级又无实测反照率：不列，用默认
+    out[id] = { grade, sat: g.sat ?? 1 };
+  }
+  return out;
+})();
+
+/** 地形层用的分级表（与盘面同源，见 DISPLAY_GRADE）。 */
+export const TERRAIN_GRADE = DISPLAY_GRADE;
+
+/** 盘面材质用的分级（同样来自 DISPLAY_GRADE）。 */
+export function displayGradeOf(bodyId) { return DISPLAY_GRADE[bodyId] ?? null; }
 
 export function createPlanetMaterial({
   map, nightMap = null, oceanSpec = false, ringShadow = null,
@@ -133,7 +208,8 @@ export function createPlanetMaterial({
     uCloudTex: { value: cloudTex ?? DUMMY_TEX },  // 地球云层贴图（地表投影用）
     uHasClouds: { value: cloudTex ? 1 : 0 },
     // 逐天体色彩分级（BODY_GRADE 表；缺省 = 无修正）
-    uGrade: { value: new THREE.Vector3(...(BODY_GRADE[bodyId]?.grade ?? [1, 1, 1])) },
+    // 亮度来自实测反照率标定（DISPLAY_GRADE 已把它折进去）
+    uGrade: { value: new THREE.Vector3(...(DISPLAY_GRADE[bodyId]?.grade ?? [1, 1, 1])) },
     uSat: { value: BODY_GRADE[bodyId]?.sat ?? 1.0 },
     uNaturalTint: { value: new THREE.Vector3(...(BODY_GRADE[bodyId]?.tint ?? [1, 1, 1])) },
     uNaturalTintMix: { value: BODY_GRADE[bodyId]?.tintMix ?? 0 },
@@ -315,6 +391,7 @@ ${CLOUD_GLSL}
           }
         }
         // 逐天体色彩分级（对标探测器实测影像；BODY_GRADE 表）
+        // 逐天体分级（DISPLAY_GRADE）：亮度来自实测反照率标定，色相来自手调分级
         albedo *= uGrade;
         albedo = mix(albedo, dot(albedo, vec3(0.2126, 0.7152, 0.0722)) * uNaturalTint, uNaturalTintMix);
         albedo = mix(vec3(dot(albedo, vec3(0.3333))), albedo, uSat);
