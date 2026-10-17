@@ -920,7 +920,17 @@ function loop() {
       ship.vel.set(0, 0, 0);
       input.cancelGestures(); // 清理起飞手势，防止捏合/平移状态泄漏
     } else {
-      ship.update(dtReal, input, env);
+      // D-6：时间加速也作用于飞船。此前只用 dtReal，想"加速看自己的轨道"
+      // 得真等 90 分钟。这里按时间倍率**多次子步**积分（上限 16×：
+      // 再高实时操控已无意义，且单步过大会让积分不稳定）。
+      // 子步之间清掉 tapped，否则按一次键会被执行 n 次。
+      {
+        const warp = Math.min(16, Math.max(1, Math.round(simClock._rate ?? 1)));
+        for (let i = 0; i < warp; i++) {
+          if (i > 0) input.justPressed?.clear?.();
+          ship.update(dtReal, input, env);
+        }
+      }
       if (appMode === 'walk' && ship.mode === 'fly') {
         switchToOrbit(); // 行走中按 G 返回 → 探索模式
       } else {
