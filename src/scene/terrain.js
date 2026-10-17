@@ -502,7 +502,7 @@ export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm
     // 地形是全场景最重的片元着色器（多次 tnoise2 + 解析梯度），被光栅化两遍
     // 既浪费一半算力，又让淡入期的 alpha 变成 a(2-a)、readyCover 判据随之失真。
     forceSinglePass: true,
-    polygonOffset: polyUnits > 0, polygonOffsetFactor: polyUnits > 0 ? 1 : 0,
+    polygonOffset: polyUnits > 0, polygonOffsetFactor: polyUnits > 0 ? 2 : 0,
     polygonOffsetUnits: polyUnits, // 粗级后推，消除 LOD 环带重叠区 z-fight（R9-2a）
   });
   const uDetailScale = { value: detailScale };
@@ -924,7 +924,9 @@ export class TerrainPatchSet {
       // 级原点相对几何（R9-2a 修闪烁）：每级独立原点 + 独立材质（粗级 polygonOffset 后推）
       const uPatchRel = { value: new THREE.Vector3() };
       const uFade = { value: 0 }; // 新建级从 0 淡入，避免 LOD 突然弹出（#18）
-      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 2, R, this.uWaterFade, this.uSunDir);
+      // 粗级后推量：原值 li*2 在重叠区仍有 z-fight——表现为沿环带边界的一条
+      // **虚线状的暗点行**（月面地面图可见）。加密到 li*6 + 系数 2。
+      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 6, R, this.uWaterFade, this.uSunDir);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.frustumCulled = false;
       mesh.receiveShadow = true; // 近场太阳阴影（岩石/地形自我投影）

@@ -1292,3 +1292,10 @@ test('银河改为程序化生成（贴图本身是全黑的）', () => {
   // 球面分段：银盘半高宽 ~7°，32 段时一面跨 5.6°，会被切成多边形色块
   assert.ok(/SphereGeometry\(SKY_R, 256, 128\)/.test(src), '银河球分段不足');
 });
+
+// ── LOD 环带重叠区的 z-fight ────────────────────────────────────────────────
+test('地形粗级 polygonOffset 足以消除环带边界的虚线', () => {
+  const src = read('src/scene/terrain.js');
+  assert.ok(/li \* 6/.test(src), '粗级后推量不足（原 li*2 时重叠区有虚线状 z-fight）');
+  assert.ok(/polygonOffsetFactor: polyUnits > 0 \? 2 : 0/.test(src), '偏移系数应为 2');
+});
