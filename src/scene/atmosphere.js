@@ -3,6 +3,7 @@
 // 注意：本引擎相机恒在场景原点（浮动原点），射线起点即 vec3(0)。
 
 import * as THREE from 'three';
+import { HASH_GLSL } from './glslNoise.js';
 import { QUALITY } from '../engine/quality.js';
 
 export function createAtmosphere(phys, auroraMode = 0) {
@@ -112,7 +113,8 @@ export function createAtmosphere(phys, auroraMode = 0) {
       float hAbove(vec3 p) { return length(stretch(p - uCenter)) - uRg; }
 
       // value-noise（极光帘幕扰动用；与行星材质同源实现保证一致性）
-      float phash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+      ${HASH_GLSL}
+      float phash(vec3 p) { return glslHash31(p); }
       float pnoise(vec3 p) {
         vec3 i = floor(p), f = fract(p);
         f = f * f * (3.0 - 2.0 * f);

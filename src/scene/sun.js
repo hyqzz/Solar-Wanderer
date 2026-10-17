@@ -4,6 +4,7 @@
 // 这里恢复的是物理日冕：1/r^2.5 径向衰减 + 赤道冕流调制，仍不渲染镜头光晕。
 
 import * as THREE from 'three';
+import { HASH_GLSL } from './glslNoise.js';
 
 export function createSun(radiusKm, mapTex) {
   const group = new THREE.Group();
@@ -51,7 +52,8 @@ export function createSun(radiusKm, mapTex) {
       varying vec3 vNormalV;
       varying vec3 vViewV;
 
-      float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+      ${HASH_GLSL}
+      float hash(vec3 p) { return glslHash31(p); }
       float vnoise(vec3 p) {
         vec3 i = floor(p), f = fract(p);
         f = f * f * (3.0 - 2.0 * f);
@@ -156,7 +158,8 @@ export function createSun(radiusKm, mapTex) {
       uniform float uVisibility;
       varying vec2 vUvC;
 
-      float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      ${HASH_GLSL}
+      float hash2(vec2 p) { return glslHash31(vec3(p, 0.0)); }
       float vnoise2(vec2 p) {
         vec2 i = floor(p), f = fract(p);
         f = f * f * (3.0 - 2.0 * f);

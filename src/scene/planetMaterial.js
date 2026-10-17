@@ -7,6 +7,7 @@
 //   按行星视半径淡入：远观与 R5 审查版一致，贴近时低清贴图不再糊。
 
 import * as THREE from 'three';
+import { HASH_GLSL } from './glslNoise.js';
 import { HAPKE_PARAMS } from '../astro/bodies.js';
 import { QUALITY } from '../engine/quality.js';
 
@@ -344,7 +345,8 @@ export function createPlanetMaterial({
       varying vec3 vPosW;
       varying vec3 vObjPos;
 
-      float phash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+      ${HASH_GLSL}
+      float phash(vec3 p) { return glslHash31(p); }
       float pnoise(vec3 p) {
         vec3 i = floor(p), f = fract(p);
         f = f * f * (3.0 - 2.0 * f);
@@ -767,7 +769,8 @@ export function createCloudMaterial(cloudTex, opts = {}) {
       }
 
       // 与行星材质相同的 value-noise，保证云层扰动与地表阴影一致
-      float phash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+      ${HASH_GLSL}
+      float phash(vec3 p) { return glslHash31(p); }
       float pnoise(vec3 p) {
         vec3 i = floor(p), f = fract(p);
         f = f * f * (3.0 - 2.0 * f);

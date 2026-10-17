@@ -27,6 +27,31 @@ function alignToNormal(group, normal) {
   group.quaternion.setFromUnitVectors(up, normal);
 }
 
+/**
+ * 由**高度场梯度**求局部地表法向。
+ *
+ * 原来直接拿球面法向立模型：在斜坡上模型是"插进坡里/浮在坡上"的，
+ * 阿波罗着陆点大多在起伏地形上，近看很出戏。这里在局部切平面内取两个
+ * 方向各走一小步、量高差，得到真实的坡面法向。
+ */
+function surfaceNormal(terrainMgr, id, dir, radiusKm) {
+  const up = dir.clone().normalize();
+  const helper = Math.abs(up.y) < 0.9
+    ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+  const t1 = new THREE.Vector3().crossVectors(up, helper).normalize();
+  const t2 = new THREE.Vector3().crossVectors(up, t1).normalize();
+  const d = 4e-4;                      // 角步长（月球上约 0.7km）
+  const h0 = terrainMgr.heightAt(id, up);
+  const h1 = terrainMgr.heightAt(id, up.clone().addScaledVector(t1, d).normalize());
+  const h2 = terrainMgr.heightAt(id, up.clone().addScaledVector(t2, d).normalize());
+  const run = d * radiusKm;
+  return new THREE.Vector3()
+    .addScaledVector(t1, -(h1 - h0) / run)
+    .addScaledVector(t2, -(h2 - h0) / run)
+    .add(up)
+    .normalize();
+}
+
 // ── Billboard 精灵工厂 ──
 // 远距离可见的十字标记，保持地标在轨道高度仍可定位
 function makeBillboard(color) {
@@ -251,7 +276,7 @@ export function createApolloLandmarks(scene, terrainMgr) {
 
     const siteGroup = new THREE.Group();
     siteGroup.position.copy(pos);
-    alignToNormal(siteGroup, dir);
+    alignToNormal(siteGroup, surfaceNormal(terrainMgr, 'moon', dir, 1737.4));
 
     // 3D 模型组（近距离显示）
     const model = new THREE.Group();
@@ -542,7 +567,7 @@ export function createRoverSites(scene, terrainMgr) {
 
     const siteGroup = new THREE.Group();
     siteGroup.position.copy(pos);
-    alignToNormal(siteGroup, dir);
+    alignToNormal(siteGroup, surfaceNormal(terrainMgr, 'mars', dir, 3389.5));
 
     // 火星车 3D 模型
     const model = createRoverModel(site);

@@ -6,6 +6,7 @@
 // heightFn 同时供行走碰撞使用（几何与碰撞同源，无穿模）。
 
 import * as THREE from 'three';
+import { HASH_GLSL } from './glslNoise.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeNoise, hashSeed } from '../util/noise.js';
 import { QUALITY } from '../engine/quality.js';
@@ -545,7 +546,8 @@ export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm
         uniform vec3 uSunDir;        // 体固系下的太阳方向（水面环境反射用）
         uniform float uWaterFade;
         uniform mat3 normalMatrix;
-        float thash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+        ${HASH_GLSL}
+        float thash(vec3 p) { return glslHash31(p); }
         float tnoise(vec3 p) {
           vec3 i = floor(p), f = fract(p);
           f = f * f * (3.0 - 2.0 * f);
@@ -772,7 +774,8 @@ class RockField {
         .replace('#include <common>', /* glsl */ `#include <common>
           varying vec3 vRockPos;
           uniform mat3 normalMatrix;   // three 只在顶点着色器里声明它
-          float rhash(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
+          ${HASH_GLSL}
+          float rhash(vec3 p){ return glslHash31(p); }
           float rnoise(vec3 p){
             vec3 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
             return mix(mix(mix(rhash(i),rhash(i+vec3(1,0,0)),f.x),mix(rhash(i+vec3(0,1,0)),rhash(i+vec3(1,1,0)),f.x),f.y),

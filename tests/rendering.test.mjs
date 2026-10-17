@@ -1547,3 +1547,17 @@ test('音频有立体声偏置（机体滚转时的引擎方位感）', () => {
   assert.ok(/setPan\(v\)/.test(a), '缺少 setPan');
   assert.ok(/audioEngine\.setPan\?\./.test(m), 'main.js 未驱动 setPan');
 });
+
+// ── 共享的无 sin 哈希 ───────────────────────────────────────────────────────
+test('GLSL 哈希集中到一处，且不再使用 sin（mediump 下会退化）', () => {
+  const shared = read('src/scene/glslNoise.js');
+  assert.ok(/float glslHash31\(vec3 p3\)/.test(shared), '缺少共享哈希');
+  assert.ok(!/sin\(/.test(shared.split('export const HASH_GLSL')[1] ?? ''), '共享哈希仍在用 sin');
+  for (const f of ['atmosphere', 'planetMaterial', 'terrain', 'sun']) {
+    const src = read(`src/scene/${f}.js`);
+    assert.ok(/\$\{HASH_GLSL\}/.test(src), `${f} 未注入共享哈希`);
+    const nInject = (src.match(/\$\{HASH_GLSL\}/g) ?? []).length;
+    const nUse = (src.match(/glslHash31\(/g) ?? []).length;
+    assert.ok(nInject >= nUse, `${f}: 注入 ${nInject} 次但引用 ${nUse} 次（有作用域外的引用）`);
+  }
+});
