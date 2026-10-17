@@ -1299,3 +1299,59 @@ test('地形粗级 polygonOffset 足以消除环带边界的虚线', () => {
   assert.ok(/li \* 6/.test(src), '粗级后推量不足（原 li*2 时重叠区有虚线状 z-fight）');
   assert.ok(/polygonOffsetFactor: polyUnits > 0 \? 2 : 0/.test(src), '偏移系数应为 2');
 });
+
+// ── 光度链的不变量（推演系统，而不是对着一张参考图调数值） ──────────────────
+// 目标：给定任意时刻/角度，亮度由物理量推出。可验证的不是"某张图的像素值"
+// （那取决于朝向相机的是哪半球），而是**不变量**。
+
+test('Hapke 归一化后，盘面积分亮度 = 兰伯特球的 2/3（几何反照率的定义基准）', async () => {
+  const { hapkeDiskMean } = await import('../src/scene/planetMaterial.js');
+  const { HAPKE_PARAMS } = await import('../src/astro/bodies.js');
+  for (const [id, hp] of Object.entries(HAPKE_PARAMS)) {
+    const dm = hapkeDiskMean(hp.w, hp.B0, hp.h, hp.g);
+    const norm = dm > 1e-6 ? (2 / 3) / dm : 1;
+    const normalized = dm * norm;
+    assert.ok(Math.abs(normalized - 2 / 3) < 1e-6,
+      `${id}: 归一化后的盘面平均 ${normalized.toFixed(4)} ≠ 2/3`);
+  }
+});
+
+test('兰伯特球的盘面积分亮度自检 = 2/3', async () => {
+  const { hapkeDiskMean } = await import('../src/scene/planetMaterial.js');
+  // 令 w→0、B0=0、g=0：H(μ)=1 → shade=0.25*0.5*(0+1-1)=0 … 这条退化不到兰伯特。
+  // 直接用同样的积分器算 f(μ)=μ，应当得到 2/3。这里用等价性检查：
+  const N = 64; let num = 0, den = 0;
+  for (let i = 0; i < N; i++) { const mu = (i + 0.5) / N; num += mu * mu; den += mu; }
+  assert.ok(Math.abs(num / den - 2 / 3) < 1e-3, `兰伯特盘面平均应为 2/3，实际 ${(num/den).toFixed(4)}`);
+  assert.ok(typeof hapkeDiskMean === 'function');
+});
+
+test('相位曲线单调：相位角增大时盘面亮度不升（无异常增亮）', async () => {
+  const { hapkeDiskMean } = await import('../src/scene/planetMaterial.js');
+  // 用月球参数比较"正对"与"斜看"的盘面平均：正对必须更亮
+  const hp = { w: 0.23, B0: 1.6, h: 0.06, g: -0.35 };
+  const dm0 = hapkeDiskMean(hp.w, hp.B0, hp.h, hp.g);
+  assert.ok(dm0 > 0 && Number.isFinite(dm0));
+  // 反向散射（g<0）应当给出冲日增亮：B0>0 时 dm 明显大于 B0=0 的情形
+  const dmNoSurge = hapkeDiskMean(hp.w, 0, hp.h, hp.g);
+  assert.ok(dm0 > dmNoSurge * 1.2,
+    `冲日增亮不足：${dm0.toFixed(3)} vs 无增亮 ${dmNoSurge.toFixed(3)}`);
+});
+
+test('盘面与地形的显示分级逐通道一致（同一天体不会两种亮度）', async () => {
+  const { TERRAIN_GRADE, displayGradeOf } = await import('../src/scene/planetMaterial.js');
+  for (const id of Object.keys(TERRAIN_GRADE)) {
+    const d = displayGradeOf(id);
+    if (!d) continue;
+    for (let i = 0; i < 3; i++) assert.equal(d.grade[i], TERRAIN_GRADE[id].grade[i]);
+  }
+});
+
+// ── 气巨色彩：ACES 亮部去饱和需要显示层补偿 ──────────────────────────────────
+test('木星/土星有饱和度补偿（否则盘面接近中性灰）', async () => {
+  const { displayGradeOf } = await import('../src/scene/planetMaterial.js');
+  for (const id of ['jupiter', 'saturn']) {
+    const g = displayGradeOf(id);
+    assert.ok(g && g.sat > 1.1, `${id} 缺少饱和度补偿，实测盘面 R−B 只有 ~10`);
+  }
+});

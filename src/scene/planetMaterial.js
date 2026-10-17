@@ -84,7 +84,10 @@ const BODY_ID_MAP = {
 const BODY_GRADE = {
   mercury: { grade: [0.40, 0.38, 0.36] },          // 真实反照率 0.09，暗灰微棕（MESSENGER）
   earth:   { grade: [1, 1, 1], sat: 1 },
-  jupiter: { sat: 1 },
+  // 木星/土星：ACES 在亮部会去饱和，而真实照片里两者的棕褐/淡金是很明确的。
+  // 这里的 sat 是**显示层**的饱和度补偿（与星历/反照率无关），幅度按
+  // "盘面 R−B 分离度接近实拍"标定，不改变相对亮度。
+  jupiter: { sat: 1.35 },
   uranus:  { grade: [1.50, 1.65, 1.70] },          // 淡青（旅行者 2 号观感）
   // Oxford/Irwin 2024: Neptune is pale green-blue, not enhanced Voyager blue.
   // Approximate display correction of this legacy map; not spectral calibration.
@@ -92,6 +95,7 @@ const BODY_GRADE = {
   pluto:   { grade: [1, 1, 1], sat: 1 },
   triton:  { grade: [1.08, 1.00, 0.95], sat: 1 },
   callisto: { grade: [0.90, 0.90, 0.92] },         // 压暗压冷，突出亮坑
+  saturn:  { sat: 1.22 },                          // 淡金：ACES 亮部去饱和的补偿
   titan:   { veil: 0.94, veilColor: [0.92, 0.45, 0.14] }, // 不透明橙色霾（卡西尼自然色：柔和卡其橙盘）
 };
 // 地形层（terrain.js 顶点色采样同一份贴图）需要同步这份反照率校正，
@@ -176,6 +180,35 @@ export const TERRAIN_GRADE = DISPLAY_GRADE;
 /** 盘面材质用的分级（同样来自 DISPLAY_GRADE）。 */
 export function displayGradeOf(bodyId) { return DISPLAY_GRADE[bodyId] ?? null; }
 
+/**
+ * Hapke 模型的**盘面积分亮度**（相位角 0、正对日下点观测），相对"正对白面"。
+ *
+ * 为什么需要它：几何反照率的定义基准是"完美兰伯特球"——盘面平均亮度 = 2/3。
+ * 而 Hapke 相位函数的盘面平均并不是 2/3：以月球的参数算出来只有约 0.29，
+ * 于是 `albedo(=实测几何反照率) × shade` 把整颗天体压暗了 2 倍以上
+ * （实测：土卫二盘面 134，而反照率 0.25 的火星是 162——排序是反的）。
+ *
+ * 这里按定义数值积分：加权用的是投影面积元 μdμ（正对观测时 μ=cosθ）。
+ * 兰伯特情形 shade=μ 代入得到 2/3，可作为公式自检。
+ */
+export function hapkeDiskMean(w, B0, h, g) {
+  const sq = Math.sqrt(Math.max(1 - w, 1e-6));
+  const ca = 1;                       // 相位角 0
+  const denom = 1 + g * g + 2 * g * ca;
+  const P = (1 - g * g) / Math.pow(Math.max(denom, 1e-6), 1.5);
+  const B = B0 / (1 + Math.tan(0) / Math.max(h, 1e-4));   // α=0 → B=B0
+  let num = 0, den = 0;
+  const N = 64;
+  for (let i = 0; i < N; i++) {
+    const mu = (i + 0.5) / N;
+    const H = (1 + 2 * mu) / (1 + 2 * mu * sq);
+    const shade = 0.25 * 0.5 * ((1 + B) * P + H * H - 1);
+    num += shade * mu;
+    den += mu;
+  }
+  return num / den;
+}
+
 export function createPlanetMaterial({
   map, nightMap = null, oceanSpec = false, ringShadow = null,
   detailMode = 0, radiusKm = 1, // detailMode: 0 无 / 1 岩质 / 2 气巨冰巨
@@ -211,6 +244,13 @@ export function createPlanetMaterial({
     // 逐天体色彩分级（BODY_GRADE 表；缺省 = 无修正）
     // 亮度来自实测反照率标定（DISPLAY_GRADE 已把它折进去）
     uGrade: { value: new THREE.Vector3(...(DISPLAY_GRADE[bodyId]?.grade ?? [1, 1, 1])) },
+    // Hapke 盘面归一化：让 shade 的盘面平均等于兰伯特球的 2/3，
+    // 从而 albedo(=实测几何反照率) × shade 的盘面平均 = A_geo × 2/3（定义基准）。
+    uHapkeNorm: { value: (() => {
+      if (!hp) return 1;
+      const dm = hapkeDiskMean(hp.w, hp.B0, hp.h, hp.g);
+      return dm > 1e-6 ? (2 / 3) / dm : 1;
+    })() },
     uSat: { value: BODY_GRADE[bodyId]?.sat ?? 1.0 },
     uNaturalTint: { value: new THREE.Vector3(...(BODY_GRADE[bodyId]?.tint ?? [1, 1, 1])) },
     uNaturalTintMix: { value: BODY_GRADE[bodyId]?.tintMix ?? 0 },
@@ -274,6 +314,7 @@ export function createPlanetMaterial({
       uniform sampler2D uCloudTex;
       uniform int uHasClouds;
       uniform vec3 uGrade;
+      uniform float uHapkeNorm;
       uniform float uSat;
       uniform vec3 uNaturalTint;
       uniform float uNaturalTintMix;
@@ -474,6 +515,9 @@ ${CLOUD_GLSL}
           float r = (uW / 12.566370614) * (mu0 / max(mu0 + mu, 1e-4))
                   * ((1.0 + B) * P + H0 * H1 - 1.0);
           shade = clamp(r * 3.14159265 / max(uW, 1e-3), 0.0, 4.0);
+        // 盘面归一化（见 hapkeDiskMean）：否则 Hapke 的盘面平均比兰伯特球低一半以上，
+        // 亮冰卫星会被压成灰球、月球地面会偏暗。
+        shade *= uHapkeNorm;
         }
         // === 日食遮蔽（逐片元）===
         // 原实现只在场景里插一个黑色锥体网格：接收体表面本身不变暗，
