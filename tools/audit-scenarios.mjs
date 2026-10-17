@@ -158,10 +158,33 @@ const SCENARIOS = [
   ['earth-underwater', async () => {
     // 先真的落到海面（每个场景都会重开页面，不能依赖上一个场景的状态），
     // 再下潜：陆地上设 underwater 是无效的——水下环境由 isWater 决定。
-    await land('earth', 12, 0);
+    // 先找一个**海面**落点：land() 默认落在日下点，那里可能是陆地。
+    const sea = await p.evaluate(() => {
+      const g = window.__game, e = g.builder.bodies.get('earth');
+      const V = Object.getPrototypeOf(g.camera.position).constructor;
+      const q = e.mesh.quaternion.clone().invert();
+      for (let lat = -60; lat <= 60; lat += 4) {
+        for (let lon = -180; lon < 180; lon += 4) {
+          const L = lat * Math.PI / 180, O = lon * Math.PI / 180;
+          const d = new V(Math.cos(L) * Math.cos(O), Math.sin(L), Math.cos(L) * Math.sin(O));
+          if (g.terrainMgr.isWater('earth', d.clone().applyQuaternion(q))) return { lat, lon };
+        }
+      }
+      return null;
+    });
+    if (sea) await orbit('earth', 6371 + 0.002, sea.lat * Math.PI / 180, sea.lon * Math.PI / 180);
+    else await land('earth', 12, 0);
+    for (let i = 0; i < 70; i++) {
+      if ((await p.evaluate(() => window.__game.getMode())) === 'walk') break;
+      await wait(500);
+    }
     await p.evaluate(() => {
-      const g = window.__game;
-      g.ship.posKm[0] -= 0.06; g.ship.posKm[1] -= 0.06;   // 下沉 ~60m
+      const g = window.__game, e = g.builder.bodies.get('earth');
+      // 沿**本地垂线**下沉 60m（此前直接改 posKm[0]/[1]，那是黄道 X/Y 方向，
+      // 在多数纬度上是水平移动，根本没有下潜）。
+      const v = [g.ship.posKm[0] - e.posKm[0], g.ship.posKm[1] - e.posKm[1], g.ship.posKm[2] - e.posKm[2]];
+      const L = Math.hypot(...v);
+      for (let i = 0; i < 3; i++) g.ship.posKm[i] -= (v[i] / L) * 0.06;
       if (g.ship.walk) g.ship.walk.pitch = 0.35;
     });
     await wait(9000);
