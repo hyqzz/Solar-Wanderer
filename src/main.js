@@ -1457,6 +1457,11 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   const adaptSpeed = exposureTarget < renderer.toneMappingExposure ? 2.5 : 0.7;
   renderer.toneMappingExposure +=
     (exposureTarget - renderer.toneMappingExposure) * Math.min(dt * adaptSpeed, 1);
+  // 太阳光球不随场景曝光变化（见 sun.js 的 uInvExposure 说明）
+  {
+    const su = builder.bodies.get('sun')?.uniforms;
+    if (su?.uInvExposure) su.uInvExposure.value = 1 / Math.max(renderer.toneMappingExposure, 1e-4);
+  }
 }
 
 function onResize() {

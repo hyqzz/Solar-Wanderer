@@ -13,6 +13,11 @@ export function createSun(radiusKm, mapTex) {
     // 太阳活动 0..1（实测周期极值表插值，见 astro/solarCycle.js）——调制黑子覆盖率
     uSolarActivity: { value: 0.5 },
     uMap: { value: mapTex },
+    // 场景曝光（相机为地表自动曝光）的**倒数**。光球表面辐亮度是常数，不随
+    // 日心距变化；若让它跟着场景曝光走，飞到冥王星时日面会被放大 ~900 倍、
+    // 彻底削成白盘。除以曝光后，日面在任何轨道上看起来一样亮。
+    // 由 main.js 每帧写入（着色器里拿不到 toneMappingExposure——色调映射在 OutputPass 做）。
+    uInvExposure: { value: 1 },
   };
 
   const mat = new THREE.ShaderMaterial({
@@ -39,6 +44,7 @@ export function createSun(radiusKm, mapTex) {
       #include <logdepthbuf_pars_fragment>
       uniform float uTime;
       uniform float uSolarActivity;
+      uniform float uInvExposure;
       uniform sampler2D uMap;
       varying vec2 vUv;
       varying vec3 vPos;
@@ -64,9 +70,14 @@ export function createSun(radiusKm, mapTex) {
         #include <logdepthbuf_fragment>
         vec3 p = normalize(vPos);
         vec3 sampled = texture2D(uMap, vUv).rgb;
-        // The legacy orange map supplies structure, not visible-light color.
+        // 贴图（sun.jpg）是橙色的显示参考图，只提供**结构**（米粒、黑子），
+        // 不提供颜色。取它的亮度做结构，再乘 5772 K 黑体的色度。
+        //
+        // 旧实现把 base 写成 vec3(luminance)，是**纯灰**——太阳被画成了一颗灰白球，
+        // 可见光下最不该错的颜色反而错了。真实的日面是略带暖调的白：
+        // 归一化黑体色度约 (1.0, 0.975, 0.93)（蓝端略低，所以看着"白里透暖"）。
         float luminance = dot(sampled, vec3(0.2126, 0.7152, 0.0722));
-        vec3 base = vec3(luminance);
+        vec3 base = vec3(luminance) * vec3(1.0, 0.975, 0.93);
         // Solar granules are ~1 Mm, rather than planet-scale flowing patches.
         // Suppress frequencies below a pixel to avoid scintillation in orbit.
         float fp = length(fwidth(p));
@@ -98,7 +109,16 @@ export function createSun(radiusKm, mapTex) {
         // 波长依赖：蓝光临边变暗更快（瑞利散射与 H⁻ 不透明度在蓝端更强），
         // 用逐通道幂次近似——μ 越小蓝通道衰减越快，边缘因此偏红。
         col *= vec3(ld, pow(ld, 1.10), pow(ld, 1.30));
-        gl_FragColor = vec4(col * 14.0, 1.0); // HDR 强度
+        // 太阳**不参与场景曝光**。光球表面辐亮度是常数，不随日心距变化；
+        // 而场景曝光按 d² 变化（相机为地表自动曝光）——若直接乘进去，飞到冥王星
+        // 时日面会被曝光放大 ~900 倍、彻底削成白盘。
+        // tonemapping_fragment 会再乘一次 toneMappingExposure，所以这里先除掉，
+        // 净输入恒定：日面在海王星轨道与在地球轨道上看起来一样亮。
+        //
+        // 系数 2.2 是**色调映射的标定**：让日面中心落在 ACES 压缩拐点之下，
+        // 否则临边昏暗与米粒组织会被削顶吃掉（此前 ×14 配曝光，中心与边缘
+        // 一起钳到 1.0，画面上就是一颗没有任何结构的白球）。
+        gl_FragColor = vec4(col * 2.2 * uInvExposure, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }

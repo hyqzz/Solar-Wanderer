@@ -1072,3 +1072,24 @@ test('DEM 分辨率以下也有撞击坑（否则落地仍是平坡）', async (
   const minD = f.craterFine.classes[f.craterFine.classes.length - 1].D;
   assert.ok(minD <= 0.012, `细坑场最细档 ${minD}km 太粗，行走尺度仍是平坡`);
 });
+
+// ── 太阳：颜色不能被抹成灰、亮度不能随场景曝光变化 ──────────────────────────
+// 旧实现 base = vec3(luminance)（纯灰）+ 强度 ×14 配场景曝光 → 一颗没有任何
+// 结构的白球；而且飞到冥王星时曝光放大 ~900 倍，日面彻底削平。
+
+test('太阳光球保留色温（不是灰度）', () => {
+  const src = read('src/scene/sun.js');
+  assert.ok(/vec3\(luminance\) \* vec3\(1\.0, 0\.975, 0\.93\)/.test(src),
+    '光球基色应是亮度 × 5772K 黑体色度，而不是纯灰');
+  assert.ok(!/vec3 base = vec3\(luminance\);/.test(src), '仍是纯灰基色');
+});
+
+test('太阳光球不随场景曝光变化（否则远日轨道会被削成白盘）', () => {
+  const sun = read('src/scene/sun.js');
+  const main = read('src/main.js');
+  assert.ok(/uInvExposure/.test(sun), '太阳着色器应接收曝光倒数');
+  assert.ok(/col \* 2\.2 \* uInvExposure/.test(sun), '光球输出应乘曝光倒数');
+  assert.ok(!/col \* 14\.0/.test(sun), '旧的 ×14 固定强度仍在');
+  assert.ok(/uInvExposure\.value = 1 \/ Math\.max\(renderer\.toneMappingExposure/.test(main),
+    'main.js 每帧应写入曝光倒数');
+});
