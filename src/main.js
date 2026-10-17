@@ -1070,6 +1070,8 @@ function loop() {
     focusName: appMode === 'orbit' ? bodyName(registry.get(orbitCam.focusId)) : null,
     nearest: nearest ? { name: bodyName(registry.get(nearest.id)), distSurface: nearest.distSurface } : null,
     gravity: appMode === 'walk' ? surfaceGravity(builder.bodies.get(ship.walk.bodyId).phys) : null,
+    // 真实引力模式下显示剩余 Δv 预算（燃料耗尽后无法再加速）
+    dv: (appMode === 'fly' && ship.gravityMode) ? ship.dvBudget : null,
   });
   updateTip(nearest);
   if (selectedId) {

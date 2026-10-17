@@ -81,7 +81,7 @@ export class HUD {
     if (tcTimeEl) tcTimeEl.textContent = local;
   }
 
-  updateNav({ mode, flight, speed, speedSetting, focusName, nearest, gravity, audioOn }) {
+  updateNav({ mode, flight, speed, speedSetting, focusName, nearest, gravity, audioOn, dv }) {
     const modeTxt = flight ? t('nav.flight') :
       mode === 'orbit' ? t('nav.orbit') :
       mode === 'walk' ? t('nav.walk') : t('nav.fly');
@@ -99,6 +99,9 @@ export class HUD {
     }
     if (nearest) {
       rows.push(`<div>${t('hud.nearest', { name: nearest.name, alt: formatDist(Math.max(nearest.distSurface, 0)) })}</div>`);
+    }
+    if (mode === 'fly' && dv != null) {
+      rows.push(`<div class="dim">${t('hud.dv', { v: dv.toFixed(2) })}</div>`);
     }
     if (mode === 'walk' && gravity != null) {
       rows.push(`<div>${t('hud.surfaceGravity', { g: gravity.toFixed(2) })}</div>`);

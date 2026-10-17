@@ -103,3 +103,25 @@ test('aeroAt：60km 动压在真实峰值量级，120km 近乎真空', () => {
   assert.ok(q60 > 1e4 && q60 < 4e4, `60km 动压 ${(q60 / 1000).toFixed(1)} kPa 不在 10–40 kPa`);
   assert.ok(aeroAt(120, 7.8, atm).q < 100, '120km 应接近真空');
 });
+
+test('推进剂：引力模式下推力消耗 Δv 预算，耗尽后无法再加速', () => {
+  const earth = makeEarth(600);
+  const s = new Ship();
+  s.mode = 'fly'; s.gravityMode = true;
+  s.posKm[0] = AU + R_EARTH + 600;
+  s.vel.set(0, 0, 0);
+  const thrustInput = {
+    ...idleInput,
+    keys: new Set(['KeyW']),
+    down: (c) => c === 'KeyW',
+  };
+  const dv0 = s.dvBudget;
+  assert.ok(dv0 > 5 && dv0 < 15, `Δv 预算 ${dv0} 不在 9.4 量级`);
+  for (let i = 0; i < 100; i++) s.update(0.05, thrustInput, makeEnv(earth));
+  assert.ok(s.dvBudget < dv0, '推力应消耗 Δv');
+  // 耗尽后速度不再增长（只剩引力）
+  s.dvBudget = 0;
+  const v0 = s.vel.length();
+  for (let i = 0; i < 20; i++) s.update(0.02, thrustInput, makeEnv(earth));
+  assert.ok(s.vel.length() <= v0 + 1e-6, 'Δv 耗尽后仍在加速');
+});

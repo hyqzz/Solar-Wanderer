@@ -85,6 +85,7 @@ const D = {
 
   // ── 提示（tips）──────────────────────────────────────────────────────
   'tip.quality': { zh: '已自动降低画质以保证流畅运行', en: 'Quality lowered automatically for smooth performance', es: 'Calidad reducida automáticamente para un rendimiento fluido', ja: '快適動作のため画質を自動的に下げました', fr: 'Qualité réduite automatiquement pour des performances fluides', de: 'Qualität automatisch gesenkt für flüssige Leistung', ru: 'Качество автоматически снижено для плавной работы' },
+  'hud.dv': { zh: '剩余 Δv {v} km/s', en: 'Δv remaining {v} km/s', es: 'Δv restante {v} km/s', ja: '残り Δv {v} km/s', fr: 'Δv restant {v} km/s', de: 'Δv verbleibend {v} km/s', ru: 'Остаток Δv {v} км/с' },
   'tip.terrainLoading': { zh: '地表高程还在加载，稍候再试', en: 'Terrain is still loading — try again in a moment', es: 'El terreno aún se está cargando', ja: '地形を読み込み中です', fr: 'Le terrain est en cours de chargement', de: 'Gelände wird noch geladen', ru: 'Рельеф ещё загружается' },
   'tip.compareOn': { zh: '地月真实比例对比：开', en: 'Earth–Moon scale comparison: ON', es: 'Comparación de escala: ON', ja: '地球と月の縮尺比較：ON', fr: 'Comparaison d’échelle : ON', de: 'Größenvergleich: AN', ru: 'Сравнение масштабов: ВКЛ' },
   'tip.compareOff': { zh: '地月真实比例对比：关', en: 'Earth–Moon scale comparison: OFF', es: 'Comparación de escala: OFF', ja: '地球と月の縮尺比較：OFF', fr: 'Comparaison d’échelle : OFF', de: 'Größenvergleich: AUS', ru: 'Сравнение масштабов: ВЫКЛ' },

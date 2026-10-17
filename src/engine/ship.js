@@ -432,6 +432,11 @@ export class Ship {
     this.quat = new THREE.Quaternion();
     this.vel = new THREE.Vector3();
     this.speedSetting = 10;
+    // 推进剂预算（km/s）。真实航天器的总 Δv 是有限的——这是"飞行模拟"与
+    // "相机平移"最本质的差别之一：你不可能无限加速。
+    // 9.4 km/s ≈ 地表到 200km 轨道的化学推进预算（含重力/气动损失）。
+    // 街机模式不消耗（保留原有手感），只在真实引力模式下生效。
+    this.dvBudget = 9.4;
     // 真实引力模式（默认关闭，快捷键切换）：开启后推力只提供加速度，
     // 速度由引力积分得到——于是可以自由落体、可以入轨、可以停在地球静止轨道
     // 看着行星自转，而不是"停手就被行星甩掉"。默认关闭以保留原有街机手感。
@@ -507,7 +512,13 @@ export class Ship {
       // ── 真实引力：推力只给加速度，速度靠积分 ──
       // 主天体用平方反比，另叠太阳；不建模多体摄动（真实任务规划才需要）。
       // 关键点：**不做阻尼**——阻尼等于有介质，太空中没有。
-      this.vel.addScaledVector(_v1, cap * boost * 0.5 * dt);   // 推力
+      // 推力消耗 Δv 预算；耗尽后无法再加速（只能靠引力滑行）
+      if (this.dvBudget > 0) {
+        const dv = cap * boost * 0.5 * dt;
+        const use = Math.min(this.dvBudget, dv);
+        this.vel.addScaledVector(_v1, use);
+        this.dvBudget -= use;
+      }
       const nb = env.nearest;
       if (nb && nb.phys?.gm) {
         _v3.set(this.posKm[0] - nb.posKm[0], this.posKm[1] - nb.posKm[1], this.posKm[2] - nb.posKm[2]);
