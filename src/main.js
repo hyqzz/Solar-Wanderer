@@ -862,6 +862,12 @@ function loop() {
       // 移动端阈值放宽至 5m：捏合缩放步长比鼠标滚轮大，需更宽触发窗口才能触发着陆
       autoLand = altGround < (IS_MOBILE ? 0.005 : 0.0022);
     }
+    // DEM 未就绪时按 G 要给出反馈：此前条件里带了 baseReady，不满足就什么都不做，
+    // 用户在低空反复按 G 却毫无反应，以为按键坏了。
+    if (input.tapped('KeyG') && nearest?.landable && nearest.distSurface < landRange &&
+        !terrainMgr.baseReady(nearest.id)) {
+      hud.tip(t('tip.terrainLoading'));
+    }
     if ((autoLand || (input.tapped('KeyG') && nearest?.landable && nearest.distSurface < landRange &&
         terrainMgr.baseReady(nearest.id)))
       && !orbitCam.flight) {
@@ -1562,8 +1568,13 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   if (waterFx) {
     // 水下（R9-2b）：深海蓝绿雾 + 全屏浸没层随深度变暗 + 曝光衰减 + 星空遮蔽
     const { depth, dim } = waterFx;
-    fogColor.setRGB(0.015 + 0.09 * dim, 0.09 + 0.2 * dim, 0.15 + 0.26 * dim);
-    fogDensity = 16 + depth * 28;
+    // 分光吸收：水对红光的吸收远强于蓝绿（纯水的吸收系数在 650nm 约是
+    // 450nm 的 30 倍），所以远处只剩青蓝。雾色向青蓝偏，且越深越暗。
+    fogColor.setRGB(0.004 + 0.030 * dim, 0.030 + 0.115 * dim, 0.060 + 0.150 * dim);
+    // 可见度：真实海水的水平能见度约 20–50m（澄清水）；浑浊水域更短。
+    // FogExp2 的 1−exp(−(ρd)²) 在 d=1/ρ 处给 63%，所以 ρ 应取 1/L。
+    // 原来取 16（L≈62m）且只随深度缓慢增加——水下远处几乎不衰减，像在空气中。
+    fogDensity = 35 + depth * 60;
     skyFade = Math.min(skyFade, 0.04);
     exposureTarget = Math.max(exposureTarget * Math.max(dim, 0.045), 0.05);
     const wr = Math.round((0.04 + 0.16 * dim) * 255);

@@ -249,9 +249,17 @@ export class HeightField {
     const { W, H, hi } = this._alb;
     const lat = Math.asin(Math.max(-1, Math.min(1, dir.y)));
     const lon = Math.atan2(-dir.z, dir.x);
-    const x = Math.min(W - 1, Math.max(0, (((lon / Math.PI + 1) * 0.5) * W) | 0));
-    const y = Math.min(H - 1, Math.max(0, ((0.5 - lat / Math.PI) * H) | 0));
-    return hi[y * W + x];
+    // **双线性**而不是最近邻。场是 256×128（格距 1.4°），最近邻会把高度场
+    // 变成分段常数——在固定经纬网格线上导数不连续，轨道高度看是一道道沿经纬线
+    // 的直线陡坎。双线性后过渡连续。
+    const fx = Math.min(W - 1.001, Math.max(0, ((lon / Math.PI + 1) * 0.5) * W - 0.5));
+    const fy = Math.min(H - 1.001, Math.max(0, (0.5 - lat / Math.PI) * H - 0.5));
+    const x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const tx = fx - x0, ty = fy - y0;
+    const x1 = Math.min(W - 1, x0 + 1), y1 = Math.min(H - 1, y0 + 1);
+    const a = hi[y0 * W + x0], b = hi[y0 * W + x1];
+    const c = hi[y1 * W + x0], d = hi[y1 * W + x1];
+    return (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
   }
 
   /** 注入 DEM 瓦片源：启用后 height() 优先查询真实高程，未命中时回退到程序化噪声 */

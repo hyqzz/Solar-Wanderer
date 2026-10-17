@@ -85,6 +85,7 @@ const D = {
 
   // ── 提示（tips）──────────────────────────────────────────────────────
   'tip.quality': { zh: '已自动降低画质以保证流畅运行', en: 'Quality lowered automatically for smooth performance', es: 'Calidad reducida automáticamente para un rendimiento fluido', ja: '快適動作のため画質を自動的に下げました', fr: 'Qualité réduite automatiquement pour des performances fluides', de: 'Qualität automatisch gesenkt für flüssige Leistung', ru: 'Качество автоматически снижено для плавной работы' },
+  'tip.terrainLoading': { zh: '地表高程还在加载，稍候再试', en: 'Terrain is still loading — try again in a moment', es: 'El terreno aún se está cargando', ja: '地形を読み込み中です', fr: 'Le terrain est en cours de chargement', de: 'Gelände wird noch geladen', ru: 'Рельеф ещё загружается' },
   'tip.compareOn': { zh: '地月真实比例对比：开', en: 'Earth–Moon scale comparison: ON', es: 'Comparación de escala: ON', ja: '地球と月の縮尺比較：ON', fr: 'Comparaison d’échelle : ON', de: 'Größenvergleich: AN', ru: 'Сравнение масштабов: ВКЛ' },
   'tip.compareOff': { zh: '地月真实比例对比：关', en: 'Earth–Moon scale comparison: OFF', es: 'Comparación de escala: OFF', ja: '地球と月の縮尺比較：OFF', fr: 'Comparaison d’échelle : OFF', de: 'Größenvergleich: AUS', ru: 'Сравнение масштабов: ВЫКЛ' },
   'tip.starsUnavailable': { zh: '真实星表加载失败，星空已降级为合成背景', en: 'Star catalog failed to load — sky reduced to a synthetic background', es: 'No se pudo cargar el catálogo estelar', ja: '恒星カタログの読み込みに失敗しました', fr: 'Échec du chargement du catalogue stellaire', de: 'Sternkatalog konnte nicht geladen werden', ru: 'Не удалось загрузить каталог звёзд' },

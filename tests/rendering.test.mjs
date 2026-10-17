@@ -1438,3 +1438,24 @@ test('审计可用 ?pr= 锁定分辨率，避免软件渲染降档造成误判',
   assert.ok(/get\('pr'\)/.test(q), '缺少 pr 参数');
   assert.ok(/return \(\) => \{\}/.test(q), '锁定分辨率后应返回空守卫');
 });
+
+// ── 水下吸收 / 双线性高通 / DEM 未就绪反馈 ──────────────────────────────────
+test('水下按真实可见度衰减，且雾色向青蓝偏（红光先被吸收）', () => {
+  const src = read('src/main.js');
+  assert.ok(/fogDensity = 35 \+ depth \* 60/.test(src), '水下雾密度过小（原 16，可见度≈62m）');
+  assert.ok(/fogColor\.setRGB\(0\.004 \+ 0\.030 \* dim, 0\.030 \+ 0\.115 \* dim, 0\.060 \+ 0\.150 \* dim\)/.test(src),
+    '水下雾色未按分光吸收偏青蓝');
+});
+
+test('贴图高通场用双线性（最近邻会在经纬网格线上切出陡坎）', () => {
+  const src = read('src/scene/terrain.js');
+  assert.ok(/const a = hi\[y0 \* W \+ x0\]/.test(src), '高通场仍是最近邻');
+  assert.ok(/tx = fx - x0/.test(src), '缺少双线性插值权重');
+});
+
+test('DEM 未就绪时按 G 有反馈', () => {
+  const m = read('src/main.js');
+  const i = read('src/ui/i18n.js');
+  assert.ok(/t\('tip\.terrainLoading'\)/.test(m), '缺少提示');
+  assert.ok(/tip\.terrainLoading/.test(i), '缺少文案');
+});
