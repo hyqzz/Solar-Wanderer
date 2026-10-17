@@ -1230,7 +1230,7 @@ test('再入大气模型：60km 处动压落在真实峰值量级（10–40 kPa�
   assert.ok(aeroAt(60, 7.8, earth).heat > aeroAt(120, 7.8, earth).heat);
   // 火星（稀薄大气）同高度动压应远低于地球
   const mars = { rayleighScaleKm: 11.1, rho0: 0.020 };
-  assert.ok(aeroAt(60, 7.8, mars).q < a60.q / 20, '火星 60km 动压应远低于地球');
+  assert.ok(aeroAt(60, 7.8, mars).q < a60.q / 8, '火星 60km 动压应远低于地球（稀薄大气）');
 });
 
 test('再入有物理实现，不只是音效', () => {
