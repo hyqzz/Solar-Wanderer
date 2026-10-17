@@ -556,9 +556,21 @@ test('妊神星按三轴椭球渲染（说明里写着"橄榄球形"，画面不
 });
 
 test('其余海外天体保持正球（没有实测形状的不要编）', () => {
+  // haumea（Ortiz 2017 掩星 Jacobi 椭球）与 az84（掩星三轴比 1:0.7:0.6）
+  // 都有实测形状依据；其余没有的必须保持正球。
+  const measured = new Set(['haumea', 'az84']);
   for (const [id, d] of Object.entries(TNO_DATA)) {
-    if (id === 'haumea') continue;
+    if (measured.has(id)) continue;
     assert.ok(!d.axes, `${id} 凭空给了三轴形状——没有实测形状就保持正球`);
+  }
+  // 有形状的必须满足"等体积球半径 = 数据里的 radiusKm"（±3%）。
+  // 注意 axes 存的是**半轴**（haumea 1161/852/513 的等体积半径正好 798）。
+  for (const id of measured) {
+    const d = TNO_DATA[id];
+    const [a, b, c] = d.axes;
+    const eq = Math.cbrt(a * b * c);
+    assert.ok(Math.abs(eq - d.radiusKm) / d.radiusKm < 0.03,
+      `${id} 三轴 ${d.axes} 的等体积半径 ${eq.toFixed(0)} 与 radiusKm ${d.radiusKm} 不符`);
   }
 });
 
@@ -1354,4 +1366,45 @@ test('木星/土星有饱和度补偿（否则盘面接近中性灰）', async (
     const g = displayGradeOf(id);
     assert.ok(g && g.sat > 1.1, `${id} 缺少饱和度补偿，实测盘面 R−B 只有 ~10`);
   }
+});
+
+// ── 本轮批次的确定性缺陷 ────────────────────────────────────────────────────
+test('冰盖不会被判成海（蓝色掩码用亮度排除冰）', () => {
+  const src = read('src/scene/planetMaterial.js');
+  assert.ok(/om \*= 1\.0 - smoothstep\(0\.42, 0\.68, lum3\)/.test(src),
+    '缺少"亮而偏蓝的冰不是海"的排除项');
+});
+
+test('滚轮落在 UI 面板里不缩放相机', () => {
+  const src = read('src/engine/ship.js');
+  assert.ok(/closest\?\.\('#directory, #help, \.tour-bar, \.tc-panel, #hud-target/.test(src),
+    '缺少面板判断：在目录里滚列表会同时缩放相机');
+});
+
+test('指南针的北是自转轴在当地水平面的投影', () => {
+  const src = read('src/main.js');
+  assert.ok(/const dotAz = axis\.x \* zenithDir\.x/.test(src), '北方向未投影到水平面');
+});
+
+test('妊神星/创神星有实测环并会被渲染', () => {
+  const tno = read('src/astro/tno.js');
+  const scene = read('src/scene/tnoScene.js');
+  assert.ok(/rings: \{ innerKm: 2252/.test(tno), '妊神星缺环（Ortiz 2017）');
+  assert.ok(/rings: \{ innerKm: 4040/.test(tno), '创神星缺环（Morgado 2023）');
+  assert.ok(/createRings/.test(scene), 'TNO 场景没有渲染环');
+});
+
+test('2003 AZ84 按实测三轴比渲染，且等体积半径守恒', () => {
+  const tno = read('src/astro/tno.js');
+  const [a, b, c] = [484, 339, 291];
+  const eq = Math.cbrt(a * b * c);
+  assert.ok(Math.abs(eq - 362) / 362 < 0.03, `等体积半径 ${eq.toFixed(0)} 偏离 362`);
+  assert.ok(/axes: \[484, 339, 291\]/.test(tno), 'AZ84 未按三轴比渲染');
+});
+
+test('巨行星法线做了逆转置（压扁后中纬法线不偏）', () => {
+  const mat = read('src/scene/planetMaterial.js');
+  const b = read('src/scene/builder.js');
+  assert.ok(/normal\.y \* uInvScaleY/.test(mat), '缺少逆转置');
+  assert.ok(/uInvScaleY\.value = 1 \/ Math\.max\(sy, 1e-3\)/.test(b), '未按扁率写入逆转置');
 });

@@ -408,7 +408,13 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     // 单独压扁网格会让地表与碰撞错位，而岩质行星扁率 <0.6% 在正球近似下不可辨。
     // 非可登陆天体（四颗巨行星）按真实椭球渲染——它们没有地表，无碰撞可言。
     // 这里能成立的前提是 radiusKm 填的是赤道半径，见 bodies.js 顶部「半径口径」。
-    if (!phys.landable) mesh.scale.y = 1 - (phys.oblateness ?? 0);
+    if (!phys.landable) {
+      const sy = 1 - (phys.oblateness ?? 0);
+      mesh.scale.y = sy;
+      // 法线的逆转置：y 方向缩放 sy → 物体空间法线的 y 分量要除以 sy
+      const u = mat.userData.uniforms;
+      if (u?.uInvScaleY) u.uInvScaleY.value = 1 / Math.max(sy, 1e-3);
+    }
     group.add(mesh);
 
     const entry = {

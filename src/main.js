@@ -1113,14 +1113,24 @@ function loop() {
         );
         const relLen = _rel.length() || 1;
         zenithDir = { x: _rel.x / relLen, y: _rel.y / relLen, z: _rel.z / relLen };
-        // 北方向 = 天体自转北极（世界系）
+        // 北方向 = 自转轴在**当地水平面**上的投影（不是极轴本身）。
+        // 原来直接取极轴的三维方向：纬度 45° 处"北"标记会偏离真实北方 45°，
+        // 只有赤道处才是对的。投影后高纬也正确；极点处投影退化，回退到极轴。
         const bodyQuat = nearestBody.mesh.quaternion;
         const nq = _q.copy(bodyQuat);
-        northDir = {
+        const axis = {
           x: 2 * (nq.x * nq.y - nq.w * nq.z),
           y: 1 - 2 * (nq.x * nq.x + nq.z * nq.z),
           z: 2 * (nq.y * nq.z + nq.w * nq.x),
         };
+        const dotAz = axis.x * zenithDir.x + axis.y * zenithDir.y + axis.z * zenithDir.z;
+        let nx = axis.x - dotAz * zenithDir.x;
+        let ny = axis.y - dotAz * zenithDir.y;
+        let nz = axis.z - dotAz * zenithDir.z;
+        const nl = Math.hypot(nx, ny, nz);
+        if (nl < 1e-4) { nx = axis.x; ny = axis.y; nz = axis.z; }
+        else { nx /= nl; ny /= nl; nz /= nl; }
+        northDir = { x: nx, y: ny, z: nz };
         // 太阳方向（世界系，从相机指向太阳）
         const sunPos = builder.bodies.get('sun').posKm;
         sunDir = {

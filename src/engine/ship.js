@@ -115,6 +115,9 @@ export class Input {
     // ── Wheel ─────────────────────────────────────────────────────────────
     document.addEventListener('wheel', (e) => {
       if (isTyping(e)) return;
+      // 落在可滚动的 UI 面板里时不缩放相机。目录（#dir-body 是 overflow-y:auto）、
+      // 帮助、导览条、目标面板都会滚动，此前在列表里滚一下会顺带把相机拉近拉远。
+      if (e.target?.closest?.('#directory, #help, .tour-bar, .tc-panel, #hud-target, #start-screen')) return;
       // deltaMode 归一化：0=像素（Chrome/Edge），1=行（Firefox，×33），2=页（×100）
       const unit = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 100 : 1;
       // Shift+滚轮 = FOV 变焦（10°–100°），不进距离缩放通道

@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { TNO_IDS, TNO_DATA, tnoPosition, tnoOrbitPoints } from '../astro/tno.js';
 import { createPlanetMaterial } from './planetMaterial.js';
+import { createRings } from './rings.js';
 import { proceduralMapLazy } from './proceduralTextures.js';
 import { eclToWorldArr } from '../config.js';
 import { J2000 } from '../astro/time.js';
@@ -76,6 +77,13 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
       mesh.scale.set(a / R, c / R, b / R);   // 体固系 +Y 为极轴（最短轴）
     }
     group.add(mesh);
+    // 环：妊神星（Ortiz 2017）与创神星（Morgado 2023）都有实测环，说明里也写了。
+    // 不渲染的话就是"说明与画面矛盾"——用户会去找那颗环。
+    let ringMesh = null;
+    if (d.rings) {
+      ringMesh = createRings({ rings: d.rings, radiusKm: d.radiusKm }, null);
+      mesh.add(ringMesh);
+    }
 
     // 彗星式柔光头（远距主视觉，始终叠加在球体之上）
     const glint = makeGlowSprite(d.palette ?? 'gray');
@@ -106,7 +114,7 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
       orbitLinesGroup.add(orbitLine);
     }
 
-    entries.set(id, { id, phys: d, posKm, group, mesh, mat, glint, orbitLine });
+    entries.set(id, { id, phys: d, posKm, group, mesh, mat, glint, orbitLine, ringMesh });
   }
 
   const _sunDir = new THREE.Vector3();
@@ -149,6 +157,12 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
       const u = e.mat.userData.uniforms;
       u.uSunDir.value.copy(_sunDir);
       u.uSunI.value = sunI;
+      // 环的受光：环系需要太阳方向与辐照度；顺带给出环面法向（等于自转轴）
+      if (e.ringMesh) {
+        const ru = e.ringMesh.material?.uniforms;
+        if (ru?.uSunDir) { ru.uSunDir.value.copy(_sunDir); ru.uSunI.value = sunI; }
+        if (ru?.uRingNormal) ru.uRingNormal.value.set(0, 1, 0).applyQuaternion(e.mesh.quaternion);
+      }
 
       // 自转：此前整颗 TNO **完全不转**（tnoScene 里没有任何 rotation 赋值），
       // 而信息面板写着妊神星"自转周期仅 3.9 小时"、伐楼那"6.3 小时自转带来

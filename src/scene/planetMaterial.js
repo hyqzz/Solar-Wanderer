@@ -244,6 +244,7 @@ export function createPlanetMaterial({
     // 逐天体色彩分级（BODY_GRADE 表；缺省 = 无修正）
     // 亮度来自实测反照率标定（DISPLAY_GRADE 已把它折进去）
     uGrade: { value: new THREE.Vector3(...(DISPLAY_GRADE[bodyId]?.grade ?? [1, 1, 1])) },
+    uInvScaleY: { value: 1 },
     // Hapke 盘面归一化：让 shade 的盘面平均等于兰伯特球的 2/3，
     // 从而 albedo(=实测几何反照率) × shade 的盘面平均 = A_geo × 2/3（定义基准）。
     uHapkeNorm: { value: (() => {
@@ -273,6 +274,7 @@ export function createPlanetMaterial({
     uniforms,
     vertexShader: /* glsl */ `
       #include <common>
+      uniform float uInvScaleY;   // 见片元：非均匀缩放的逆转置
       #include <logdepthbuf_pars_vertex>
       varying vec2 vUv;
       varying vec3 vNormalW;
@@ -280,7 +282,9 @@ export function createPlanetMaterial({
       varying vec3 vObjPos;
       void main() {
         vUv = uv;
-        vNormalW = normalize(mat3(modelMatrix) * normal);
+        // 非均匀缩放（巨行星压扁）必须用**逆转置**：物体空间法线分量要除以缩放因子。
+        // 直接乘 modelMatrix 会让土星中纬法线偏约 5.6°，晨昏线位置与临边昏暗随之错。
+        vNormalW = normalize(mat3(modelMatrix) * vec3(normal.x, normal.y * uInvScaleY, normal.z));
         vec4 wp = modelMatrix * vec4(position, 1.0);
         vPosW = wp.xyz;
         vObjPos = position; // 对象空间（随行星自转，细节特征固定在表面）
@@ -314,6 +318,7 @@ export function createPlanetMaterial({
       uniform sampler2D uCloudTex;
       uniform int uHasClouds;
       uniform vec3 uGrade;
+      uniform float uInvScaleY;
       uniform float uHapkeNorm;
       uniform float uSat;
       uniform vec3 uNaturalTint;
@@ -442,6 +447,11 @@ ${CLOUD_GLSL}
         // 贴图海洋像素偏亮偏青；按蓝色掩码压暗并加深蓝移（Blue Marble/阿波罗实拍观感）
         if (uBodyId == 3) {
           float om = clamp((albedo.b - max(albedo.r, albedo.g * 0.9)) * 6.0, 0.0, 1.0);
+          // 冰盖不是海：南极/格陵兰的贴图同样"偏蓝"（雪在阴影里偏蓝），会被上面的
+          // 蓝色掩码判成开阔大洋，压暗并偏蓝约 24%。用亮度把"亮而偏蓝"的冰排除掉
+          // ——真实冰盖反照率 0.7–0.9，开阔大洋只有 0.03–0.06，两者亮度差一个数量级。
+          float lum3 = dot(albedo, vec3(0.3333));
+          om *= 1.0 - smoothstep(0.42, 0.68, lum3);
           albedo *= mix(vec3(1.0), vec3(0.52, 0.60, 0.86), om * 0.8);
         }
         // 土星极区重着色：贴图极盖为蓝灰斑驳（2013 蓝极期数据），经临边昏暗+ACES 后
@@ -635,13 +645,16 @@ export function createCloudMaterial(cloudTex, opts = {}) {
     side: THREE.DoubleSide,
     vertexShader: /* glsl */ `
       #include <common>
+      uniform float uInvScaleY;   // 见片元：非均匀缩放的逆转置
       #include <logdepthbuf_pars_vertex>
       varying vec2 vUv;
       varying vec3 vNormalW;
       varying vec3 vPosW;
       void main() {
         vUv = uv;
-        vNormalW = normalize(mat3(modelMatrix) * normal);
+        // 非均匀缩放（巨行星压扁）必须用**逆转置**：物体空间法线分量要除以缩放因子。
+        // 直接乘 modelMatrix 会让土星中纬法线偏约 5.6°，晨昏线位置与临边昏暗随之错。
+        vNormalW = normalize(mat3(modelMatrix) * vec3(normal.x, normal.y * uInvScaleY, normal.z));
         vPosW = (modelMatrix * vec4(position, 1.0)).xyz;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         #include <logdepthbuf_vertex>
