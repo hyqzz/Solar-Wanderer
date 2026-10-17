@@ -45,12 +45,16 @@ import { idbGet, idbPut } from '../engine/texCache.js';
 import { resourceQueue, whenIdle } from '../engine/resourceQueue.js';
 
 /** 全尺寸贴图后台升级优先级：默认视野（地月系/太阳）优先，气巨其次，远端卫星最后 */
+// 顺序即后台升级优先级。earth_clouds.jpg（11MB）**排在最后**：它是云层的
+// **兜底**贴图，而默认路径是 GIBS 的实时日期云图——两者都存在时兜底根本不显示。
+// 原先它排第 3，等于每次进站都先花 11MB 带宽抢在火星/木星全分辨率之前。
 const TEX_PRIORITY = [
-  'earth_day.jpg', 'earth_night.jpg', 'earth_clouds.jpg', 'moon.jpg', 'sun.jpg',
+  'earth_day.jpg', 'earth_night.jpg', 'moon.jpg', 'sun.jpg',
   'mars.jpg', 'jupiter.jpg', 'saturn.jpg', 'saturn_ring.png', 'milkyway.jpg',
   'venus_surface.jpg', 'venus_atmosphere.jpg', 'mercury.jpg',
   'io.jpg', 'europa.png', 'ganymede.jpg', 'callisto.jpg', 'titan.jpg',
   'uranus.jpg', 'neptune.jpg', 'triton.jpg', 'pluto.jpg', 'charon.jpg',
+  'earth_clouds.jpg',
 ];
 
 function priorityOf(file) {

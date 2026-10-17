@@ -1713,3 +1713,13 @@ test('大气壳的抖动幅度按曝光归一化（否则高曝光天体整片�
   const m = read('src/main.js');
   assert.ok(/au\?\.uInvExposure/.test(m), '主循环没有给大气壳写入 uInvExposure');
 });
+
+// ── 标签投影：每帧不得分配 ─────────────────────────────────────────────────
+test('标签投影不再每帧分配（199 个标签 × 每帧一个 Vector3）', () => {
+  const src = read('src/ui/labels.js');
+  assert.ok(!/rel\.clone\(\)\.project/.test(src),
+    '仍在使用 rel.clone().project(...)：每帧每标签一次分配');
+  assert.ok(/_ndc\.copy\(rel\)\.project/.test(src), '缺少复用的暂存向量');
+  // 样式写入要有状态缓存（display 每帧写 199 次是无效的样式失效）
+  assert.ok(/item\._shown/.test(src), 'display 写入没有状态缓存');
+});

@@ -7,6 +7,9 @@ import { formatDist } from '../config.js';
 
 const _v = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
+// 投影用的暂存向量。此前每帧对每个标签都新分配一个 Vector3 再投影——
+// Vector3 分配（199 个/帧），纯粹给 GC 添堵，且与渲染预算直接抢时间。
+const _ndc = new THREE.Vector3();
 
 export class Labels {
   constructor(container, camera) {
@@ -51,6 +54,11 @@ export class Labels {
    * @param occluders 遮挡体数组 [{id, pos:Vector3(相机相对), r:km}] —— 所有投影角足够大的天体都参与
    * （修复：原实现仅在相机贴近最近天体 2.5R 内才遮挡，远处天体的标签会叠加在眼前行星盘面上）
    */
+  /** 隐藏一个标签（带状态缓存，避免每帧重复写同一样式） */
+  _hide(item, el) {
+    if (item._shown !== false) { el.style.display = 'none'; item._shown = false; }
+  }
+
   update(selectedId, occluders = []) {
     if (!this.visible) return;
     const occList = Array.isArray(occluders) ? occluders : (occluders ? [occluders] : []);
@@ -67,7 +75,7 @@ export class Labels {
       // 在相机后方？用视线方向点积判定（稳定，不受 far=1e15 时 ndc.z≈1 浮点抖动影响）
       // —— 这是远处标签持续闪烁的根因（#3）：原 ndc.z>1 在远平面附近来回跳变。
       const vz = rel.x * _fwd.x + rel.y * _fwd.y + rel.z * _fwd.z;
-      if (vz <= 0) { el.style.display = 'none'; item._hideStreak = 0; continue; }
+      if (vz <= 0) { this._hide(item, el); item._hideStreak = 0; continue; }
 
       // 球体遮挡测试：视线与任一前景天体相交且目标在交点之后 → 隐藏
       let wantHide = false;
@@ -81,7 +89,7 @@ export class Labels {
           }
         }
       }
-      const ndc = rel.clone().project(this.camera);
+      const ndc = _ndc.copy(rel).project(this.camera);
       if (ndc.x < -1.08 || ndc.x > 1.08 || ndc.y < -1.08 || ndc.y > 1.08) wantHide = true;
       // 太近（已充满视野）时隐藏标签
       if (dist < target.radiusKm * 1.6) wantHide = true;
@@ -89,12 +97,14 @@ export class Labels {
       // 迟滞：连续 2 帧想隐藏才真正隐藏；想显示则立即显示（消除边界单帧抖动）
       if (wantHide) {
         item._hideStreak = (item._hideStreak || 0) + 1;
-        if (item._hideStreak >= 2) { el.style.display = 'none'; continue; }
+        if (item._hideStreak >= 2) { this._hide(item, el); continue; }
       } else {
         item._hideStreak = 0;
       }
 
-      el.style.display = '';
+      // 只在状态真的变化时写样式：`display=''` 每帧写 199 次是无效的样式失效
+      // 与重排风险（浏览器的样式系统仍要比较新值）。
+      if (item._shown !== true) { el.style.display = ''; item._shown = true; }
       const x = ((ndc.x + 1) / 2) * w;
       const y = ((1 - ndc.y) / 2) * h;
       el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
@@ -127,7 +137,7 @@ export class Labels {
     for (const it of frame) {
       const overlap = accepted.some((a) =>
         Math.abs(a.x - it.x) < (a.bw + it.bw) / 2 && Math.abs(a.y - it.y) < (a.bh + it.bh) / 2);
-      if (overlap) it.el.style.display = 'none';
+      if (overlap) this._hide(it, it.el);
       else accepted.push(it);
     }
     // 瞄准高亮
