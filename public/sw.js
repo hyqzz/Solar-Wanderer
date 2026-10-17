@@ -15,7 +15,9 @@
 const VERSION = 'sw-v1';
 const SHELL = `${VERSION}-shell`;
 const ASSETS = `${VERSION}-assets`;
-const MAX_ASSETS = 900;          // 条目上限，避免无界增长（约 300 MB 量级的资源池）
+// 条目上限：全站可缓存文件实测 2817 个（650 星历分片 + 2047 DEM 瓦片 + 111 贴图）。
+// 原来取 900，运行时缓存会反复淘汰——离线使用时 DEM 瓦片根本留不住。
+const MAX_ASSETS = 3200;
 
 self.addEventListener('install', (e) => {
   // 立即接管，不等待旧 worker 退役（本应用没有需要版本对齐的破坏性变更）

@@ -98,7 +98,11 @@ export class Labels {
       const x = ((ndc.x + 1) / 2) * w;
       const y = ((1 - ndc.y) / 2) * h;
       el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
-      el.querySelector('.ld').textContent = target.distText ?? formatDist(dist);
+      // 距离数字只在**选中**或**准星瞄准**的天体上显示。
+      // 此前每帧给全部标签写距离，天空看上去像一块测量仪表盘——
+      // 真实星空里你不会在每颗星旁边看到"3.2 AU"。
+      const detail = target.id === selectedId || target.id === this.aimedId;
+      el.querySelector('.ld').textContent = detail ? (target.distText ?? formatDist(dist)) : '';
       el.classList.toggle('selected', target.id === selectedId);
       // 收入本帧可见集，供重叠避让（优先级：选中 > 视半径大 > 近）
       const name = target.name ?? target.nameZh ?? '';

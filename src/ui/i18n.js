@@ -85,6 +85,8 @@ const D = {
 
   // ── 提示（tips）──────────────────────────────────────────────────────
   'tip.quality': { zh: '已自动降低画质以保证流畅运行', en: 'Quality lowered automatically for smooth performance', es: 'Calidad reducida automáticamente para un rendimiento fluido', ja: '快適動作のため画質を自動的に下げました', fr: 'Qualité réduite automatiquement pour des performances fluides', de: 'Qualität automatisch gesenkt für flüssige Leistung', ru: 'Качество автоматически снижено для плавной работы' },
+  'tip.compareOn': { zh: '地月真实比例对比：开', en: 'Earth–Moon scale comparison: ON', es: 'Comparación de escala: ON', ja: '地球と月の縮尺比較：ON', fr: 'Comparaison d’échelle : ON', de: 'Größenvergleich: AN', ru: 'Сравнение масштабов: ВКЛ' },
+  'tip.compareOff': { zh: '地月真实比例对比：关', en: 'Earth–Moon scale comparison: OFF', es: 'Comparación de escala: OFF', ja: '地球と月の縮尺比較：OFF', fr: 'Comparaison d’échelle : OFF', de: 'Größenvergleich: AUS', ru: 'Сравнение масштабов: ВЫКЛ' },
   'tip.starsUnavailable': { zh: '真实星表加载失败，星空已降级为合成背景', en: 'Star catalog failed to load — sky reduced to a synthetic background', es: 'No se pudo cargar el catálogo estelar', ja: '恒星カタログの読み込みに失敗しました', fr: 'Échec du chargement du catalogue stellaire', de: 'Sternkatalog konnte nicht geladen werden', ru: 'Не удалось загрузить каталог звёзд' },
   'tip.tnoOrbitsOn': { zh: '海外天体轨道线：开', en: 'Trans-Neptunian orbits: ON', es: 'Órbitas transneptunianas: ON', ja: '海王星以遠軌道線：ON', fr: 'Orbites transneptuniennes : ON', de: 'Transneptunische Orbits: AN', ru: 'Орбиты транснептуновых объектов: ВКЛ' },
   'tip.tnoOrbitsOff': { zh: '海外天体轨道线：关', en: 'Trans-Neptunian orbits: OFF', es: 'Órbitas transneptunianas: OFF', ja: '海王星以遠軌道線：OFF', fr: 'Orbites transneptuniennes : OFF', de: 'Transneptunische Orbits: AUS', ru: 'Орбиты транснептуновых объектов: ВЫКЛ' },
@@ -402,6 +404,7 @@ const HELP_EN = `
         <tr><td>C</td><td>Compass</td></tr>
         <tr><td>M</td><td>Sound (off by default)</td></tr>
         <tr><td>Y</td><td>Human silhouette reference (walk mode · sense of scale)</td></tr>
+        <tr><td>U</td><td>Earth–Moon true-scale comparison (diameter and distance to scale)</td></tr>
         <tr><td>Ctrl+B / Ctrl+Shift+B</td><td>Save bookmark / jump to the most recent bookmark</td></tr>
         <tr><td>J</td><td>Real gravity (in flight · off by default; enables free-fall and orbit insertion)</td></tr>
       </table>

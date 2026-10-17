@@ -449,6 +449,13 @@ async function init() {
       const on = audioEngine?.toggle();
       hud.tip(t(on ? 'tip.audioOn' : 'tip.audioOff'));
     }
+    // I-14：地月真实比例对比（ScaleReference.toggleCompare）此前零调用——
+    // 功能写好了却没有任何入口，只能靠控制台。U 键接上。
+    if (e.code === 'KeyU' && !e.repeat) {
+      e.preventDefault();
+      const on = scaleRef?.toggleCompare();
+      if (on !== undefined) showActionTip(t(on ? 'tip.compareOn' : 'tip.compareOff'));
+    }
     if (e.code === 'KeyY' && !e.repeat && appMode === 'walk') {
       e.preventDefault();
       const on = scaleRef?.toggleHuman();
@@ -460,6 +467,16 @@ async function init() {
       else saveBookmark();
     }
   });
+
+  // I-15：教师分享的 ?tour= 之前是死功能——写进了 URL，全仓库没有一处读取。
+  // 现在启动时读一次，自动进入同一导览（教师工具那侧的链接才真的可用）。
+  try {
+    const wantTour = new URLSearchParams(window.location.search).get('tour');
+    if (wantTour && tourSystem?.start) {
+      // 等启动画面收起后再开始，否则旁白会被开场动画盖住
+      setTimeout(() => { try { tourSystem.start(wantTour); } catch { /* 未知导览 id */ } }, 1500);
+    }
+  } catch { /* 无 location 环境 */ }
 
   window.__game = { ship, simClock, overlayScene, overlayCam, cockpit, shipModel, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr, smallBodies, quality: QUALITY, ephemerisLoader, renderer, composer, apolloLandmarks, roverSites, sky, labels, tnoScene, comets, oortCloud };
   renderer.setAnimationLoop(loop);
@@ -824,7 +841,10 @@ function loop() {
       prevOrbitDist = orbitCam.dist;
     }
     // 登陆：按 G，或滚轮一路拉近贴地自动转行走（NMS 式无缝衔接，R7 #1）
-    const landRange = nearest ? Math.max(20, nearest.radiusKm * 0.05) : 0;
+    // 登陆距离阈值必须与 ship.js 的 20km 一致。此前这里取 max(20, R*0.05)：
+    // 地球是 318km——按 G 会从 300km 高度**硬切瞬移**到地面 +1.7m，
+    // 没有下降动画、没有过渡。两处阈值不一致说明是遗漏而不是设计。
+    const landRange = 20;
     let autoLand = false;
     // 手势活跃时不自动登陆：双指捏合/平移时的中点偏移可能短暂把相机推近地表，
     // 此时应让用户完成手势后再判断是否真正靠近，避免"刚切回探索就吸回行走"。
@@ -1516,7 +1536,11 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       }
       // fogDensity：基础值 + haze 系数 + 可选 fogDensityMult（金星等极厚大气）
       const hazeDensity = 1 + (atm.haze ?? 0) * 3;
-      fogDensity = (1 / 180) * Math.exp(-alt / atm.rayleighScaleKm) * hazeDensity * (atm.fogDensityMult ?? 1);
+      // 气溶胶透视。FogExp2 的因子是 1−exp(−(ρd)²)，要让它与真实的 exp(−d/L)
+      // 在 d=L 处吻合，需要 ρ = 1/L。此前取 1/180（相当于 L=180km）：20km 处只有
+      // 1.2% 的雾化（真实晴空约 18%），而 180km 处已经 63%、300km 全糊——
+      // 近处过清、远处过糊。取 L≈110km（晴空能见度量级）后中景层次才出来。
+      fogDensity = (1 / 110) * Math.exp(-alt / atm.rayleighScaleKm) * hazeDensity * (atm.fogDensityMult ?? 1);
       // 星空淡出：白昼且身处稠密层内
       const density = Math.exp(-alt / (atm.rayleighScaleKm * 2.2));
       // 白昼星消：散射天空亮度取决于视线路径上的整层气柱，而非局地密度——
