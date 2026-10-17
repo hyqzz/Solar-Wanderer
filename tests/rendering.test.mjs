@@ -1492,3 +1492,15 @@ test('TNO 光点有距离与相位调制（否则 30AU 与 90AU 一样亮）', (
   assert.ok(/const flux = Math\.min\(1, \(40 \/ dAUg\) \* \(40 \/ dAUg\)\)/.test(src), '缺少距离项');
   assert.ok(/cosPhase/.test(src), '缺少相位角');
 });
+
+// ── 新视野号：数据与模型早就有，但从未实例化 ────────────────────────────────
+test('新视野号被实例化，且位置在 2026 年约 59 AU', async () => {
+  const { newHorizonsPosition, NEW_HORIZONS } = await import('../src/scene/spacecraft.js');
+  assert.ok(NEW_HORIZONS.id === 'newhorizons');
+  const p = newHorizonsPosition(2461330);   // 2026-06 前后
+  const au = Math.hypot(p.x, p.y, p.z) / 1.495978707e8;
+  assert.ok(au > 55 && au < 65, `日心距 ${au.toFixed(1)} AU 不合理（应约 59）`);
+  const m = read('src/main.js');
+  assert.ok(/NEW_HORIZONS/.test(m) && /newHorizonsPosition/.test(m), 'main.js 未接入新视野号');
+  assert.ok(/posFn/.test(m), '探测器更新应走统一 posFn（否则新视野号不会动）');
+});

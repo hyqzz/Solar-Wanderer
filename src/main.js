@@ -47,7 +47,8 @@ import { TeacherToolkit } from './ui/teacher.js';
 import { EclipseSystem } from './scene/eclipses.js';
 import { WebXRManager } from './engine/webxr.js';
 import { createCockpit, createShipModel } from './scene/cockpit.js';
-import { createSpacecraftModel, makeSpacecraftGlow, SPACECRAFT_TIMELINES } from './scene/spacecraft.js';
+import { createSpacecraftModel, makeSpacecraftGlow, SPACECRAFT_TIMELINES,
+         NEW_HORIZONS, newHorizonsPosition } from './scene/spacecraft.js';
 import { createApolloLandmarks, createRoverSites } from './scene/landmarks.js';
 import { createEphemerisLoader } from './engine/ephemerisLoader.js';
 import { createCameraFeel } from './engine/cameraFeel.js';
@@ -282,7 +283,21 @@ async function init() {
       const glow = makeSpacecraftGlow(0x88ccff);
       group.add(glow);
     } catch { /* 模型创建失败时退化为空 Group，不影响位置注册 */ }
-    voyagerEntries.push({ vg, posKm, group });
+    voyagerEntries.push({ vg, posKm, group, posFn: (jd) => voyagerPosition(vg, jd) });
+  }
+
+  // 新视野号：数据与模型早就写好了（NEW_HORIZONS / newHorizonsPosition /
+  // createSpacecraftModel('newhorizons')），但从来没有被实例化——死资源。
+  {
+    const group = new THREE.Group();
+    const posKm = new Float64Array(3);
+    world.register(posKm, group);
+    scene.add(group);
+    try {
+      group.add(createSpacecraftModel('newhorizons'));
+      group.add(makeSpacecraftGlow(0x88ffcc));
+    } catch { /* 模型失败则退化为空 Group */ }
+    voyagerEntries.push({ vg: NEW_HORIZONS, posKm, group, posFn: (jd) => newHorizonsPosition(jd) });
   }
 
   // 日球层边界地标（可前往的"边界鼻尖"）
@@ -495,7 +510,7 @@ async function init() {
       comets.update(jdAfter, ship.posKm);
       tnoScene.update(jdAfter, ship.posKm);
       for (const v of voyagerEntries) {
-        const p = voyagerPosition(v.vg, jdAfter);
+        const p = v.posFn(jdAfter);
         const w = eclToWorldArr(p);
         v.posKm[0] = w[0]; v.posKm[1] = w[1]; v.posKm[2] = w[2];
       }
@@ -796,7 +811,7 @@ function loop() {
   try { smallBodies.update(jdTT, ship.posKm); } catch (e) { loopErr('smallBodies', e); }
   try {
     for (const v of voyagerEntries) {
-      const p = voyagerPosition(v.vg, jdTT);
+      const p = v.posFn(jdTT);
       const w = eclToWorldArr(p);
       v.posKm[0] = w[0]; v.posKm[1] = w[1]; v.posKm[2] = w[2];
     }
