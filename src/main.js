@@ -23,6 +23,7 @@ import { createStarfield, SKY_R } from './scene/starfield.js';
 import { loadStarCatalog } from './astro/starCatalog.js';
 import { NAMED_STARS } from './astro/stars.generated.js';
 import { photoSkyVisibility } from './scene/photoExposure.js';
+import { atmosphereFog } from './scene/atmosphere.js';
 import { createBelts, createOortCloud } from './scene/belts.js';
 import { createSmallBodies } from './scene/smallBodies.js';
 import { createTNOScene } from './scene/tnoScene.js';
@@ -498,7 +499,7 @@ async function init() {
     }
   } catch { /* 无 location 环境 */ }
 
-  window.__game = { ship, simClock, overlayScene, overlayCam, cockpit, shipModel, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr, smallBodies, quality: QUALITY, ephemerisLoader, renderer, composer, apolloLandmarks, roverSites, sky, labels, tnoScene, comets, oortCloud };
+  window.__game = { get __nearest() { return nearestCache; }, ship, simClock, overlayScene, overlayCam, cockpit, shipModel, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr, smallBodies, quality: QUALITY, ephemerisLoader, renderer, composer, apolloLandmarks, roverSites, sky, labels, tnoScene, comets, oortCloud };
   renderer.setAnimationLoop(loop);
 
   // ── 生命周期：后台/标签切换/睡眠恢复后强制同步仿真时钟 ──
@@ -783,6 +784,9 @@ function setupTerrainMgr() {
 
 // ---------- 主循环 ----------
 const _rel = new THREE.Vector3();
+const _fogView = new THREE.Vector3();
+const _fogUp = new THREE.Vector3();
+const _fogSun = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _sunLocal = new THREE.Vector3();
 let exposureTarget = 1;
@@ -1432,6 +1436,16 @@ function setCinematic(on) {
   }
 }
 
+// 诊断开关（自动化排查用）：
+//   ?noatmo=1  不建大气壳（隔离"壳层 vs 地形"的贡献）
+//   ?nofog=1   关闭气溶胶透视雾
+const DEBUG_FLAGS = (() => {
+  const q = new URLSearchParams(window.location.search);
+  const f = { noatmo: q.get('noatmo') === '1', nofog: q.get('nofog') === '1' };
+  globalThis.__noAtmo = f.noatmo;   // builder 在构建期读取
+  return f;
+})();
+
 // 直接以纯净模式启动（自动化截图/录屏用）：?clean=1
 if (typeof document !== 'undefined' && document.body
     && new URLSearchParams(window.location.search).get('clean') === '1') {
@@ -1572,27 +1586,35 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       ).normalize();
       const sunDir = new THREE.Vector3(-e.posKm[0], -e.posKm[1], -e.posKm[2]).normalize();
       const sunElev = _rel.dot(sunDir);
-      const b = atm.rayleigh;
-      const m = Math.max(b[0], b[1], b[2]);
-      const tint = new THREE.Color(b[0] / m, b[1] / m, b[2] / m);
       const day = THREE.MathUtils.clamp(sunElev * 4 + 0.1, 0, 1);
-      const dusk = Math.max(0, 1 - Math.abs(sunElev) * 6);
-      // 尘埃/气溶胶放大雾色亮度（haze 越大地平线橙色带越明显）
-      const dustAmp = 1 + (atm.haze ?? 0) * 1.5;
-      fogColor.copy(tint).multiplyScalar(0.5 * day * dustAmp / Math.max(dSunAU * dSunAU, 1e-4));
-      // 分光 Mie 行星（如火星）日落偏蓝；普通行星日落偏橙红
-      if (Array.isArray(atm.mie) && atm.mie[2] > atm.mie[0]) {
-        fogColor.r += dusk * 0.06; fogColor.b += dusk * 0.35;
-      } else {
-        fogColor.r += dusk * 0.25; fogColor.g += dusk * 0.1;
+      // ── 大气透视：与大气壳**同一套单次散射模型**（审计 C-4）──────────────
+      // 壳层是 depthTest 的透明体，只填充前方没有实体的像素；地面像素全被地形
+      // 挡住，壳层在那里贡献为零。所以地形侧必须自己再做一次大气透视——但必须
+      // 用同一个模型，否则地平线的霾色和它上方的天空对不上。
+      // 这里取相机视向，于是"朝着太阳看"与"背着太阳看"的霾色自然不同
+      // （前向 Mie 散射 + 整条路径的受照比例），不再是一个全天固定的常数。
+      // **坐标系必须统一**：atmosphereFog 内部要做 up·view、up·sun 的点积，
+      // 而相机视向是 Three 世界系（黄道系经 (x,y,z)→(x,z,−y) 映射而来）。
+      // 直接把黄道系的 up/sunDir 传进去会让受照占比恒为 0 → 霾色纯黑。
+      _fogUp.set(_rel.x, _rel.z, -_rel.y);
+      _fogSun.set(-e.posKm[0], -e.posKm[2], e.posKm[1]).normalize();
+      const fogRes = atmosphereFog(e.phys, {
+        altKm: alt,
+        up: _fogUp,
+        viewDir: camera.getWorldDirection(_fogView),
+        sunDir: _fogSun,
+        sunI: 5 * (atm.multiplier ?? 1) / Math.max(dSunAU * dSunAU, 1e-6),
+        boost: e.atmoMesh?.material.userData.uniforms.uBoost.value ?? 1,
+        boostM: e.atmoMesh?.material.userData.uniforms.uBoostM.value ?? 1,
+        dustStorm: e.atmoMesh?.material.userData.uniforms.uDustStorm.value ?? 0,
+      });
+      if (fogRes) {
+        // 源函数 = L/α：FogExp2 混向它等价于 mix(地形, 霾) = 地形·(1−α) + L，
+        // 与壳层在地平线处的合成完全一致。fogDensityMult 仍是"美术修正"（金星
+        // 用 Venera 实测能见度标定），但现在它乘的是**物理消光系数**而不是经验常数。
+        fogColor.setRGB(fogRes.color[0], fogRes.color[1], fogRes.color[2]);
+        fogDensity = Math.min(fogRes.density * (atm.fogDensityMult ?? 1), 2.5);
       }
-      // fogDensity：基础值 + haze 系数 + 可选 fogDensityMult（金星等极厚大气）
-      const hazeDensity = 1 + (atm.haze ?? 0) * 3;
-      // 气溶胶透视。FogExp2 的因子是 1−exp(−(ρd)²)，要让它与真实的 exp(−d/L)
-      // 在 d=L 处吻合，需要 ρ = 1/L。此前取 1/180（相当于 L=180km）：20km 处只有
-      // 1.2% 的雾化（真实晴空约 18%），而 180km 处已经 63%、300km 全糊——
-      // 近处过清、远处过糊。取 L≈110km（晴空能见度量级）后中景层次才出来。
-      fogDensity = (1 / 110) * Math.exp(-alt / atm.rayleighScaleKm) * hazeDensity * (atm.fogDensityMult ?? 1);
       // 星空淡出：白昼且身处稠密层内
       const density = Math.exp(-alt / (atm.rayleighScaleKm * 2.2));
       // 白昼星消：散射天空亮度取决于视线路径上的整层气柱，而非局地密度——
@@ -1643,7 +1665,8 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   }
 
   scene.fog.color.copy(fogColor);
-  scene.fog.density = fogDensity;
+  scene.fog.density = DEBUG_FLAGS.nofog ? 0 : fogDensity;
+  renderer.__fogRef = scene.fog;   // 诊断用（tools/probe-titanfog.mjs）
   sky.setFade(skyFade / Math.max(1, renderer.toneMappingExposure));
   // 黄道光的亮度分布依赖太阳方向（时变量），每帧喂一次
   try {
@@ -1691,6 +1714,14 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   {
     const su = builder.bodies.get('sun')?.uniforms;
     if (su?.uInvExposure) su.uInvExposure.value = 1 / Math.max(renderer.toneMappingExposure, 1e-4);
+    // 大气壳的抖动同样按曝光归一化（否则高曝光天体整片天空是雪花）。
+    // 这里遍历所有天体：大气壳是常驻场景的，不只最近的那一个会被看到
+    // （远处行星的临边大气同样在画面里），而写入 uniform 的成本可忽略。
+    const invExp = 1 / Math.max(renderer.toneMappingExposure, 1e-4);
+    for (const bd of builder.bodies.values()) {
+      const au = bd.atmoMesh?.material.userData.uniforms;
+      if (au?.uInvExposure) au.uInvExposure.value = invExp;
+    }
   }
 }
 

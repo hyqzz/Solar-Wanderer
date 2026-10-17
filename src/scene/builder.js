@@ -361,6 +361,8 @@ function detailModeOf(phys) {
 }
 
 export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
+  // 诊断开关由 main.js 从 URL 写入（?noatmo=1 不建大气壳，用于隔离壳层贡献）
+  const skipAtmo = !!globalThis.__noAtmo;
   const { cache, upgrades, boost } = await loadTextures(onProgress, onBgProgress);
   const bodies = new Map();
   const orbitLines = new THREE.Group();
@@ -393,6 +395,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   // 平行光（地表尺度上阳光本就近似平行），由它投射岩石/地形自我阴影——
   // 无阴影的岩石像贴图浮在地上（地表审查"照片级"缺口之首）。
   // 平行光正交阴影框 ±400m 只覆盖近场；w=0 时 castShadow 关闭、零开销。
+  globalThis.__scene = scene;   // 诊断用
   const sunShadow = new THREE.DirectionalLight(0xffffff, 0);
   sunShadow.castShadow = false;
   sunShadow.shadow.mapSize.set(QUALITY.shadowSize, QUALITY.shadowSize);
@@ -472,7 +475,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       entry.cloudMat = cmat;
     }
 
-    if (phys.atmosphere) {
+    if (phys.atmosphere && !skipAtmo) {
       const atmo = createAtmosphere(phys, AURORA_MODE[id] ?? 0);
       group.add(atmo);
       entry.atmoMesh = atmo;
@@ -552,7 +555,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       posKm: new Float64Array(3), mat,
     };
 
-    if (phys.atmosphere) {
+    if (phys.atmosphere && !skipAtmo) {
       const atmo = createAtmosphere(fullPhys, AURORA_MODE[id] ?? 0);
       group.add(atmo);
       entry.atmoMesh = atmo;
@@ -834,6 +837,8 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     // （原来取 pow(li, 0.55)，与盘面的 1/d² 不同源，水星上地形比盘面暗 2.4 倍）
     const li = 1 / (dAU * dAU);
     sunLight.intensity = Math.PI * li;
+    // 诊断用（tools/audit-scenarios.mjs 的 AUDIT_FOG）：读取当前地表光照
+    globalThis.__sunLight = sunLight; globalThis.__skyLight = skyLight;
     // 地表光照穿霾色滤：厚霾天体（金星/土卫六）的阳光被气溶胶滤成橙色并衰减
     // （Venera 橙琥珀原野 / Huygens 橙色漫射光实拍）；随高度指数恢复为自然阳光
     const gt = nearestE?.phys.atmosphere?.groundTint;

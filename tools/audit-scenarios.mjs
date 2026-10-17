@@ -29,7 +29,7 @@ async function freshPage() {
   p.on('pageerror', (e) => errs.push(String(e)));
   p.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
   await p.setViewport({ width: 960, height: 600 });
-  await p.goto(`http://127.0.0.1:4199/?clean=1&quality=${process.env.AUDIT_Q ?? 'high'}&pr=1`, { waitUntil: 'networkidle2', timeout: 180000 });
+  await p.goto(`http://127.0.0.1:4199/?clean=1&quality=${process.env.AUDIT_Q ?? 'high'}&pr=1${process.env.AUDIT_FLAGS ?? ''}`, { waitUntil: 'networkidle2', timeout: 180000 });
   await p.waitForFunction(() => {
     const x = document.getElementById('start-btn');
     return x && !x.disabled;
@@ -194,7 +194,86 @@ for (const [name, fn] of SCENARIOS) {
     const f = await fps();
     const st = await state();
     await p.screenshot({ path: `${OUT}${name}.png` });
+    if (process.env.AUDIT_HIDE === 'expo') {
+      await p.evaluate(() => { window.__game.renderer.toneMappingExposure *= 6; });
+      await wait(2500);
+      await p.screenshot({ path: `${OUT}${name}-expo.png` });
+      await p.evaluate(() => { window.__game.renderer.toneMappingExposure /= 6; });
+    }
+    if (process.env.AUDIT_HIDE === 'mesh') {
+      await p.evaluate(() => { const g = window.__game; const n = g.__nearest;
+        if (n) g.builder.bodies.get(n.id).mesh.visible = false; });
+      await wait(2500);
+      await p.screenshot({ path: `${OUT}${name}-nomesh.png` });
+      await p.evaluate(() => { const g = window.__game; const n = g.__nearest;
+        if (n) g.builder.bodies.get(n.id).mesh.visible = true; });
+    }
     rows.push({ name, ...st, fps: f, ...m });
+    if (process.env.AUDIT_FOG) {
+      const d = await p.evaluate(() => {
+        const g = window.__game;
+        const fog = g.renderer?.__fogRef;
+        const n = g.__nearest;
+        const cam = g.camera;
+        const v = { x: 0, y: 0, z: -1 };
+        const e = n && g.builder.bodies.get(n.id);
+        return {
+          fog: fog ? fog.color.toArray().map((x) => +x.toFixed(4)) : null,
+          dens: fog ? +fog.density.toFixed(5) : null,
+          exp: +g.renderer.toneMappingExposure.toFixed(3),
+          nearest: n ? n.id : null,
+          alt: n ? +n.distSurface.toFixed(2) : null,
+          atmo: !!(e && e.phys.atmosphere),
+          gt: e?.phys?.atmosphere?.groundTint ?? null,
+          sunCol: globalThis.__sunLight ? globalThis.__sunLight.color.toArray().map((x) => +x.toFixed(3)) : null,
+          sunInt: globalThis.__sunLight ? +globalThis.__sunLight.intensity.toFixed(4) : null,
+          skyInt: globalThis.__skyLight ? +globalThis.__skyLight.intensity.toFixed(4) : null,
+          lights: (() => {
+            const out = [];
+            const scan = (root) => root.traverse((o) => { if (o.isLight) out.push({
+              type: o.type, vis: o.visible, i: +o.intensity.toFixed(4),
+              c: o.color ? o.color.toArray().map((x) => +x.toFixed(2)) : null,
+              shadow: !!o.castShadow }); });
+            scan(globalThis.__scene ?? { traverse: () => {} });
+            return out;
+          })(),
+          px: (() => {
+            const cv = g.renderer.domElement;
+            const c2 = document.createElement('canvas');
+            c2.width = cv.width; c2.height = cv.height;
+            const ctx = c2.getContext('2d');
+            ctx.drawImage(cv, 0, 0);
+            const pick = (fx, fy) => {
+              const d = ctx.getImageData(Math.floor(cv.width * fx), Math.floor(cv.height * fy), 1, 1).data;
+              return [d[0], d[1], d[2]];
+            };
+            return { mid: pick(0.5, 0.4), low: pick(0.5, 0.8), sky: pick(0.5, 0.1) };
+          })(),
+          water: (() => {
+            const tm = g.terrainMgr;
+            return null;
+          })(),
+          terrHeight: (() => {
+            const tm = g.terrainMgr;
+            if (!n) return null;
+            const V = Object.getPrototypeOf(g.camera.position).constructor;
+            const q = e.mesh.quaternion;
+            const rel = new V(g.ship.posKm[0] - e.posKm[0], g.ship.posKm[1] - e.posKm[1], g.ship.posKm[2] - e.posKm[2]);
+            const L = rel.length(); rel.divideScalar(L);
+            const iq = q.clone().invert();
+            const loc = rel.clone().applyQuaternion(iq);
+            const f = tm.field(n.id);
+            return { camR: +L.toFixed(3), h: +tm.heightAt(n.id, loc).toFixed(3), R: e.phys.radiusKm,
+              baseOffset: +f.baseOffset.toFixed(3), effAmp: +f.effAmp.toFixed(3),
+              relief: +f.reliefRadius(loc).toFixed(3), baseSph: +f.baseSphereRadius(loc).toFixed(3),
+              deformed: f.deformed, reliefSphere: f.reliefSphere,
+              meshR: +e.mesh.geometry.boundingSphere.radius.toFixed(3),
+              atmoMesh: !!e.atmoMesh };
+          })(),
+        };
+      });
+      console.log('   fog', JSON.stringify(d));
+    }
     console.log(`${name.padEnd(24)} ${String(st.mode).padEnd(5)} ${String(st.focus).padEnd(9)} 均值${String(m.mean).padStart(6)} std${String(m.std).padStart(5)} 纹理${String(m.tex).padStart(6)} 暗${String(m.darkPct).padStart(5)}% 过曝${String(m.blownPct).padStart(5)}% 主档${String(m.peakBin).padStart(4)}% fps${String(f).padStart(5)} (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
   } catch (e) {
     console.log(`${name.padEnd(24)} 失败: ${e.message}`);

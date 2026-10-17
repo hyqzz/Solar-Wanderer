@@ -1650,3 +1650,66 @@ test('基底球：盘面球不高于地形最低点（否则坑底被球面切�
   }
   assert.ok(checked > 30, `只检查了 ${checked} 个天体`);
 });
+
+// ── 大气透视：与壳层同源（审计 C-4）────────────────────────────────────────
+test('大气透视与壳层共用同一套单次散射模型，且地平线比天顶更白', async () => {
+  const { atmosphereFog } = await import('../src/scene/atmosphere.js');
+  const earth = BODIES.earth;
+  const up = { x: 0, y: 1, z: 0 };
+  const sun = { x: 0, y: 1, z: 0 };
+  const at = (elDeg) => {
+    const r = elDeg * Math.PI / 180;
+    return atmosphereFog(earth, {
+      altKm: 0.03, up, viewDir: { x: Math.cos(r), y: Math.sin(r), z: 0 },
+      sunDir: sun, sunI: 5 * (earth.atmosphere.multiplier ?? 1), boost: 1, boostM: 1, dustStorm: 0,
+    });
+  };
+  const horizon = at(1), zenith = at(90), mid = at(45);
+  // 地平线光学厚度大 → 透射率低；天顶透明
+  assert.ok(horizon.alpha > zenith.alpha + 0.3,
+    `地平线 α=${horizon.alpha.toFixed(2)} 应远大于天顶 ${zenith.alpha.toFixed(2)}`);
+  // **饱和度**：地平线接近白，中天蓝（多次散射把长路径的蓝端补回来）。
+  // 只做单次散射时地平线是红黄主导的橄榄色——真实天空不会那样。
+  // 与中天而不是天顶比：本用例太阳在正上方，天顶方向正对太阳，那里由
+  // Mie 前向散射的日晕主导（真实天空里同样是发白的），不适合当"蓝"的参照。
+  const sat = (f) => (f.color[2] - f.color[0]) / f.color[2];
+  assert.ok(sat(horizon) < sat(mid) * 0.6,
+    `地平线饱和度 ${sat(horizon).toFixed(2)} 应明显低于中天 ${sat(mid).toFixed(2)}`);
+  // 源函数有限且为正（L/α 在薄大气下也不发散）
+  for (const f of [horizon, zenith]) {
+    for (const c of f.color) assert.ok(Number.isFinite(c) && c >= 0 && c < 50, `源函数异常 ${c}`);
+  }
+});
+
+test('厚霾天体的天空是不透明的（土卫六 τ≈3.7，旧值 τ≈0.05 时天空是黑的）', async () => {
+  const { atmosphereFog } = await import('../src/scene/atmosphere.js');
+  const titan = MOON_PHYS.titan;
+  const tauM = Math.max(...titan.atmosphere.mie) * 1000 * titan.atmosphere.mieScaleKm
+    * (1 + (titan.atmosphere.haze ?? 0) * 0.22);
+  assert.ok(tauM > 2 && tauM < 8, `土卫六霾垂直光学厚度 ${tauM.toFixed(2)} 不在实测 2–8`);
+  const f = atmosphereFog(titan, {
+    altKm: 0.03, up: { x: 0, y: 1, z: 0 }, viewDir: { x: 1, y: 0.02, z: 0 },
+    sunDir: { x: 0, y: 1, z: 0 }, sunI: 5 * (titan.atmosphere.multiplier ?? 1) / (9.55 ** 2),
+    boost: 1, boostM: 1, dustStorm: 0,
+  });
+  assert.ok(f.alpha > 0.9, `土卫六地平线应几乎不透明，实测 α=${f.alpha.toFixed(2)}`);
+  // 橙色：散射系数红端最高（tholin 吸蓝），源函数必须红>蓝
+  assert.ok(f.color[0] > f.color[2] * 1.5,
+    `土卫六天空应偏橙（红 ${f.color[0].toFixed(4)} vs 蓝 ${f.color[2].toFixed(4)}）`);
+});
+
+test('火星尘埃光学厚度在实测量级（晴期 τ≈0.4）', () => {
+  const a = BODIES.mars.atmosphere;
+  const tau = Math.max(...a.mie) * 1000 * a.mieScaleKm * (1 + (a.haze ?? 0) * 0.22);
+  assert.ok(tau > 0.25 && tau < 1.2, `火星尘埃垂直 τ=${tau.toFixed(3)} 不在晴期实测 0.3–0.8`);
+  // 散射系数红端最高（Fe₂O₃ 吸蓝）→ 天空是黄褐色
+  assert.ok(a.mie[0] > a.mie[2], '火星尘埃散射系数应红>蓝，否则天空偏蓝');
+});
+
+test('大气壳的抖动幅度按曝光归一化（否则高曝光天体整片天空是雪花）', () => {
+  const src = read('src/scene/atmosphere.js');
+  assert.ok(/uInvExposure/.test(src), '缺少 uInvExposure');
+  assert.ok(/dith\s*=[\s\S]{0,200}uInvExposure/.test(src), '抖动幅度没有按曝光归一化');
+  const m = read('src/main.js');
+  assert.ok(/au\?\.uInvExposure/.test(m), '主循环没有给大气壳写入 uInvExposure');
+});

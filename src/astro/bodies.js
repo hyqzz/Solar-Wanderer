@@ -76,7 +76,13 @@ export const BODIES = {
       heightKm: 60, rayleighScaleKm: 8.5, mieScaleKm: 1.2,
       // multiplier 0.72：太空视角减弱盘面内散射（真实 Blue Marble 观感为深蓝海洋，
       // 强 Rayleigh 内散射把整个白昼面罩上一层淡青纱）；地表天空亮度由 interiorBoost 补偿回 1.0
-      rayleigh: [5.802e-6, 13.558e-6, 33.1e-6], mie: 3.996e-6, mieG: 0.76, multiplier: 0.66,
+      // mie 按实测气溶胶光学厚度锚定：晴空大陆型 AOD(550nm) ≈ 0.10，标高 1.2km
+      // → β = AOD/H = 0.083 km⁻¹。旧值 3.996e-6 m⁻¹（AOD≈0.005）比实测低 20 倍，
+      // 于是地平线附近完全没有气溶胶的白化——真实天空在低仰角是发白的，
+      // 纯瑞利大气给出的是一条偏蓝的带。分光取散射系数的 Ångström 指数 ≈0.5
+      // （消光的 α≈1.3 里含吸收，散射部分弱得多），近似中性。
+      rayleigh: [5.802e-6, 13.558e-6, 33.1e-6],
+      mie: [7.7e-5, 8.3e-5, 9.3e-5], mieG: 0.72, multiplier: 0.66,
       interiorBoost: 1.52, // ≈1/0.66：补偿 multiplier 降低对地表/低空无散射天空亮度的影响
     },
     // cloudsReal：由 tools/fetch-clouds.mjs 从 NASA GIBS 的 MODIS 云量产品生成的
@@ -102,12 +108,17 @@ export const BODIES = {
       heightKm: 80, rayleighScaleKm: 11.1, mieScaleKm: 9,
       // Rayleigh 保持物理量级（CO₂ 稀薄大气，太空看仅极薄气雾）
       rayleigh: [5.0e-7, 3.0e-7, 1.2e-7],
-      // betaM [R,G,B]：蓝光消光略高，对应 ~1.5µm 尘埃的 Mie 消光谱
-      mie: [1.2e-6, 1.5e-6, 1.8e-6],
+      // betaM [R,G,B]：按实测尘埃光学厚度锚定。火星晴期可见光垂直 τ≈0.4
+      // （沙尘暴期可达 5），标高 9 km → β = τ/H ≈ 4.4e-5 km⁻¹。
+      // 旧值 τ≈0.002 差两个数量级：天空过于通透，且白昼天空只有极淡的黄。
+      // 分光取**散射**系数（红>绿>蓝）：Fe₂O₃ 尘埃在蓝端吸收远强于散射，
+      // 所以被散射进视线的光是黄褐色的——这正是火星天空的标志色。
+      // （消光系数本身是蓝端更高，但本模型不分离吸收，用散射系数才对。）
+      mie: [4.4e-5, 3.6e-5, 2.8e-5],
       // mieG [R,G,B]：物理合理范围（实测 Fe₂O₃ g≈0.55–0.75），蓝通道峰略尖产生蓝色日落光晕
       mieG: [0.60, 0.65, 0.72],
-      multiplier: 3.0,
-      haze: 0.70,   // 较高尘埃雾霾：地平线橘黄色带 + 大气纵深感
+      multiplier: 0.75,  // 与上面的 τ 同步标定：天空/地面亮度比对齐地球量级
+      haze: 0.35,   // 近地面浓尘层（标高 0.22·HM ≈ 2km）：地平线橘黄色带 + 纵深感
       // 分离式 interiorBoost：仅在相机进入大气内部后生效，探索模式太空视角完全不受影响
       // uBoost（Rayleigh）= 8 → 白昼天空明亮琥珀色（地球参考级亮度的约 1/4）
       // uBoostM（Mie）= 1.5 → 适度前向散射光晕，太阳盘面仍清晰可见
@@ -267,16 +278,24 @@ export const MOON_PHYS = {
   titan:     { nameZh: '土卫六', nameEn: 'Titan', parent: 'saturn', radiusKm: 2574.7, gm: 8.978e3,
                landable: true, surface: { ampKm: 1.5, roughness: 0.4, craters: 0.1, palette: 'titan' },
                textures: { map: 'titan.jpg' },
-               atmosphere: { groundAlbedo: 0.10, skyFraction: 0.55, heightKm: 200, rayleighScaleKm: 20, mieScaleKm: 30,
+               atmosphere: { groundAlbedo: 0.10, skyFraction: 0.55, heightKm: 200, rayleighScaleKm: 20, mieScaleKm: 50,
                              // multiplier 1.6：太空视角降低霾层盘面内散射（旧值 3.0 把橙色霾
                              // 洗成粉米色；卡西尼实拍为饱和橙黄盘）；地表橙色天空由 interiorBoost 补偿
                              // 分光 mie：tholin 霾强烈吸收蓝光（红>绿>蓝散射），
                              // 使霾层内散射呈橙色——旧值灰色 mie 把盘面洗成粉米白
-                             rayleigh: [8e-7, 5e-7, 2e-7], mie: [1.6e-6, 1.2e-6, 0.7e-6], mieG: 0.7, multiplier: 1.6,
+                             // 光学厚度按 Cassini/Huygens 实测锚定：tholin 霾在可见光的
+                             // 垂直光学厚度 τ ≈ 3–5（卡西尼在可见光看不到地表，只在近红外
+                             // 才拍得到），霾标高约 50 km。旧值 τ≈0.05 差两个数量级——地面
+                             // 天空因此是**黑的**（壳层几乎全透明），而 Huygens 实拍是
+                             // 一片不透明的橙色天光，地平线几乎看不见。
+                             // β = τ/H = 3.7/50 km ≈ 7.4e-5 km⁻¹（红端略高：tholin 吸蓝）。
+                             rayleigh: [8e-7, 5e-7, 2e-7], mie: [7.4e-5, 5.6e-5, 3.4e-5], mieG: 0.7, multiplier: 1.0,
                              interiorBoost: 1.9,
                              // 地表光照穿霾色滤：tholin 橙霾把 0.1% 的残余阳光滤成橙色漫射光
                              // （Huygens 着陆实拍：整个地表场景笼罩在橙色光中）
                              groundTint: [1.0, 0.60, 0.28], groundDim: 0.9,
+                             // 近地面再加一层更薄的浓霾（Huygens 下降段在 20 km 以下
+                             // 见到明显的近地霾），标高取主层的 0.22 倍
                              haze: 0.30 }, // 烃类烟霾（tholin），橙色近地面雾霾极厚
                desc: '唯一拥有浓密大气的卫星（1.5 倍地球气压），表面有液态甲烷的湖泊与河流，橙色烟霾笼罩全球。' },
   iapetus:   { nameZh: '土卫八', nameEn: 'Iapetus', parent: 'saturn', radiusKm: 734.5, gm: 120.51,

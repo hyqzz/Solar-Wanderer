@@ -48,6 +48,11 @@ export function createAtmosphere(phys, auroraMode = 0) {
     uAuroraMode: { value: auroraMode }, // 0=无 1=地球 2=木星 3=土星 4=海卫一
     uAuroraStrength: { value: 1.0 },    // 运行时降档置 0
     uDustStorm: { value: 0.0 },     // 火星尘暴强度 0..1（boost 雾霾）
+    // 抖动幅度的曝光归一化：抖动是**为了消除 8bit 输出的条带**，幅度应当对应
+    // 输出端的 1/255，而 L 要经过曝光与 ACES 才到输出端。此前抖动是加在 L 上的
+    // 绝对值（1/255），在土卫六这种高曝光天体（×68）上被放大成 ±25/255 的可见
+    // 噪点——整片天空都是雪花。见 sun.js 的同名 uniform。
+    uInvExposure: { value: 1 },
   };
 
   const mat = new THREE.ShaderMaterial({
@@ -91,6 +96,7 @@ export function createAtmosphere(phys, auroraMode = 0) {
       uniform int uAuroraMode;    // 0=无 1=地球 2=木星 3=土星 4=海卫一
       uniform float uAuroraStrength;
       uniform float uDustStorm;
+      uniform float uInvExposure;
       varying vec3 vWorldPos;
 
       // 沿自转轴拉伸：扁椭球 → 正球（uStretch=0 时恒等）
@@ -272,11 +278,34 @@ export function createAtmosphere(phys, auroraMode = 0) {
         float alpha = 1.0 - dot(viewT, vec3(0.3333));
 
         // 多重散射近似（B3）：光学厚处的再散射能量以各向同性相位回归。
-        // 能量占比 ≈ 1 − viewT（被多次散射"截留"的光），Frostbite 式一阶修正；
-        // 效果：白昼面天空更亮更柔、临边过渡自然、晨昏圈不再突变死黑。
+        // 能量占比 ≈ 1 − viewT（被多次散射"截留"的光）。
+        //
+        // 源项**不能**用路径加权的 inscR：进入视线的多次散射光来自整个天穹，
+        // 而 inscR 带的是视线自身的透射率——水平视线上蓝端的透射率在 30km 内
+        // 就衰到 4%，于是单次散射解在地平线附近是红黄主导的，天空出现一条
+        // 橄榄色带（真实天空没有）。改用"相机处密度 × 气柱等效程长 √(2πR·H)"，
+        // 保持蓝主导——真实漫射天光确实是偏蓝的。
+        // 再乘受照路径占比，夜间不发光（否则夜空会自己亮起来）。
         vec3 msFrac = vec3(1.0) - viewT;
-        vec3 betaScat = uBetaR * inscR + uBetaM * inscM;
-        L += uSunI * betaScat * (1.0 / (4.0 * PI)) * msFrac * msFrac * 0.35;
+        float hCam = hAbove(ro);
+        float hazeM = uHaze + uDustStorm * 0.6;
+        float rhoRc = exp(-hCam / uHR) * uBoost;
+        float rhoMc = (exp(-hCam / uHM) + hazeM * exp(-hCam / max(uHM * 0.22, 0.5))) * uBoostM;
+        // 幅度取**各向同性极限** E/(4π)：光学厚时多次散射的天空辐亮度就是
+        // 太阳辐照度除以 4π（能量守恒的必然结果），与光学厚度无关；
+        // 薄大气由 msFrac² 自然压小（二阶散射 ∝ τ²）。
+        // 色调用归一化的散射系数——瑞利主导偏蓝（地球），霾主导偏橙（土卫六）。
+        // 色相随散射次数**去饱和**：一阶散射带的是散射系数的谱（瑞利偏蓝），
+        // 但高阶散射在保守介质里最终把能量全部还回来，谱趋向入射光（白）。
+        // 只按散射系数染色时，地平线（光程极长、几乎全是高阶散射）会是一条
+        // 偏蓝的带——真实天空在那里恰恰是最白的。
+        vec3 scatTint = uBetaR * rhoRc + uBetaM * rhoMc;
+        float smax = max(max(scatTint.r, scatTint.g), scatTint.b);
+        vec3 sNorm = smax > 1e-12 ? scatTint / smax : vec3(0.0);
+        float msMean = (msFrac.r + msFrac.g + msFrac.b) * (1.0 / 3.0);
+        sNorm = mix(sNorm, vec3(1.0), msMean);
+        float litFrac = odR > 1e-6 ? odRlit / odR : 0.0;
+        L += uSunI * sNorm * (1.0 / (4.0 * PI)) * msFrac * msFrac * litFrac;
 
         // === 地面反照率反弹 ===
         // 阳光穿过整层大气到达地表、被地表按反照率反射、再散射进视线。
@@ -307,7 +336,9 @@ export function createAtmosphere(phys, auroraMode = 0) {
 
         // 轻微抖动消除条带（×alpha：仅作用于有大气信号处。R8 #1 修复——
         // 旧实现无条件加在整个壳投影盘上，外太阳系高曝光下显形为以 Ra 为界的圆圈线）
-        float dith = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) / 255.0;
+        // 抖动幅度按曝光归一化（uInvExposure），使输出端的幅度恒为 ~1/255
+        float dith = (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5)
+                   / 255.0 * uInvExposure;
         gl_FragColor = vec4(L + dith * alpha, alpha);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -320,4 +351,183 @@ export function createAtmosphere(phys, auroraMode = 0) {
   mesh.frustumCulled = true;
   mat.userData.uniforms = uniforms;
   return mesh;
+}
+
+// ── 大气透视（aerial perspective）的 JS 实现 ────────────────────────────────
+//
+// 为什么需要单独一份：大气壳是 depthTest 的透明体，只填充"前方没有实体"的像素
+// ——地面像素被地形完全挡住，壳层在那里贡献恒为零。于是**地形侧必须自己再做一次
+// 大气透视**。原先这一步是另写的一串经验公式（fogColor = rayleigh 比例 × 0.5 ×
+// day…），与壳层毫无关系：地平线的霾色和它上方天空的颜色对不上，这正是"从地面
+// 看仍像游戏"最直接的来源（审计 C-4）。
+//
+// 这里把壳层片元着色器的单次散射积分（Rayleigh + 分光 Mie + 臭氧 + 一阶多重
+// 散射 + 地面反照率反弹）在 JS 里重算一遍，返回：
+//   · color   —— 视线方向的散射辐亮度 L（与着色器同单位，HDR 线性）
+//   · alpha   —— 1 − 平均透射率（着色器用的同一个量）
+//   · source  —— L / alpha，源函数 j/σt：光学厚时的极限辐亮度。
+//                地形用 FogExp2 混向它，"远处地形 → 霾色"与天空在数学上同源。
+//   · density —— 相机所在高度的消光系数（km⁻¹），FogExp2 的 ρ。
+//
+// 每帧只算一次（视向取相机前方），16×8 步，开销可忽略。
+export function atmosphereFog(phys, opts) {
+  const a = phys?.atmosphere;
+  if (!a) return null;
+  const Rg = phys.radiusKm;
+  const Ra = Rg + a.heightKm;
+  const bR = [a.rayleigh[0] * 1000, a.rayleigh[1] * 1000, a.rayleigh[2] * 1000]; // m⁻¹→km⁻¹
+  const mieIn = Array.isArray(a.mie) ? a.mie : [a.mie, a.mie, a.mie];
+  const bM = [mieIn[0] * 1000, mieIn[1] * 1000, mieIn[2] * 1000];
+  const gIn = Array.isArray(a.mieG) ? a.mieG : [a.mieG, a.mieG, a.mieG];
+  const HR = a.rayleighScaleKm, HM = a.mieScaleKm;
+  const haze = a.haze ?? 0;
+  const ozone = a.ozone ?? 0;
+  const groundAlbedo = a.groundAlbedo ?? 0;
+  const boost = opts.boost ?? 1;
+  const boostM = opts.boostM ?? 1;
+  const hazeEff = haze + (opts.dustStorm ?? 0) * 0.6;
+  const sunI = opts.sunI;
+
+  const { altKm, up, viewDir, sunDir } = opts;
+  // 相机在原点（浮动原点），行星中心在 -up·(Rg+alt)
+  const cx = -up.x * (Rg + altKm), cy = -up.y * (Rg + altKm), cz = -up.z * (Rg + altKm);
+  const rdx = viewDir.x, rdy = viewDir.y, rdz = viewDir.z;
+  const sdx = sunDir.x, sdy = sunDir.y, sdz = sunDir.z;
+
+  // 射线-球相交。**必须传方向**：早先这里写死了视线方向，于是"该点是否被
+  // 行星挡住阳光"用的其实是视线方向——水平视线上的采样点几乎全部被判成
+  // 在阴影里，受照占比归零，霾色变成纯黑（土卫六地平线是一条黑带）。
+  const hitD = (ox, oy, oz, dx, dy, dz, r) => {
+    const gx = ox - cx, gy = oy - cy, gz = oz - cz;
+    const b = gx * dx + gy * dy + gz * dz;
+    const cc = gx * gx + gy * gy + gz * gz - r * r;
+    const det = b * b - cc;
+    if (det < 0) return null;
+    const sq = Math.sqrt(det);
+    return [-b - sq, -b + sq];
+  };
+  const hit = (ox, oy, oz, r) => hitD(ox, oy, oz, rdx, rdy, rdz, r);
+  const hAbove = (px, py, pz) => Math.hypot(px - cx, py - cy, pz - cz) - Rg;
+
+  const shell = hit(0, 0, 0, Ra);
+  if (!shell) return null;
+  let t0 = Math.max(shell[0], 0), t1 = shell[1];
+  const gr = hit(0, 0, 0, Rg);
+  if (gr && gr[0] > 0) t1 = Math.min(t1, gr[0]);
+  if (t1 <= t0) return null;
+
+  const N = 16, NL = 8;
+  const ds = (t1 - t0) / N;
+  let odR = 0, odM = 0, odO = 0, odRlit = 0;
+  const inscR = [0, 0, 0], inscM = [0, 0, 0];
+
+  for (let i = 0; i < N; i++) {
+    const t = t0 + (i + 0.5) * ds;
+    const px = rdx * t, py = rdy * t, pz = rdz * t;
+    const h = hAbove(px, py, pz);
+    const dR = Math.exp(-h / HR) * boost;
+    const dM = (Math.exp(-h / HM) + hazeEff * Math.exp(-h / Math.max(HM * 0.22, 0.5))) * boostM;
+    odR += dR * ds;
+    odM += dM * ds;
+    // 采样点脚下那片地面是否受照（与着色器一致）
+    const pl = Math.hypot(px - cx, py - cy, pz - cz) || 1;
+    const litDot = ((px - cx) * sdx + (py - cy) * sdy + (pz - cz) * sdz) / pl;
+    odRlit += Math.max(0, Math.min(1, (litDot + 0.10) / 0.20)) * dR * ds;
+    odO += Math.exp(-(((h - 25) / 8) ** 2)) * ds;
+
+    // 向太阳的光学深度
+    const ts = hitD(px, py, pz, sdx, sdy, sdz, Ra);
+    const shadow = hitD(px, py, pz, sdx, sdy, sdz, Rg * 0.998);
+    const shadowed = !!(shadow && shadow[0] < shadow[1] && shadow[1] > 0 && shadow[0] > 0);
+    if (!shadowed && ts) {
+      const sl = Math.max(ts[1], 0) / NL;
+      let olR = 0, olM = 0, olO = 0;
+      for (let j = 0; j < NL; j++) {
+        const q = (j + 0.5) * sl;
+        const hq = hAbove(px + sdx * q, py + sdy * q, pz + sdz * q);
+        olR += Math.exp(-hq / HR) * sl;
+        olM += Math.exp(-hq / HM) * sl;
+        olO += Math.exp(-(((hq - 25) / 8) ** 2)) * sl;
+      }
+      const betaO = [1.25e-3 * ozone, 4.4e-4 * ozone, 2.5e-5 * ozone];
+      for (let k = 0; k < 3; k++) {
+        const tau = bR[k] * (odR + olR) + bM[k] * 1.1 * (odM + olM) + betaO[k] * (odO + olO);
+        const T = Math.exp(-tau);
+        inscR[k] += T * dR * ds;
+        inscM[k] += T * dM * ds;
+      }
+    }
+  }
+
+  const mu = rdx * sdx + rdy * sdy + rdz * sdz;
+  const phR = (3 / (16 * Math.PI)) * (1 + mu * mu);
+  const out = [0, 0, 0];
+  const msFrac = [0, 0, 0];
+  for (let k = 0; k < 3; k++) {
+    const g = gIn[k], g2 = g * g;
+    const phM = (3 / (8 * Math.PI)) * ((1 - g2) * (1 + mu * mu))
+      / ((2 + g2) * Math.pow(Math.max(1 + g2 - 2 * g * mu, 1e-6), 1.5));
+    out[k] = sunI * (bR[k] * phR * inscR[k] + bM[k] * phM * inscM[k]);
+  }
+  // 一阶多重散射（与着色器同一式：源项用相机处密度 × 气柱等效程长，不是路径加权的
+  // inscR——见着色器里的说明，后者会让地平线变成橄榄色）
+  const hCam0 = Math.max(altKm, 0);
+  const rhoRc = Math.exp(-hCam0 / HR) * boost;
+  const rhoMc = (Math.exp(-hCam0 / HM)
+    + hazeEff * Math.exp(-hCam0 / Math.max(HM * 0.22, 0.5))) * boostM;
+  const litFrac = odR > 1e-6 ? odRlit / odR : 0;
+  const scatTint = [0, 0, 0];
+  let smax = 0;
+  for (let k = 0; k < 3; k++) {
+    scatTint[k] = bR[k] * rhoRc + bM[k] * rhoMc;
+    smax = Math.max(smax, scatTint[k]);
+  }
+  const msMean = (msFrac[0] + msFrac[1] + msFrac[2]) / 3;
+  for (let k = 0; k < 3; k++) {
+    const viewT = Math.exp(-(bR[k] * odR + bM[k] * 1.1 * odM));
+    msFrac[k] = 1 - viewT;
+    const sNorm = smax > 1e-12 ? scatTint[k] / smax : 0;
+    const sMix = sNorm + (1 - sNorm) * msMean;   // 高阶散射去饱和（与着色器同式）
+    out[k] += sunI * sMix * (1 / (4 * Math.PI)) * msFrac[k] * msFrac[k] * litFrac;
+  }
+  // 地面反照率反弹（同样只算受照地面那一份）
+  if (groundAlbedo > 0) {
+    const upx = -cx, upy = -cy, upz = -cz;
+    const ul = Math.hypot(upx, upy, upz) || 1;
+    const below = Math.max(0, Math.min(1, -(rdx * upx + rdy * upy + rdz * upz) / ul));
+    const groundLit = odR > 1e-6 ? odRlit / odR : 0;
+    const bm = Math.max(bR[0], bR[1], bR[2]) || 1;
+    const gTint = [bR[0] / bm, bR[1] / bm, bR[2] / bm];
+    for (let k = 0; k < 3; k++) {
+      const gcol = 1 * (1 - 0.55) + gTint[k] * 1.7 * 0.55;
+      const twoWay = Math.exp(-(bR[k] * odR + bM[k] * 1.1 * odM) * 1.5);
+      out[k] += sunI * groundAlbedo * gcol * twoWay * (0.35 + 0.65 * below) * msFrac[k]
+        * (1 / Math.PI) * groundLit;
+    }
+  }
+
+  // 平均透射率（与着色器 alpha 同一口径）
+  let meanT = 0;
+  for (let k = 0; k < 3; k++) meanT += Math.exp(-(bR[k] * odR + bM[k] * 1.1 * odM));
+  meanT /= 3;
+  const alpha = 1 - meanT;
+
+  // 源函数：L/α。单次散射下它恒等于 j/σt（与路径长度无关），所以薄大气也不会发散。
+  const al = Math.max(alpha, 1e-3);
+  const color = [out[0] / al, out[1] / al, out[2] / al];
+
+  // FogExp2 的 ρ。它的因子是 1−exp(−(ρd)²)，与真实的 1−exp(−σd) 形状不同，
+  // 没有哪个 ρ 能处处吻合；按**能见度**（Koschmieder L=3.912/σ）对齐最划算：
+  // 令 1−exp(−(ρL)²)=0.98 ⇒ ρL=1.98 ⇒ ρ≈0.5σ。取 σ/2 后 20km 处两种曲线
+  // 相差 <2%（0.91 vs 0.92），近场略偏清但量级正确。
+  const hCam = Math.max(altKm, 0);
+  let density = 0;
+  for (let k = 0; k < 3; k++) {
+    density += bR[k] * Math.exp(-hCam / HR) * boost
+      + bM[k] * 1.1 * (Math.exp(-hCam / HM)
+        + hazeEff * Math.exp(-hCam / Math.max(HM * 0.22, 0.5))) * boostM;
+  }
+  density /= 6;   // = σ/2，见上
+
+  return { color, alpha, density };
 }
