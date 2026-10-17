@@ -1599,6 +1599,11 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   scene.fog.color.copy(fogColor);
   scene.fog.density = fogDensity;
   sky.setFade(skyFade / Math.max(1, renderer.toneMappingExposure));
+  // 黄道光的亮度分布依赖太阳方向（时变量），每帧喂一次
+  try {
+    const sp = builder.bodies.get('sun')?.posKm;
+    if (sp) sky.setSunDir?.(-sp[0], -sp[1], -sp[2]);   // 世界系：相机在原点，指向太阳
+  } catch { /* 太阳未就绪 */ }
   // 统计性点云/暗弱标记的可见性：白昼大气内被日光淹没（skyFade），
   // 且行走地表时肉眼本就不可见——主带/柯伊伯带点云、真实小天体、奥尔特云、
   // TNO 辉光（≥17 等）、探测器辉光在任何天体的地表夜晚也看不见

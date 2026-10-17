@@ -75,6 +75,58 @@ function makeMilkyWayTexture() {
   return tex;
 }
 
+/**
+ * 黄道光：沿黄道面、朝太阳方向增亮的弥散辉光（行星际尘埃散射阳光）。
+ * 真实夜空中它是一条比银河更淡的锥形光锥，在日心距 30–90° 处最易见。
+ * 用着色器而不是贴图：亮度依赖**太阳方向**，是时变量，贴图表达不了。
+ */
+function createZodiacalLight() {
+  const uniforms = {
+    uSunDir: { value: new THREE.Vector3(1, 0, 0) },
+    uIntensity: { value: 0.020 },
+  };
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
+    side: THREE.BackSide, depthWrite: false, depthTest: false,
+    transparent: true, blending: THREE.AdditiveBlending, fog: false,
+    vertexShader: /* glsl */ `
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      varying vec3 vDir;
+      void main() {
+        vDir = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        #include <logdepthbuf_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      #include <common>
+      #include <logdepthbuf_pars_fragment>
+      varying vec3 vDir;
+      uniform vec3 uSunDir;
+      uniform float uIntensity;
+      void main() {
+        #include <logdepthbuf_fragment>
+        vec3 d = normalize(vDir);
+        // 世界系 +Y = 黄北极，所以 d.y 直接就是黄纬的正弦
+        float lat = asin(clamp(d.y, -1.0, 1.0));
+        float band = exp(-abs(lat) / 0.14);            // 半高宽约 8°
+        float cosEl = dot(d, normalize(uSunDir));
+        float elon = acos(clamp(cosEl, -1.0, 1.0));    // 日心距（弧度）
+        // 朝太阳方向增亮，~80° 外基本消失
+        float bright = exp(-(elon * elon) / (1.15 * 1.15));
+        float I = band * (0.25 + 0.75 * bright) * uIntensity;
+        // 略偏暖白（尘埃散射略红于太阳）
+        gl_FragColor = vec4(vec3(1.0, 0.965, 0.90) * I, 1.0);
+      }
+    `,
+  });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(SKY_R, 96, 48), mat);
+  mesh.renderOrder = 1;
+  mesh.frustumCulled = false;
+  return { mesh, uniforms };
+}
+
 export function createStarfield(milkywayTex) {
   const group = new THREE.Group();
   const fadeMats = []; // 白昼大气内星空淡出（真实：日光散射淹没星光）
@@ -193,8 +245,14 @@ export function createStarfield(milkywayTex) {
 
   group.frustumCulled = false;
 
+  // 黄道光挂在同一个 group 上（一起受白昼淡出控制）
+  const zodiacal = createZodiacalLight();
+  group.add(zodiacal.mesh);
+
   return {
     group,
+    /** 太阳方向（世界系）：黄道光的亮度分布依赖它 */
+    setSunDir(x, y, z) { zodiacal.uniforms.uSunDir.value.set(x, y, z); },
     brightGroup,       // 需在 main.js 中 scene.add + world.register([0,0,0], brightGroup)
     setCatalog,
     /** 各层实际绘制的恒星数（供诊断与回归断言） */

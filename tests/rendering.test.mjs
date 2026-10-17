@@ -1476,3 +1476,19 @@ test('谷神星在场景里，且日心距与轨道根数自洽', async () => {
   const r2 = Math.hypot(q.x, q.y, q.z) / 1.495978707e8;
   assert.ok(Math.abs(r2 - r) < 0.01, `一个周期后距离 ${r2.toFixed(3)} 与 ${r.toFixed(3)} 不符`);
 });
+
+// ── 黄道光 / TNO 光点的距离与相位 ──────────────────────────────────────────
+test('夜空有黄道光层，且依赖太阳方向', () => {
+  const src = read('src/scene/starfield.js');
+  assert.ok(/createZodiacalLight/.test(src), '缺少黄道光');
+  assert.ok(/setSunDir/.test(src), '黄道光未接太阳方向');
+  assert.ok(/float band = exp\(-abs\(lat\) \/ 0\.14\)/.test(src), '缺少黄道面弥散带');
+  const m = read('src/main.js');
+  assert.ok(/sky\.setSunDir\?\./.test(m), 'main.js 未每帧喂太阳方向');
+});
+
+test('TNO 光点有距离与相位调制（否则 30AU 与 90AU 一样亮）', () => {
+  const src = read('src/scene/tnoScene.js');
+  assert.ok(/const flux = Math\.min\(1, \(40 \/ dAUg\) \* \(40 \/ dAUg\)\)/.test(src), '缺少距离项');
+  assert.ok(/cosPhase/.test(src), '缺少相位角');
+});

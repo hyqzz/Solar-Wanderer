@@ -179,9 +179,29 @@ export function createTNOScene(scene, world, orbitLinesGroup) {
       );
       // 尺度：视角尺寸约 0.6°（dist*0.006），并保证不小于天体本身视半径的若干倍以形成光晕
       e.glint.scale.setScalar(Math.max(dist * 0.006, e.phys.radiusKm * 6));
-      // 不透明度：远距常驻（0.85），接近天体（< 半径×60）时淡出，避免糊住表面
+      // 不透明度：远距常驻，接近天体（< 半径×60）时淡出，避免糊住表面。
+      // 再加**距离与相位**调制：此前任何日心距、任何相位角下都一样亮，
+      // 于是冥王星与赛德娜（30 AU 对 90 AU）在天空里看上去一样。
+      // 通量 ∝ (1/d²)·相位函数；以 40 AU 为基准归一，保底 0.25 保证仍能找到。
+      const dAUg = Math.max(dKm / 149597870.7, 1e-3);
+      const flux = Math.min(1, (40 / dAUg) * (40 / dAUg));
+      // 相位角 α（太阳—天体—观测者）：cos α = (toSun·toCam)/(|toSun||toCam|)。
+      // 这里 e.posKm 是**日心**坐标（太阳在原点），相机在 shipPosKm。
+      let cosPhase = 1;
+      if (shipPosKm) {
+        const tsx = -e.posKm[0], tsy = -e.posKm[1], tsz = -e.posKm[2];
+        const tcx = shipPosKm[0] - e.posKm[0];
+        const tcy = shipPosKm[1] - e.posKm[1];
+        const tcz = shipPosKm[2] - e.posKm[2];
+        const ls = Math.hypot(tsx, tsy, tsz), lc = Math.hypot(tcx, tcy, tcz);
+        if (ls > 0 && lc > 0) {
+          cosPhase = Math.max(-1, Math.min(1, (tsx * tcx + tsy * tcy + tsz * tcz) / (ls * lc)));
+        }
+      }
+      const phase = 0.25 + 0.75 * Math.max(0, cosPhase);
       e.glint.material.opacity =
-        THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 60) - 0.3), 0, 1) * 0.85 * skyFadeF;
+        THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 60) - 0.3), 0, 1)
+        * 0.85 * skyFadeF * (0.35 + 0.65 * flux) * phase;
       // 球体：仅在较近时渲染（远距纯辉光头，省填充率且更像彗星点光）
       e.mesh.visible = dist < e.phys.radiusKm * 900;
     }
