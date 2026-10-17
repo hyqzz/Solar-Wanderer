@@ -187,7 +187,7 @@ export function createEvaSuit() {
   const JOINTS = {
     shoulder: (s) => new THREE.Vector3(s * 0.24, -0.30, 0.12),
     elbow: (s) => new THREE.Vector3(s * 0.30, -0.26, -0.14),
-    wrist: (s) => new THREE.Vector3(s * 0.27, -0.19, -0.40),
+    wrist: (s) => new THREE.Vector3(s * 0.27, -0.21, -0.40),
   };
   const arms = [];
   for (const s of [-1, 1]) {
@@ -201,7 +201,7 @@ export function createEvaSuit() {
     ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), el.clone().sub(wr).normalize());
     arm.add(ring);
     // 手套：朝前下方伸，指尖略微内收（真实手在身前的自然姿态）
-    const tip = new THREE.Vector3(s * 0.22, -0.13, -0.60);
+    const tip = new THREE.Vector3(s * 0.22, -0.155, -0.60);
     const g = new THREE.Mesh(new THREE.CapsuleGeometry(0.050, 0.11, 5, 12), glove);
     const gd = tip.clone().sub(wr).normalize();
     g.position.copy(wr).addScaledVector(gd, 0.075);
@@ -246,6 +246,9 @@ export function createEvaSuit() {
     }
   };
 
+  // 整体缩小一点：真机上手臂在画面里是"余光里的存在"，占满两角反而像举着两根
+  // 管子。0.82 之后只在下缘露出一截前臂与手套，接近头盔内的实际视野占比。
+  root.scale.setScalar(0.82);
   root.userData.layout(58, 1.7);
   return root;
 }
