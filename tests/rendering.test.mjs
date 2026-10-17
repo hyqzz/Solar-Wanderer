@@ -792,3 +792,84 @@ test('全部透明双面材质（除 atmosphere 已显式处理）都设了 forc
     assert.match(read(f), /forceSinglePass:\s*true/, `${f} 未设 forceSinglePass`);
   }
 });
+
+// ── 食：判据必须是真实几何遮挡，且不能再往场景里插锥体网格 ────────────────────
+// 旧实现有两个问题：① 判据是"三体共线度 > 0.999"（2.56°），在六个月的窗口里
+// 绝大多数命中的其实是"下一次朔/望"，并不成食；② 场景里插了一个黑色锥体网格，
+// 用 MultiplyBlending（three 里忽略片元 alpha）把帧缓冲乘成纯黑，在夜面表现为
+// 硬边黑色矩形；且 ConeGeometry 的 uv.x 是方位角不是半径，"半影"成了绕锥条纹。
+
+test('isEclipse 能判出真实日全食（2026-08-12）与真实月食，且不误判普通朔望', async () => {
+  const { isEclipse } = await import('../src/scene/eclipses.js');
+  const { planetPosition } = await import('../src/astro/planets.js');
+  const { moonGeocentric } = await import('../src/astro/moon.js');
+  const { dateToJD } = await import('../src/astro/time.js');
+
+  const pos = (jd) => {
+    const e = planetPosition('earth', jd);
+    const mg = moonGeocentric(jd);
+    return {
+      sun: [0, 0, 0],
+      earth: [e.x, e.y, e.z],
+      moon: [e.x + mg.x, e.y + mg.y, e.z + mg.z],
+    };
+  };
+  const R_SUN = 695700, R_EARTH = 6371, R_MOON = 1737.4;
+
+  // 2026-08-12 是一次真实的日全食（冰岛/西班牙可见）
+  const jdEcl = dateToJD(new Date(Date.UTC(2026, 7, 12, 17, 46)));
+  assert.equal(isEclipse('solar', pos(jdEcl), R_SUN, R_EARTH, R_MOON), true,
+    '2026-08-12 应判为日食');
+
+  // 日食后约 7 天是上弦，几何上不可能成食
+  assert.equal(isEclipse('solar', pos(jdEcl + 7), R_SUN, R_EARTH, R_MOON), false,
+    '上弦不应判为日食');
+  // 日食后约 14.8 天是望（可能成月食，但不是日食）
+  assert.equal(isEclipse('solar', pos(jdEcl + 14.77), R_SUN, R_EARTH, R_MOON), false,
+    '望不应判为日食');
+});
+
+test('getNextEclipse 找到的下一次日食与真实日期一致，且不卡主线程', async () => {
+  const { EclipseSystem } = await import('../src/scene/eclipses.js');
+  const { planetPosition } = await import('../src/astro/planets.js');
+  const { moonGeocentric } = await import('../src/astro/moon.js');
+  const { dateToJD, jdToDate } = await import('../src/astro/time.js');
+  const sys = new EclipseSystem();
+  const getPositions = (jd) => {
+    const e = planetPosition('earth', jd);
+    const mg = moonGeocentric(jd);
+    return { sun: [0, 0, 0], earth: [e.x, e.y, e.z], moon: [e.x + mg.x, e.y + mg.y, e.z + mg.z] };
+  };
+  const from = dateToJD(new Date(Date.UTC(2026, 5, 1)));   // 2026-06-01
+  const t0 = Date.now();
+  const jd = sys.getNextEclipse('solar', from, getPositions);
+  const ms = Date.now() - t0;
+  assert.ok(jd, '应找到下一次日食');
+  const d = jdToDate(jd);
+  assert.equal(d.getUTCFullYear(), 2026, `应落在 2026 年，实际 ${d.toISOString()}`);
+  assert.equal(d.getUTCMonth(), 7, `应是 8 月（2026-08-12 日全食），实际 ${d.toISOString()}`);
+  assert.ok(ms < 5000, `搜索不应卡主线程，实际 ${ms} ms`);
+});
+
+test('食系统不再往场景里插锥体网格（夜面硬边黑矩形的成因）', async () => {
+  const { EclipseSystem } = await import('../src/scene/eclipses.js');
+  const src = read('src/scene/eclipses.js');
+  // 注释里会提到这两个名字（说明历史成因），所以只禁"实际使用"
+  assert.ok(!/new THREE\.ConeGeometry/.test(src), '不应再创建 ConeGeometry');
+  assert.ok(!/THREE\.MultiplyBlending/.test(src), '不应再用 MultiplyBlending');
+  assert.ok(!/this\.cones/.test(src), '不应再维护锥体列表');
+  // 仍然要保留逐片元遮蔽的推入路径
+  assert.match(src, /pushOccluder/, '必须保留逐片元遮蔽的遮挡体推入');
+  // 构造函数不再需要 scene/world
+  const sys = new EclipseSystem();
+  assert.ok(sys, '应能无参构造');
+  // update 只推 uniform，不碰场景图
+  const pushed = [];
+  const mkBody = (id) => ({ id, posKm: [1e8, 0, 0], phys: { radiusKm: 1000 },
+    mat: { userData: { uniforms: { uEclOn: { value: 0 }, uEclPos: { value: { set() { pushed.push(id); } } },
+      uEclR: { value: 0 }, uSunDistKm: { value: 0 } } } } });
+  const bodies = new Map(['sun', 'earth', 'moon', 'jupiter', 'io', 'europa', 'ganymede', 'callisto', 'saturn', 'titan']
+    .map((id) => [id, mkBody(id)]));
+  sys.update(2451545, bodies, [0, 0, 0]);
+  assert.ok(pushed.length > 0, '应把遮挡体推给接收体材质');
+});

@@ -361,7 +361,7 @@ async function init() {
   });
 
   // 日食阴影系统（#25）
-  eclipseSystem = new EclipseSystem(scene, world);
+  eclipseSystem = new EclipseSystem();
 
   // WebXR/VR 支持（#33）：支持时添加入口按钮并接通控制器回调
   webxr = new WebXRManager(renderer, camera, scene);

@@ -1,18 +1,21 @@
-// 日食阴影系统：计算并渲染太阳系内的本影/半影锥。
+// 食（日食/月食/卫星食）系统。
 // 处理三类事件：
 //   1. 日食（月球遮挡太阳→地球表面）
-//   2. 月食（地球遮挡太阳→月球表面，红色本影）
+//   2. 月食（地球遮挡太阳→月球表面）
 //   3. 卫星食（行星遮挡太阳→卫星，如木星→伽利略卫星）
-// 算法：对每个 光源-遮挡体-接收体 三元组，计算几何阴影锥，
-// 用自定义着色器在接收体表面渲染柔和半影渐变。
-// 性能：只计算相机附近接收体的日食，远处跳过。
-
-import * as THREE from 'three';
-import { KM_PER_AU } from '../config.js';
-
-const _v1 = new THREE.Vector3();
-const _v2 = new THREE.Vector3();
-const _v3 = new THREE.Vector3();
+//
+// **遮蔽只在接收体表面逐片元计算**（见 planetMaterial.js 的 uEclOn 分支：按遮挡体
+// 与太阳的角半径、角分离求圆盘重叠比例），这里只负责把"当前有效的遮挡体"推给接收体材质。
+//
+// 历史上这里还在场景里插了一个黑色锥体网格来"画出阴影"。它有三个叠加缺陷：
+//   ① 用 MultiplyBlending，而 three 的该模式是 (DstColor, Zero)——片元 alpha 完全不
+//      参与，着色器把唯一的梯度量 shadow 写进 alpha，于是半影渐变与 uOpacity 全是死代码；
+//   ② 片元色恒为黑（uColor=0x000000），锥体覆盖处一律把帧缓冲乘成黑，在夜面表现为
+//      一个**硬边黑色矩形**；
+//   ③ ConeGeometry 继承 CylinderGeometry，其 uv.x 是绕圈方位角、uv.y 才是沿轴，
+//      而着色器按"vUv.x = 半径"取值，于是"半影"变成绕锥体的条纹。
+// 加上 transparent+DoubleSide 的双遍渲染（见 rings.js 同名注释），实际是 dst × col²。
+// 阴影在真空里本来也看不见（没有介质可被遮挡），所以直接删掉锥体，只留逐片元遮蔽。
 
 /**
  * 日食阴影系统：管理场景中所有活跃的阴影锥。
@@ -36,18 +39,14 @@ function pushOccluder(receiver, occ, camPosKm, sunDistKm) {
 const ECLIPSE_RECEIVERS = ['earth', 'moon', 'io', 'europa', 'ganymede', 'callisto', 'titan'];
 
 export class EclipseSystem {
-  constructor(scene, world) {
-    this.scene = scene;
-    this.world = world;
-    this.cones = [];          // 活跃阴影锥 { mesh, occluderId, receiverId, type }
-    this.maxCones = 8;        // 性能上限
+  constructor() {
     this._nextEclipseCache = null;
     this._nextEclipseJd = 0;
   }
 
   /**
-   * 每帧更新：检查所有可能的三元组，为近距离的创建/更新阴影锥。
-   * @param {number} jdTT - 儒略日 TT
+   * 每帧更新：把当前有效的遮挡体推给接收体材质，由片元着色器做逐片元遮蔽。
+   * @param {number} jdTT - 儒略日 TT（保留参数：调用方按帧序传入，本实现不依赖它）
    * @param {Map} bodies - builder.bodies: id → { posKm, phys, mesh, ... }
    * @param {Float64Array} camPosKm - 相机位置（日心黄道 km）
    */
@@ -55,239 +54,97 @@ export class EclipseSystem {
     const sun = bodies.get('sun');
     if (!sun) return;
 
-    const sunPos = sun.posKm;
-    let activeCount = 0;
-
-    // 日食遮蔽：每帧先清除再按需设置。不清除的话食结束后阴影会永久留在表面上。
-    // 注意这一步**不受** distCam 门控——锥体网格只在近处才值得画，但"月球在地球上
-    // 投下的阴影"从远处（例如地月系之外）照样看得见，而且逐片元遮蔽本来就便宜。
-    // 遮蔽比例由着色器按角半径/角分离算，未对齐时自然趋于 0，无需在这里判条件。
+    // 每帧先清除再按需设置。不清除的话食结束后阴影会永久留在表面上。
+    // 遮蔽比例由着色器按角半径/角分离算，未对齐时自然趋于 0，无需在这里判条件，
+    // 也不受相机距离门控——"月球在地球上投下的阴影"从地月系之外照样看得见。
     for (const id of ECLIPSE_RECEIVERS) pushOccluder(bodies.get(id), null, camPosKm, 1);
     const distTo = (a) => Math.hypot(a.posKm[0], a.posKm[1], a.posKm[2]);
 
-    // ── 日食：月球→地球 ──
     const moon = bodies.get('moon');
     const earth = bodies.get('earth');
-    if (moon && earth) {
-      const distCam = _v1.set(camPosKm[0] - earth.posKm[0], camPosKm[1] - earth.posKm[1], camPosKm[2] - earth.posKm[2]).length();
-      // 只在地球附近 50 万 km 内渲染日食半影
-      // 月球在地球表面的遮蔽（日食）
-      pushOccluder(earth, moon, camPosKm, distTo(earth));
-      if (distCam < 5e5) {
-        if (this._updateCone(activeCount, 'solar', 'sun', 'moon', 'earth',
-          sunPos, moon.posKm, moon.phys.radiusKm, earth.posKm, earth.phys.radiusKm, bodies)) activeCount++;
-      }
-    }
+
+    // ── 日食：月球→地球 ──
+    if (moon && earth) pushOccluder(earth, moon, camPosKm, distTo(earth));
 
     // ── 月食：地球→月球 ──
-    if (moon && earth) {
-      const distCam = _v1.set(camPosKm[0] - moon.posKm[0], camPosKm[1] - moon.posKm[1], camPosKm[2] - moon.posKm[2]).length();
-      // 地球在月球表面的遮蔽（月食）
-      pushOccluder(moon, earth, camPosKm, distTo(moon));
-      if (distCam < 5e5) {
-        if (this._updateCone(activeCount, 'lunar', 'sun', 'earth', 'moon',
-          sunPos, earth.posKm, earth.phys.radiusKm, moon.posKm, moon.phys.radiusKm, bodies)) activeCount++;
-      }
-    }
+    if (moon && earth) pushOccluder(moon, earth, camPosKm, distTo(moon));
 
     // ── 木星→伽利略卫星 ──
     const jupiter = bodies.get('jupiter');
     if (jupiter) {
-      const distCamJ = _v1.set(camPosKm[0] - jupiter.posKm[0], camPosKm[1] - jupiter.posKm[1], camPosKm[2] - jupiter.posKm[2]).length();
-      if (distCamJ < 2e6) {
-        for (const moonId of ['io', 'europa', 'ganymede', 'callisto']) {
-          const m = bodies.get(moonId);
-          if (!m) continue;
-          // 木星在卫星表面的遮蔽（卫星走进木星影子里就不再被照亮）
-          pushOccluder(m, jupiter, camPosKm, distTo(m));
-          if (this._updateCone(activeCount, 'jovian', 'sun', 'jupiter', moonId,
-            sunPos, jupiter.posKm, jupiter.phys.radiusKm, m.posKm, m.phys.radiusKm, bodies)) activeCount++;
-          if (activeCount >= this.maxCones) break;
-        }
+      for (const moonId of ['io', 'europa', 'ganymede', 'callisto']) {
+        const m = bodies.get(moonId);
+        if (m) pushOccluder(m, jupiter, camPosKm, distTo(m));
       }
     }
 
     // ── 土星→土卫六 ──
     const saturn = bodies.get('saturn');
     const titan = bodies.get('titan');
-    if (saturn && titan) {
-      const distCamS = _v1.set(camPosKm[0] - saturn.posKm[0], camPosKm[1] - saturn.posKm[1], camPosKm[2] - saturn.posKm[2]).length();
-      if (distCamS < 3e6) {
-        pushOccluder(titan, saturn, camPosKm, distTo(titan));
-        if (this._updateCone(activeCount, 'jovian', 'sun', 'saturn', 'titan',
-          sunPos, saturn.posKm, saturn.phys.radiusKm, titan.posKm, titan.phys.radiusKm, bodies)) activeCount++;
-      }
-    }
-
-    // 隐藏未使用的锥
-    for (let i = activeCount; i < this.cones.length; i++) {
-      const c = this.cones[i];
-      if (c) c.mesh.visible = false; // 空洞容错（早退不占用 idx 后应无洞，防御性）
-    }
+    if (saturn && titan) pushOccluder(titan, saturn, camPosKm, distTo(titan));
   }
 
   /**
-   * 更新或创建一个阴影锥。
-   * 阴影锥从遮挡体背光面延伸，本影锥收敛到尖端，半影锥发散。
-   */
-  _updateCone(idx, type, lightId, occluderId, receiverId,
-              sunPos, occluderPos, occluderR, receiverPos, receiverR, bodies) {
-    // 太阳→遮挡体方向
-    _v1.set(occluderPos[0] - sunPos[0], occluderPos[1] - sunPos[1], occluderPos[2] - sunPos[2]);
-    const distSunOcc = _v1.length();
-    _v1.normalize(); // 阴影轴方向
-
-    // 太阳半径
-    const sunR = bodies.get('sun')?.phys?.radiusKm ?? 696000;
-
-    // 本影长度：L = R_occ * D / (R_sun - R_occ)
-    // 当 R_occ < R_sun 时本影收敛（全影锥）
-    const umbraLen = occluderR * distSunOcc / (sunR - occluderR);
-
-    // 半影锥在接收体处的半径
-    _v2.set(receiverPos[0] - occluderPos[0], receiverPos[1] - occluderPos[1], receiverPos[2] - occluderPos[2]);
-    const distOccRecv = _v2.length();
-    const projDist = _v2.dot(_v1); // 投影到阴影轴
-    // 半影半径在接收体处
-    const penumbraR = occluderR + (sunR + occluderR) * projDist / distSunOcc;
-    // 本影半径在接收体处
-    const umbraR = Math.max(0, occluderR - (sunR - occluderR) * projDist / distSunOcc);
-
-    // 无阴影场景：早退但必须隐藏既有锥（防残影），且不占用 idx（防数组空洞）
-    if (projDist <= 0 || penumbraR < 1) {
-      const old = this.cones[idx];
-      if (old) old.mesh.visible = false;
-      return false;
-    }
-
-    // 获取或创建锥 mesh
-    let cone = this.cones[idx];
-    if (!cone) {
-      const geo = new THREE.ConeGeometry(1, 1, 32, 1, true);
-      const mat = new THREE.ShaderMaterial({
-        uniforms: {
-          uPenumbraR: { value: 1 },
-          uUmbraR: { value: 0 },
-          uOpacity: { value: 0.5 },
-          uColor: { value: new THREE.Color(0x000000) },
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform float uPenumbraR;
-          uniform float uUmbraR;
-          uniform float uOpacity;
-          uniform vec3 uColor;
-          varying vec2 vUv;
-          void main() {
-            // vUv.x = 0 中心, 1 边缘；vUv.y = 0 顶部(遮挡体), 1 底部(远端)
-            float r = vUv.x * 2.0 - 1.0; // -1..1
-            float dist = abs(r) * uPenumbraR;
-            // 本影：完全黑
-            float umbra = 1.0 - smoothstep(uUmbraR * 0.9, uUmbraR * 1.1, dist);
-            // 半影：线性渐变
-            float penumbra = 1.0 - smoothstep(uUmbraR, uPenumbraR, dist);
-            float shadow = max(umbra, penumbra * 0.6);
-            // 月食：红色本影
-            vec3 col = mix(uColor, vec3(0.4, 0.1, 0.05), umbra * 0.7);
-            gl_FragColor = vec4(col, shadow * uOpacity);
-          }
-        `,
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        blending: THREE.MultiplyBlending,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.renderOrder = 5;
-      mesh.frustumCulled = false;
-      this.scene.add(mesh);
-      cone = { mesh, geo, mat, occluderId, receiverId, type };
-      this.cones[idx] = cone;
-    }
-
-    // 更新锥几何：从遮挡体延伸到接收体
-    const coneLen = projDist;
-    const coneR = penumbraR;
-
-    // 锥位置：遮挡体到接收体的中点
-    _v3.set(
-      occluderPos[0] + _v1.x * coneLen * 0.5,
-      occluderPos[1] + _v1.y * coneLen * 0.5,
-      occluderPos[2] + _v1.z * coneLen * 0.5
-    );
-    cone.mesh.position.set(_v3.x, _v3.y, _v3.z);
-
-    // 锥朝向：沿阴影轴（ConeGeometry 默认 +Y 轴）
-    const quat = new THREE.Quaternion();
-    quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), _v1);
-    cone.mesh.quaternion.copy(quat);
-
-    // 锥尺寸
-    cone.mesh.scale.set(coneR, coneLen, coneR);
-
-    // 更新 uniforms
-    cone.mat.uniforms.uPenumbraR.value = penumbraR;
-    cone.mat.uniforms.uUmbraR.value = umbraR;
-    cone.mat.uniforms.uOpacity.value = type === 'lunar' ? 0.7 : 0.5;
-
-    cone.mesh.visible = true;
-    cone.occluderId = occluderId;
-    cone.receiverId = receiverId;
-    cone.type = type;
-    return true;
-  }
-
-  /**
-   * 查找下一次日食（简化版：搜索月地连线对齐太阳的时刻）。
+   * 查找下一次日食。
    * @param {string} type - 'solar' | 'lunar'
    * @param {number} fromJd - 起始 JD
    * @param {Function} getPositions - (jdTT) => { sun, moon, earth } 位置
    * @returns {number} 日食发生的 JD
    */
   getNextEclipse(type, fromJd, getPositions) {
-    // 简化搜索：以 1 小时步长扫描 6 个月
-    const step = 1 / 24 / 60; // 1 分钟
-    let jd = fromJd;
-    const endJd = fromJd + 183; // 6 个月
+    const R_SUN = 696000, R_EARTH = 6371, R_MOON = 1737.4;
+    const hit = (jd) => {
+      const p = getPositions(jd);
+      return p ? isEclipse(type, p, R_SUN, R_EARTH, R_MOON) : false;
+    };
 
-    for (; jd < endJd; jd += step) {
-      const pos = getPositions(jd);
-      if (!pos) continue;
-
-      if (type === 'solar') {
-        // 日食：太阳-月球-地球几乎共线，月球在中间
-        const align = this._alignment(pos.sun, pos.moon, pos.earth);
-        if (align > 0.999) return jd;
-      } else if (type === 'lunar') {
-        // 月食：太阳-地球-月球几乎共线，地球在中间
-        const align = this._alignment(pos.sun, pos.earth, pos.moon);
-        if (align > 0.999) return jd;
+    // 两段式：先粗扫定位，再二分细化。
+    // 旧实现是 1 分钟步长扫 183 天 = 26.3 万次同步星历求值，会卡住主线程数秒；
+    // 而一次食的几何窗口有好几个小时，30 分钟步长足够不跳过，细化交给二分。
+    const COARSE = 1 / 48;               // 30 分钟
+    const endJd = fromJd + 183;          // 6 个月
+    for (let jd = fromJd; jd < endJd; jd += COARSE) {
+      if (!hit(jd)) continue;
+      // 二分开区间 [jd-COARSE, jd]，收敛到 1 分钟以内
+      let lo = jd - COARSE, hi = jd;
+      for (let i = 0; i < 20 && hi - lo > 1 / 1440; i++) {
+        const mid = (lo + hi) / 2;
+        if (hit(mid)) hi = mid; else lo = mid;
       }
+      return hi;
     }
     return null;
   }
+}
 
-  /** 三体共线度：a→b→c，返回 b 在 a-c 连线上的投影比例（0-1）和角度对齐度 */
-  _alignment(a, b, c) {
-    _v1.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]).normalize();
-    _v2.set(c[0] - a[0], c[1] - a[1], c[2] - a[2]).normalize();
-    return _v1.dot(_v2);
-  }
+/** 判据：不是"三体共线度 > 0.999"（那是 2.56°，等于"下一次朔/望"，六个月的窗口里
+ *  绝大多数并不成食），而是**真实的几何遮挡**——遮挡体的本影锥是否扫到接收体。
+ *  日食：月球的本影锥在地球距离处的截面是否与地球相交；
+ *  月食：地球的本影锥在月球距离处的截面是否与月球相交。 */
+export function isEclipse(type, p, R_SUN, R_EARTH, R_MOON) {
+  const occ = type === 'solar' ? p.moon : p.earth;   // 遮挡体
+  const rec = type === 'solar' ? p.earth : p.moon;   // 接收体
+  const occR = type === 'solar' ? R_MOON : R_EARTH;
+  const recR = type === 'solar' ? R_EARTH : R_MOON;
 
-  dispose() {
-    for (const cone of this.cones) {
-      if (cone?.mesh) {
-        this.scene.remove(cone.mesh);
-        cone.geo.dispose();
-        cone.mat.dispose();
-      }
-    }
-    this.cones = [];
-  }
+  // 阴影轴：太阳 → 遮挡体
+  const ax = occ[0] - p.sun[0], ay = occ[1] - p.sun[1], az = occ[2] - p.sun[2];
+  const dSunOcc = Math.hypot(ax, ay, az);
+  if (!(dSunOcc > 0)) return false;
+  const nx = ax / dSunOcc, ny = ay / dSunOcc, nz = az / dSunOcc;
+
+  // 接收体相对遮挡体
+  const rx = rec[0] - occ[0], ry = rec[1] - occ[1], rz = rec[2] - occ[2];
+  const proj = rx * nx + ry * ny + rz * nz;          // 沿阴影轴的投影距离
+  if (proj <= 0) return false;                        // 接收体在受光侧
+
+  // 本影锥在接收体处的半径：R_occ − (R_sun − R_occ)·proj / dSunOcc（可为负 = 锥已收敛）
+  const umbraR = occR - (R_SUN - occR) * proj / dSunOcc;
+
+  // 接收体中心到阴影轴的垂直距离
+  const px = rx - proj * nx, py = ry - proj * ny, pz = rz - proj * nz;
+  const perp = Math.hypot(px, py, pz);
+
+  // 相交判据用半影（|umbraR| + recR）：本影锥收敛后按发散的半影算，与"能看见食"一致
+  return perp < Math.abs(umbraR) + recR;
 }
