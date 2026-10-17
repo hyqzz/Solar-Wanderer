@@ -62,3 +62,4 @@ tools/.audit-scenarios/
 
 # ---- 本地审计产物 ----
 .audit-reports/
+tools/.reference/
