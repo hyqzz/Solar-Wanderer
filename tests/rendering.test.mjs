@@ -1129,8 +1129,10 @@ test('地形外缘覆盖视地平，且边缘高度收回基准球', () => {
   // 外缘级别至少到 600km（300km 高度上可见的地面半径）
   assert.ok(/280, 600, 1500/.test(src), '最外级应扩展到 600/1500km');
   // 边缘高度向 baseRadius 平滑收回
-  assert.ok(/blend > 0\) h = h \* \(1 - blend\) \+ this\.field\.baseSphereRadius\(dir\) \* blend/.test(src),
+  assert.ok(/h = h \* \(1 - blend\) \+ this\.field\.baseSphereRadius\(dir\) \* blend/.test(src),
     '最外级边缘应收到基底球面，否则交界是硬直边');
+  // 细节要同步淡出（只淡高度会在边界留下"有细节 vs 只有贴图"的层次差）
+  assert.ok(/dfd\[k\] = 1 - blend/.test(src), '边缘细节没有随高度一起淡出');
 });
 
 // ── 星表失败必须可见；亮星要有层次 ────────────────────────────────────────────

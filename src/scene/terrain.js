@@ -641,18 +641,22 @@ export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm
         uniform vec3 uPatchRel;
         attribute float water;
         attribute float slope;
+        attribute float detfade;
         varying float vWater;
         varying float vSlope;
+        varying float vDetFade;
         varying vec3 vObjPos;`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vObjPos = position + uPatchRel;
         vWater = water;
-        vSlope = slope;`);
+        vSlope = slope;
+        vDetFade = detfade;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', /* glsl */ `#include <common>
         varying vec3 vObjPos;
         varying float vWater;
         varying float vSlope;
+        varying float vDetFade;
         uniform float uTime;
         uniform float uFade;
         uniform float uDetailScale;
@@ -768,7 +772,11 @@ export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm
           // 第二档更细（约 2 m），只在近处生效，避免行走时地面像同一张贴图在平移
           float c2 = tnoise2(vObjPos * 420.0 + vec3(21.7, 4.9, 13.3)) * g2 * uDetailScale;
           tintVar *= mix(vec3(0.97), vec3(1.03, 1.0, 0.97), c2);
-          diffuseColor.rgb *= mix(dm, 1.0, vWater) * tintVar;
+          // 细节按 vDetFade 淡出：最外级在边缘把地形收回盘面球时，程序化亮度/
+          // 色偏也必须一起归零，否则补丁边界处"有细节的地形"直接贴上"只有贴图
+          // 的盘面"，低轨上是一圈方正的层次差（C-5 残余）。
+          float df = vDetFade;
+          diffuseColor.rgb *= mix(1.0, mix(dm, 1.0, vWater), df) * mix(vec3(1.0), tintVar, df);
           // 岸边泡沫：land→water 过渡区（vWater 0..1 内插）叠加白色浪沫（#21）
           float foam = smoothstep(0.05, 0.38, vWater) * (1.0 - smoothstep(0.62, 0.95, vWater));
           if (foam > 0.01) {
@@ -785,10 +793,10 @@ export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm
           float vd = length(vViewPosition), fp = length(fwidth(vObjPos));
           float fade = 1.0 - smoothstep(0.1, 1.2, vd);
           float aa2 = 1.0 - smoothstep(0.35, 0.9, fp * 420.0);
-          vec3 grad = tnoise2Grad(vObjPos * 420.0) * (420.0 * 0.00015 * aa2 * fade * uDetailScale);
+          vec3 grad = tnoise2Grad(vObjPos * 420.0) * (420.0 * 0.00015 * aa2 * fade * uDetailScale * vDetFade);
           #if !SW_LOW
           float aa3 = 1.0 - smoothstep(0.35, 0.9, fp * 5200.0);
-          if (aa3 > 0.01) grad += tnoise2Grad(vObjPos * 5200.0) * (5200.0 * 0.00002 * aa3 * fade * uDetailScale);
+          if (aa3 > 0.01) grad += tnoise2Grad(vObjPos * 5200.0) * (5200.0 * 0.00002 * aa3 * fade * uDetailScale * vDetFade);
           #endif
           if (vWater > 0.001) {
             // 海面波纹的足迹门限。原先 (0.25, 0.65) 在**水面**上过于保守：
@@ -1064,6 +1072,10 @@ export class TerrainPatchSet {
       geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
       geo.setAttribute('water', new THREE.BufferAttribute(new Float32Array(verts), 1));
       geo.setAttribute('slope', new THREE.BufferAttribute(new Float32Array(verts), 1)); // 坡度 PBR
+      // 细节淡出因子：最外级在边缘把地形收回盘面球时，程序化细节也要一起淡出。
+      // 不淡出的话，补丁边界处"有细节的地形"直接贴上"只有贴图的盘面"，低轨上
+      // 能看出一圈方正的层次差（C-5 残余）。
+      geo.setAttribute('detfade', new THREE.BufferAttribute(new Float32Array(verts).fill(1), 1));
       const idx = [];
       const hole = li === 0 ? 0 : (this.extents[li - 1] / this.extents[li]) * GRID * 0.5 * 0.92;
       for (let y = 0; y < GRID; y++) {
@@ -1203,6 +1215,7 @@ export class TerrainPatchSet {
     const pos = geo.attributes.position.array;
     const col = geo.attributes.color.array;
     const wat = geo.attributes.water.array;
+    const dfd = geo.attributes.detfade.array;
     const dir = new THREE.Vector3();
     const c = new THREE.Color();
     const dirs = lv.dirs ??= new Float32Array((GRID + 1) * (GRID + 1) * 3);
@@ -1225,7 +1238,10 @@ export class TerrainPatchSet {
           // 过渡带取外缘 30%（原 14%）：收口落差是 |地形 − 盘面球|，可能有几公里，
           // 14% 的宽度会让它变成一道明显的陡坎；30% 把它摊成缓坡。
           const blend = sstep(0.7, 1.0, edge);
-          if (blend > 0) h = h * (1 - blend) + this.field.baseSphereRadius(dir) * blend;
+          if (blend > 0) {
+            h = h * (1 - blend) + this.field.baseSphereRadius(dir) * blend;
+            dfd[k] = 1 - blend;   // 细节同步淡出
+          }
         }
         hs[k] = h;
         dirs[k * 3] = dir.x; dirs[k * 3 + 1] = dir.y; dirs[k * 3 + 2] = dir.z;
@@ -1238,6 +1254,7 @@ export class TerrainPatchSet {
     }
     geo.attributes.position.needsUpdate = true;
     geo.attributes.water.needsUpdate = true;
+    geo.attributes.detfade.needsUpdate = true;
     geo.computeVertexNormals();
     geo.attributes.normal.needsUpdate = true;
     // 第二遍：用法线坡度上色（陡坡岩壁化）并写入坡度属性（PBR 粗糙度驱动）
