@@ -1408,3 +1408,12 @@ test('巨行星法线做了逆转置（压扁后中纬法线不偏）', () => {
   assert.ok(/normal\.y \* uInvScaleY/.test(mat), '缺少逆转置');
   assert.ok(/uInvScaleY\.value = 1 \/ Math\.max\(sy, 1e-3\)/.test(b), '未按扁率写入逆转置');
 });
+
+// ── 气巨条带要有剪切驱动的湍流与涡街 ────────────────────────────────────────
+test('气巨条带按急流剪切生成湍流与涡旋（木星与土星）', () => {
+  const src = read('src/scene/planetMaterial.js');
+  assert.ok(/float jets = \(uBodyId == 5\) \? 24\.0 : 16\.0/.test(src), '缺少按天体的急流条数');
+  assert.ok(/float shear = abs\(cos\(lat \* jets/.test(src), '缺少剪切强度');
+  assert.ok(/eddy/.test(src), '缺少涡旋结构');
+  assert.ok(/uBodyId == 5 \|\| uBodyId == 6/.test(src), '土星没有走同一条湍流路径');
+});

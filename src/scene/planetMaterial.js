@@ -389,22 +389,37 @@ ${CLOUD_GLSL}
           // === Issue #28：木星动态云带 + 大红斑 ===
           // 纬向风剖面（交替东西向急流）+ System III 经度漂移的大红斑 + 对流胞。
           // 保持基础贴图可识别：所有调制为乘法/混合，不替换底色。
-          if (uBodyId == 5) {
+          // === 气巨纬向风与湍流（木星与土星）===
+          // 真实气巨的条带不是静态色带：纬向急流交替（木星约 12 条），急流边界
+          // （剪切最大处）才有明显的涡街与 festoon。此前只有一条正弦 + 各向同性
+          // 噪声，画面上是"平滑色带"——卡西尼/朱诺实拍里那种卷曲结构完全没有。
+          if (uBodyId == 5 || uBodyId == 6) {
             float lat = vObjPos.y / uRadius; // 归一化纬度 -1..1
-            // 纬向风：不同纬度不同流速（真实木星约 12 条交替急流，简化为正弦）
-            float windSpeed = sin(lat * 14.0) * 0.00015;
+            // 急流条数：木星约 12 对（24 个极值），土星更少更宽
+            float jets = (uBodyId == 5) ? 24.0 : 16.0;
+            float windSpeed = sin(lat * jets + 0.6) * 0.00022;
             float flow = uTime * windSpeed;
             vec3 jp = vObjPos / uRadius;
-            // 条带湍流：沿风方向拉伸的噪声产生流动结构
-            float turb = pnoise(vec3(jp.x * 3.0 + flow, jp.y * 10.0, jp.z * 3.0 + flow * 0.5)) * 0.12;
+            // 剪切强度：急流边界处 |dwind/dlat| 最大，涡街只在那里出现
+            float shear = abs(cos(lat * jets + 0.6));
+            // 沿经度拉伸 ~6:1 的湍流（纬度方向频率远高于经度）
+            float turb = pnoise(vec3(jp.x * 4.0 + flow, jp.y * 26.0, jp.z * 4.0 + flow * 0.5))
+                       * (0.05 + 0.11 * shear) * smoothstep(0.015, 0.12, app);
             albedo *= 1.0 + turb;
-            // 对流胞：近距离才淡入（app > 0.15），远观不可见避免摩尔纹
-            float conv = pnoise(jp * 25.0 + vec3(uTime * 0.03)) * smoothstep(0.15, 0.5, app);
-            albedo *= 1.0 + conv * 0.06;
+            // 涡旋（eddy）：剪切带上的旋涡斑，方向随纬度交替（相邻带反向）
+            float eddyN = pnoise(vec3(jp.x * 9.0 - flow * 0.7, jp.y * 42.0, jp.z * 9.0 - flow * 0.35));
+            float eddy = smoothstep(0.60, 0.86, eddyN) * shear
+                       * smoothstep(0.03, 0.18, app);
+            albedo = mix(albedo, albedo * vec3(1.13, 1.06, 0.96), eddy * 0.40);
+            // 对流胞（只木星）：近距才淡入，远观不可见避免摩尔纹
+            if (uBodyId == 5) {
+              float conv = pnoise(jp * 25.0 + vec3(uTime * 0.03)) * smoothstep(0.15, 0.5, app);
+              albedo *= 1.0 + conv * 0.06;
+            }
             // 大红斑：贴图（卡西尼拼接）自带 GRS 于 ~22°S——原位增强其红橙色饱和度。
             // 旧版在漂移经度叠加第二个程序化红斑，与贴图红斑分离后形成双斑/洗白圈。
             // 在 UV 空间定位（对球面 UV 约定稳健）：贴图 GRS 中心 u≈0.368, v≈0.628。
-            {
+            if (uBodyId == 5) {
               vec2 grsD = vec2(angleDiff(vUv.x, 0.368), vUv.y - 0.628);
               float grs = (1.0 - smoothstep(0.008, 0.040, abs(grsD.x)))
                         * (1.0 - smoothstep(0.004, 0.022, abs(grsD.y)));
