@@ -46,7 +46,7 @@ import { buildTourUI } from './ui/tourUI.js';
 import { TeacherToolkit } from './ui/teacher.js';
 import { EclipseSystem } from './scene/eclipses.js';
 import { WebXRManager } from './engine/webxr.js';
-import { createCockpit, createShipModel } from './scene/cockpit.js';
+import { createCockpit, createShipModel, createHelmet } from './scene/cockpit.js';
 import { createSpacecraftModel, makeSpacecraftGlow, SPACECRAFT_TIMELINES,
          NEW_HORIZONS, newHorizonsPosition } from './scene/spacecraft.js';
 import { createApolloLandmarks, createRoverSites } from './scene/landmarks.js';
@@ -132,10 +132,13 @@ const overlayCam = new THREE.PerspectiveCamera(58, window.innerWidth / window.in
 // 座舱框在黑色星空里完全看不见）。主光从前上方来，模拟舷窗透进来的阳光；
 // 环境贴图与主场景共用，让金属有可反射的底。
 {
-  const key = new THREE.DirectionalLight(0xfff4e8, 3.0);
-  key.position.set(0.35, 0.55, -1.0);
+  // 主光放在**相机后方**（+z）：平行光从光源位置照向原点，所以 +z 处的光
+  // 照亮的是朝向相机的那一面。第一版把光放在 -z（画面前方），照亮的是背面，
+  // 座舱/头盔在屏幕上几乎是黑的。
+  const key = new THREE.DirectionalLight(0xfff4e8, 2.4);
+  key.position.set(0.35, 0.55, 1.0);
   overlayScene.add(key);
-  const fill = new THREE.DirectionalLight(0x8fa8c8, 0.8);
+  const fill = new THREE.DirectionalLight(0x8fa8c8, 0.9);
   fill.position.set(-0.6, -0.4, 0.8);
   overlayScene.add(fill);
   overlayScene.add(new THREE.AmbientLight(0x5a6472, 0.35));
@@ -144,6 +147,8 @@ const cockpit = createCockpit();
 overlayScene.add(cockpit);
 const shipModel = createShipModel();
 overlayScene.add(shipModel);
+const helmet = createHelmet();
+overlayScene.add(helmet);
 let thirdPerson = false;   // V 键在飞行模式切换第一/第三人称
 
 const ambient = new THREE.AmbientLight(0x404858, 0.02);
@@ -945,6 +950,12 @@ function loop() {
     const showCockpit = appMode === 'fly' && !thirdPerson;
     cockpit.visible = showCockpit;
     shipModel.visible = appMode === 'fly' && thirdPerson;
+    // 行走时的"我在其中"边界：用视口级的 CSS 晕影，而不是 3D 头盔框。
+    // 3D 框在这个环境里反复受近平面/视锥影响（主相机近平面随最近天体动态调整），
+    // 而在行走模式下叠加层又要独立相机——很容易让框落到视锥外。
+    // 晕影与分辨率、FOV、相机姿态全都无关，是最稳的表达。
+    document.body.classList.toggle('walk-mode', appMode === 'walk');
+    helmet.visible = false;
     if (shipModel.visible) {
       shipModel.position.set(0, 0, 0);
       shipModel.quaternion.copy(ship.quat);
@@ -962,6 +973,7 @@ function loop() {
     overlayCam.aspect = camera.aspect;
     overlayCam.updateProjectionMatrix();
     cockpit.userData.layout?.(overlayCam.fov, overlayCam.aspect);
+    helmet.userData.layout?.(overlayCam.fov, overlayCam.aspect);
     if (thirdPerson && shipModel.visible) {
       overlayCam.position.set(0, 2.6, 16).applyQuaternion(ship.quat);
       overlayCam.quaternion.copy(ship.quat);

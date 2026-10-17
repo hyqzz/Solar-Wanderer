@@ -954,3 +954,17 @@ body.cinematic #directory, body.cinematic .compass-widget { opacity: 0; }
   mix-blend-mode: screen;
 }
 body.cinematic #reentry-glow { z-index: 40; } /* 纯净模式下保留：它是画面的一部分 */
+
+/* 行走模式的头盔晕影：视口边缘一圈向内渐暗的包裹感。
+   用 CSS 而不是 3D 几何：主场景近平面会随最近天体动态调整，叠加层又要
+   独立的米制相机——行走模式下这两者交互很容易让 3D 框落到视锥外。
+   视口级晕影与分辨率、FOV、相机姿态全都无关，是最稳的"我在其中"表达。 */
+body.walk-mode::after {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 35;
+  background:
+    radial-gradient(ellipse 78% 72% at 50% 50%,
+      rgba(0,0,0,0) 62%,
+      rgba(12,15,20,0.28) 82%,
+      rgba(8,10,14,0.62) 100%);
+}

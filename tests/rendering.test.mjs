@@ -1518,3 +1518,16 @@ test('程序化条带贴图左右列连续（反经线无硬缝）', async () =>
   const avg = diff / h;
   assert.ok(avg < 3, `左右列平均差 ${avg.toFixed(2)}，反经线仍有缝`);
 });
+
+// ── 行走模式的"我在其中"边界 ────────────────────────────────────────────────
+test('行走时有头盔晕影（视口级，不依赖 3D 视锥）', () => {
+  const css = read('src/style.css');
+  const m = read('src/main.js');
+  assert.ok(/body\.walk-mode::after/.test(css), '缺少行走晕影样式');
+  assert.ok(/classList\.toggle\('walk-mode', appMode === 'walk'\)/.test(m), '未按模式切换');
+});
+
+test('叠加层主光在相机后方（否则照亮的是背面，座舱是黑的）', () => {
+  const m = read('src/main.js');
+  assert.ok(/key\.position\.set\(0\.35, 0\.55, 1\.0\)/.test(m), '主光仍在画面前方');
+});

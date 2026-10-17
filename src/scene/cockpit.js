@@ -95,3 +95,59 @@ export function createShipModel() {
   group.userData.flame = flame;
   return group;
 }
+
+/**
+ * 航天服头盔框（行走模式）。
+ *
+ * 与飞行座舱同一目的：让画面里有一个"我在其中"的边界。行走时视野边缘是
+ * 一层低饱和的盔内壁 + 一条细面窗边框，底部两角有一对戴手套的手。
+ * 不追求细节——过度建模反而会抢走地面本身的注意力。
+ */
+export function createHelmet() {
+  const group = new THREE.Group();
+  const shell = new THREE.MeshStandardMaterial({
+    color: 0x7a828c, roughness: 0.8, metalness: 0.12, emissive: 0x0d1015, fog: false,
+    side: THREE.DoubleSide,
+  });
+  const trim = new THREE.MeshStandardMaterial({
+    color: 0xd8dde4, roughness: 0.4, metalness: 0.45, fog: false,
+  });
+  const Z = -0.42;
+  const mk = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+  const top = mk(1, 0.03, 0.05, trim);
+  const bottom = mk(1, 0.06, 0.06, trim);
+  const left = mk(0.035, 1, 0.05, trim);
+  const right = mk(0.035, 1, 0.05, trim);
+  // 盔内壁：四块略微内倾的板，形成"被包裹"的感觉
+  const wallL = mk(0.25, 1.4, 0.02, shell);
+  const wallR = mk(0.25, 1.4, 0.02, shell);
+  const wallB = mk(1.4, 0.22, 0.02, shell);
+  group.add(top, bottom, left, right, wallL, wallR, wallB);
+
+  // 两只手套：底部两角，暗色、略比盔壁亮
+  const glove = new THREE.MeshStandardMaterial({
+    color: 0x9aa0a8, roughness: 0.85, metalness: 0.05, fog: false,
+  });
+  const handL = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 8), glove);
+  const handR = handL.clone();
+  group.add(handL, handR);
+
+  group.userData.layout = (fovV, aspect) => {
+    const halfH = Math.tan(fovV * Math.PI / 360) * -Z;
+    const halfW = halfH * aspect;
+    const oy = halfH * 0.90, ox = halfW * 0.94;
+    top.position.set(0, oy, Z); top.scale.x = ox * 2 + 0.10;
+    bottom.position.set(0, -oy, Z); bottom.scale.x = ox * 2 + 0.10;
+    left.position.set(-ox, 0, Z); left.scale.y = oy * 2 + 0.10;
+    right.position.set(ox, 0, Z); right.scale.y = oy * 2 + 0.10;
+    wallL.position.set(-halfW - 0.10, 0, Z + 0.02);
+    wallR.position.set(halfW + 0.10, 0, Z + 0.02);
+    wallB.position.set(0, -halfH - 0.10, Z + 0.02);
+    handL.position.set(-halfW * 0.62, -halfH * 0.72, Z + 0.06);
+    handR.position.set(halfW * 0.62, -halfH * 0.72, Z + 0.06);
+  };
+  group.userData.layout(58, 1.6);
+  group.renderOrder = 2;
+  group.userData.isHelmet = true;
+  return group;
+}
