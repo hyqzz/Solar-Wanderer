@@ -139,6 +139,6 @@ test('大气内有升力，且低于失速速度时骤降', () => {
   };
   const fast = run(1.0);                     // 1000 m/s
   const slow = run(0.03);                    // 30 m/s，低于失速速度
-  assert.ok(fast > 100, `高速时升力 ${fast.toFixed(0)} m/s² 太小`);
+  assert.ok(fast > 10, `高速时升力 ${fast.toFixed(0)} m/s² 太小（20km/1km/s 应约 2g）`);
   assert.ok(slow < 1, `低速时升力 ${slow.toFixed(1)} m/s² 应接近 0（失速）`);
 });
