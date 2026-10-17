@@ -753,6 +753,40 @@ class RockField {
       color: 0xffffff, // 实例色承载反照率（setColorAt）
       roughness: 0.93, metalness: 0, fog: true,
     });
+    // 岩石表面细节：几何是"变形二十面体 + 三档 fbm"，近距离看仍是光滑的团块。
+    // 真实月壤/火星砾石表面有坑洼、棱角与颗粒。这里在片元里按**对象空间**位置
+    // 加一层法线扰动（对象空间稳定，实例旋转/缩放不会让纹理滑动）。
+    mat.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vRockPos;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRockPos = position;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', /* glsl */ `#include <common>
+          varying vec3 vRockPos;
+          uniform mat3 normalMatrix;   // three 只在顶点着色器里声明它
+          float rhash(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
+          float rnoise(vec3 p){
+            vec3 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+            return mix(mix(mix(rhash(i),rhash(i+vec3(1,0,0)),f.x),mix(rhash(i+vec3(0,1,0)),rhash(i+vec3(1,1,0)),f.x),f.y),
+                       mix(mix(rhash(i+vec3(0,0,1)),rhash(i+vec3(1,0,1)),f.x),mix(rhash(i+vec3(0,1,1)),rhash(i+vec3(1,1,1)),f.x),f.y),f.z);
+          }
+          vec3 rgrad(vec3 p){
+            vec3 i = floor(p), f = fract(p), df = 6.0*f*(1.0-f); f = f*f*(3.0-2.0*f);
+            float a=rhash(i), b=rhash(i+vec3(1,0,0)), c=rhash(i+vec3(0,1,0)), d=rhash(i+vec3(1,1,0));
+            float e=rhash(i+vec3(0,0,1)), h=rhash(i+vec3(1,0,1)), j=rhash(i+vec3(0,1,1)), k=rhash(i+vec3(1,1,1));
+            return df * vec3(mix(mix(b-a,d-c,f.y),mix(h-e,k-j,f.y),f.z),
+                             mix(mix(c-a,d-b,f.x),mix(j-e,k-h,f.x),f.z),
+                             mix(mix(e-a,h-b,f.x),mix(j-c,k-d,f.x),f.y));
+          }`)
+        .replace('#include <normal_fragment_maps>', /* glsl */ `#include <normal_fragment_maps>
+          {
+            // 三档：粗棱角（~30cm 等效）、中颗粒、细砂。对象空间单位是 km。
+            vec3 g = rgrad(vRockPos * 900.0) * 0.0014
+                   + rgrad(vRockPos * 3200.0) * 0.0005
+                   + rgrad(vRockPos * 9000.0) * 0.00022;
+            normal = normalize(normal + (normalMatrix * g));
+          }`);
+    };
     this.mesh = new THREE.InstancedMesh(geo, mat, this.MAX);
     this.mesh.frustumCulled = false;
     this.mesh.castShadow = true;    // 近场太阳阴影（builder 阴影装置）

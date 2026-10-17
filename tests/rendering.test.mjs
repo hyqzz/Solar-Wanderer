@@ -1251,3 +1251,11 @@ test('海面波纹的振幅与门限足以在水面看到起伏', () => {
   assert.ok(/smoothstep\(0\.7, 1\.6, fp \* 820\.0\)/.test(src), '水波足迹门限仍过紧');
   assert.ok(!/waterGrad \* 0\.00025/.test(src), '旧的低振幅仍在');
 });
+
+// ── 岩石要有表面质感 ────────────────────────────────────────────────────────
+test('岩石材质加了程序化法线扰动（否则近看是光滑团块）', () => {
+  const src = read('src/scene/terrain.js');
+  assert.ok(/mat\.onBeforeCompile/.test(src), '岩石材质缺少 onBeforeCompile');
+  assert.ok(/rgrad\(vRockPos \* 900\.0\)/.test(src), '缺少岩石法线扰动');
+  assert.ok(/uniform mat3 normalMatrix;/.test(src), '片元着色器必须自己声明 normalMatrix');
+});
