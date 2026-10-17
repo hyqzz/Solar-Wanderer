@@ -170,6 +170,9 @@ const SCENARIOS = [
   ['moon-ground-dusk', async () => { await land('moon', 8, 80); await look(0.05, 0); await wait(10000); }],
   ['mars-ground-dusk', async () => { await land('mars', 18, 80); await look(0.05, 0); await wait(10000); }],
   ['mercury-ground-horizon', async () => { await land('mercury', 20, 0); await look(0.05, 0); await wait(10000); }],
+  // 低轨机位：判"地形方块与基底球的交界"是否可见（R4）
+  ['moon-loworbit', async () => { await orbit('moon', 1737 + 300, 0.3, null); await wait(12000); }],
+  ['mars-loworbit', async () => { await orbit('mars', 3390 + 300, 0.2, null); await wait(12000); }],
   ['europa-ground-horizon', async () => { await land('europa', 12, 0); await look(0.05, 0); await wait(10000); }],
   ['enceladus-ground-horizon', async () => { await land('enceladus', 5, 0); await look(0.05, 0); await wait(10000); }],
   ['io-ground-horizon', async () => { await land('io', 15, 0); await look(0.05, 0); await wait(10000); }],

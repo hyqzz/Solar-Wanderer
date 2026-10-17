@@ -1106,3 +1106,16 @@ test('主场景设置了程序化环境贴图（金属材质才有东西可反�
     'scene.environment 未设置');
   assert.ok(/environmentIntensity/.test(src), '环境强度应显式压低，避免把地表整体洗亮');
 });
+
+// ── 地形必须覆盖视地平，且边缘与基底球无缝 ──────────────────────────────────
+// 原来最外级只到 280km 半边长，而 300km 高度上地平线在 ~1000km 外——地形方块
+// 明晃晃地浮在光滑基底球上，交界是一条硬直边。_showBase() 还是死代码（从不隐藏）。
+
+test('地形外缘覆盖视地平，且边缘高度收回基准球', () => {
+  const src = read('src/scene/terrain.js');
+  // 外缘级别至少到 600km（300km 高度上可见的地面半径）
+  assert.ok(/280, 600, 1500/.test(src), '最外级应扩展到 600/1500km');
+  // 边缘高度向 baseRadius 平滑收回
+  assert.ok(/blend > 0\) h = h \* \(1 - blend\) \+ this\.field\.baseRadius\(dir\) \* blend/.test(src),
+    '最外级边缘应收到基准球面，否则与基底球交界是硬直边');
+});

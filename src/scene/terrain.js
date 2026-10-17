@@ -844,7 +844,11 @@ export class TerrainPatchSet {
     const R = field.phys.radiusKm;
     // 各级半边长（km）：最内 0.012km → 格距 ~0.4m（脚掌尺度，行走时地面与碰撞
     // 高度场偏差 <2cm）；次内 0.03km 覆盖中景过渡（R9-2a 行走尺度再加密）
-    this.extents = [0.012, 0.03, 0.12, 0.5, 2.5, 12, 60, 280].filter((e) => e < R * 0.7);
+    // 最外两级（600/1500km 半边长）是为了覆盖**视地平**：300km 高度上地平线在
+    // ~1000km 外，只到 280km 时地形方块边缘会明晃晃地浮在光滑基底球上。
+    // 最外级的边缘高度会被平滑收回基准球（见 _buildLevel），交界因此无缝。
+    this.extents = [0.012, 0.03, 0.12, 0.5, 2.5, 12, 60, 280, 600, 1500]
+      .filter((e) => e < R * 0.7);
     if (this.extents.length === 0) this.extents = [R * 0.3];
     this.group = new THREE.Group();
     this.levels = [];
@@ -1013,7 +1017,15 @@ export class TerrainPatchSet {
         const fx = ((x / GRID) * 2 - 1) * lv.extent;
         const fy = ((y / GRID) * 2 - 1) * lv.extent;
         dir.copy(u).addScaledVector(east, fx / R).addScaledVector(north, fy / R).normalize();
-        const h = this.field.height(dir);
+        let h = this.field.height(dir);
+        // 最外级：边缘高度平滑收回到基准球面，与基底球无缝衔接。
+        // 不这样做的话，地形方块的外缘是一条硬直边——300km 高度上非常显眼
+        // （方块内有大尺度起伏、方块外是完美光滑的球）。
+        if (lv.extent >= R * 0.2) {
+          const edge = Math.max(Math.abs(fx), Math.abs(fy)) / lv.extent;
+          const blend = sstep(0.86, 1.0, edge);
+          if (blend > 0) h = h * (1 - blend) + this.field.baseRadius(dir) * blend;
+        }
         hs[k] = h;
         dirs[k * 3] = dir.x; dirs[k * 3 + 1] = dir.y; dirs[k * 3 + 2] = dir.z;
         pos[k * 3] = dir.x * h - origin.x;
