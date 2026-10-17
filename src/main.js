@@ -1012,7 +1012,7 @@ function loop() {
 
   try {
     // 比例参照物（#38）：跟随相机位置
-    scaleRef?.update({ mode: appMode });
+    scaleRef?.update({ mode: appMode, cinematic });
   } catch (e) { console.error('[scaleRef]', e); }
   try {
     for (const [id, landmarks] of [['moon', apolloLandmarks], ['mars', roverSites]]) {
@@ -1113,8 +1113,11 @@ const PLANET_KEYS = {
   Digit6: 'saturn', Digit7: 'uranus', Digit8: 'neptune', Digit9: 'pluto', Digit0: 'sun',
 };
 
-let orbitLinesOn = true;
-let tnoOrbitsOn = false; // 海外天体（TNO）轨道线默认关闭（#4：数量多且远，避免画面杂乱）
+// 轨道线默认**关闭**：它是示意图层，不是天体本身。默认开启时任何一张太空视角的
+// 画面里都横着 6–8 条彩色线（实测 earth-space），与"任何角度都逼真"直接冲突。
+// 需要时按 O 打开。TNO 轨道线同样默认关闭（数量多且远）。
+let orbitLinesOn = false;
+let tnoOrbitsOn = false;
 let directoryTabKeyBound = false;
 
 function handleUIKeys() {
@@ -1140,8 +1143,10 @@ function handleUIKeys() {
   if (input.tapped('KeyV') && appMode === 'orbit' && !orbitCam.flight) {
     orbitCam.setInertial(!orbitCam.inertial, orbitEnv);
   }
-  // 行走模式自动隐藏轨道辅助线（沉浸真实星空）
-  const showOrbits = orbitLinesOn && appMode !== 'walk';
+  // 行走模式与纯净/电影模式都隐藏轨道辅助线（沉浸真实星空）。
+  // 纯净模式此前只加 body.cinematic 这个 CSS 类，而轨道线是 WebGL 对象、CSS 管不到——
+  // 于是"没有任何界面"的录屏/截图里仍然横着彩色轨道线。3D 叠加物必须在这里一起收。
+  const showOrbits = orbitLinesOn && appMode !== 'walk' && !cinematic;
   // 近距淡出：轨道线是示意辅助而非法线实体，抵达/环绕某天体时其轨道线
   // 仍横贯视野会破坏临场感（冥王星系统内"轨道比星球还醒目"的投诉）。
   // 6R→300R 平滑淡入：月距 38 万 km 处看地球轨道线仍接近全显，登陆前完全隐去。
@@ -1159,7 +1164,7 @@ function handleUIKeys() {
     if (line.visible) line.material.opacity = (line.userData.baseOpacity ?? 0.3) * f;
   }
   // 海外天体（TNO）轨道线：独立开关（K），默认关闭（#4）
-  const showTnoOrbits = tnoOrbitsOn && appMode !== 'walk';
+  const showTnoOrbits = tnoOrbitsOn && appMode !== 'walk' && !cinematic;
   for (const [, e] of tnoScene.entries) {
     if (!e.orbitLine) continue;
     const R = e.phys.radiusKm ?? 500;

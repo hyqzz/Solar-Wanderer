@@ -184,12 +184,36 @@ test('云层与地表云影共用同一套 UV 与不透明度映射', () => {
 test('云密度是连续幂律而非阈值截断（阈值化会压出硬边白斑）', () => {
   const src = read('src/scene/planetMaterial.js');
   assert.ok(/float cloudTau\(vec3 cl\)/.test(src), '缺少共享的云光学厚度映射');
-  assert.ok(/pow\(lum, 1\.45\) \* 1\.25 \+ lum \* 0\.06/.test(src), '缺少幂律映射');
+  // 断言的是**性质**而不是某组具体数字：云量 → 光学厚度必须是一条连续幂律
+  // （pow(lum, k) * c，k ≥ 1），不能是 smoothstep/截断那样的阈值型映射——
+  // 阈值化会在高云量处饱和成硬边不透明白斑。
+  const m = src.match(/float cloudTau\(vec3 cl\)\s*\{([\s\S]*?)\}/);
+  assert.ok(m, '未找到 cloudTau 实现');
+  const body = m[1];
+  const p = body.match(/pow\(lum,\s*([\d.]+)\)\s*\*\s*([\d.]+)/);
+  assert.ok(p, 'cloudTau 应为连续幂律 pow(lum, k) * c');
+  assert.ok(Number(p[1]) >= 1, `幂指数应 ≥1，实际 ${p[1]}`);
+  assert.ok(!/smoothstep/.test(body), 'cloudTau 不应含阈值化映射');
+  assert.ok(!/step\(/.test(body), 'cloudTau 不应含阈值化映射');
   // 旧写法在 lum>0.65 处饱和到 1，把贴图的大片中间调压成硬边不透明白斑
   assert.ok(!/dot\(cl, vec3\(0\.34\)\) - 0\.10\) \* 1\.8/.test(src), '阈值化映射仍在');
   assert.ok(!/dot\(cloudCol, vec3\(0\.34\)\) - 0\.10\) \* 1\.8/.test(src), '云影仍用阈值化映射');
   // Beer–Lambert 形式：永不饱和，薄云保持半透明
-  assert.ok(/1\.0 - exp\(-cloudTau\(cl\) \* 1\.9\)/.test(src), '缺少 Beer–Lambert 不透明度');
+  assert.ok(/1\.0 - exp\(-cloudTau\(cl\)\)/.test(src), '缺少 Beer–Lambert 不透明度');
+});
+
+test('云的平均不透明度落在"能看见海陆"的区间（不是白球也不是没有云）', () => {
+  const src = read('src/scene/planetMaterial.js');
+  const body = src.match(/float cloudTau\(vec3 cl\)\s*\{([\s\S]*?)\}/)[1];
+  const p = body.match(/pow\(lum,\s*([\d.]+)\)\s*\*\s*([\d.]+)/);
+  const k = Number(p[1]), c = Number(p[2]);
+  // GIBS 云量的全球均值实测 0.71（public/textures/clouds_real.json 有记录）
+  const meanLum = 0.71;
+  const tau = meanLum ** k * c;
+  const alpha = 1 - Math.exp(-tau);
+  assert.ok(alpha > 0.15 && alpha < 0.45,
+    `全球平均云不透明度 ${alpha.toFixed(2)} 不在 [0.15, 0.45]：` +
+    `过低云会看不见，过高地球会糊成白球（实测 0.775 时 63.8% 盘面像元过曝）`);
 });
 
 // ── 批次 9：GIBS 真实日期云图 ────────────────────────────────────────────────
@@ -898,3 +922,4 @@ test('地表明暗调制保留增益与限幅（否则噪声方差太小，看�
   assert.ok(/clamp\(1\.0 \+ 2\.2 \* \(nsum - 0\.5\), 0\.62, 1\.38\)/.test(src),
     'dm 的增益与限幅应保持（±38% 表土质感，不死黑不过曝）');
 });
+

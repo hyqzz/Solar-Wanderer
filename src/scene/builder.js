@@ -670,7 +670,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       if (e.atmoMesh) {
         const u = e.atmoMesh.material.userData.uniforms;
         u.uSunDir.value.copy(_sunDir);
-        u.uSunI.value = 13 * (e.phys.atmosphere.multiplier ?? 1) * sunI;
+        u.uSunI.value = 5 * (e.phys.atmosphere.multiplier ?? 1) * sunI;
         // 扁率求交用自转轴（世界系，R8 #1）
         u.uAxis.value.set(0, 1, 0).applyQuaternion(e.mesh.quaternion);
       }

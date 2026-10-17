@@ -243,6 +243,12 @@ export class ScaleReference {
    */
   update(state = {}) {
     if (!this._human && !this._compareGroup) return;
+    // 纯净/电影模式：参照物也是叠加层，必须一起收——它是 WebGL 对象，
+    // body.cinematic 那套 CSS 管不到，录屏/截图里会留下一个飘着的暗色胶囊。
+    const show = !state.cinematic;
+    if (this._human) this._human.visible = show;
+    if (this._compareGroup) this._compareGroup.visible = show;
+    if (!show) return;
     const camPos = this.camera.position;
     const camQuat = this.camera.quaternion;
     if (this._human) this._updateHuman(camPos, camQuat);
