@@ -647,10 +647,16 @@ export class Ship {
     const dirNow = w.localPos.clone().normalize();
     const surfR  = phys.radiusKm + 0.001;
     const onWater = !!env.isWater?.(w.bodyId, dirNow);
-    if (onWater && !w.diving && (input.wheel <= -0.5 || input.down('PageDown') || input.touchDescend)) {
-      w.diving = true; w.grounded = false; w.vAlt = 0;
-    }
-    const inWater = onWater && w.diving && r < surfR + 1e-7;
+    // 主动下潜的意图（键盘/触控/滚轮下）
+    const wantDescend = input.down('PageDown') || input.touchDescend || input.wheel <= -0.5;
+    // 入水判定：**不再要求先按"下潜"**。原来 inWater 需要 w.diving 且 r < surfR+1e-7，
+    // 而站立时 r = surfR + 眼高(1.7m)，两个条件都够不着——于是走到海上既不减速、
+    // 也不受浮力，只是"站在水面上走"。
+    const inWater = onWater && r < surfR + 0.0015;
+    // 下潜态改为**派生量**（在水里 + 主动下沉），不再是需要单独进入/退出的模式。
+    // 原来 w.diving 由滚轮置位、又由"浮出水面"清除，而浮力一旦把人抬回水面就与
+    // 清零条件互相抵消——实测按住下潜键 3 秒 diving 仍然是 false。
+    w.diving = inWater && wantDescend;
     let speed = ((input.down('ShiftLeft') || input.touchSprint) ? 0.009 : 0.003);
     if (inWater) speed *= 0.45;
     const moving = move.lengthSq() > 0;
@@ -676,20 +682,35 @@ export class Ship {
     }
     if (inWater) {
       if (input.down('Space') || input.touchAscend) w.vAlt += g * 0.5 * dt;
-      w.vAlt *= Math.exp(-dt * 2.5);
+      // 浮力：把人推回水面。原来只有阻尼、没有浮力，所以"入水"实际等于"沉底"。
+      // 目标上浮速度 ∝ 深度（越深上浮越快），封顶 1.2 m/s；主动下潜时不生效。
+      const depth = Math.max(0, surfR - w.localPos.length());
+      if (wantDescend) {
+        w.vAlt -= g * 0.5 * dt;
+      } else {
+        const wantV = Math.min(depth * 0.6, 0.0012);
+        w.vAlt += (wantV - w.vAlt) * Math.min(dt * 2.5, 1);
+      }
+      w.vAlt *= Math.exp(-dt * 0.8);   // 水阻
     } else {
       w.vAlt -= g * dt;
     }
     w.localPos.addScaledVector(up, w.vAlt * dt);
 
     const dir = w.localPos.clone().normalize();
+    // 没入水面即算潜水（不再只由 w.diving 决定，否则浮力把脚抬回水面后状态就卡住）
+    const rr = w.localPos.length();
+    w.submerged = onWater && rr < surfR - 0.0002;
+    // 地面：下潜时是海床；在水面（未下潜）时脚在水面下 1.4m —— 人是半个身子泡在
+    // 水里，不是站在水上。原来直接用 heightFn（=水面）加眼高，等于站在水面上走。
+    let ground;
     if (w.diving) {
-      const rr = w.localPos.length();
-      if (rr < surfR - 0.001) w.submerged = true;
-      else if (w.submerged && rr >= surfR - 0.0001) { w.diving = false; w.submerged = false; w.vAlt = 0; }
+      ground = (env.heightSolidFn ?? env.heightFn)(w.bodyId, dir) + WALK_EYE_KM;
+    } else if (onWater) {
+      ground = surfR - 0.0014 + WALK_EYE_KM;
+    } else {
+      ground = env.heightFn(w.bodyId, dir) + WALK_EYE_KM;
     }
-    const groundFn = w.diving ? (env.heightSolidFn ?? env.heightFn) : env.heightFn;
-    let ground = groundFn(w.bodyId, dir) + WALK_EYE_KM;
     // 接地视线低通：解析高度场含分米级微地形，且 DEM 瓦片异步到达会突变局部
     // 高程——视线高度直连时每步都在微抖动/瓦片到达瞬间跳动。非对称时间常数：
     // 地面上升快速跟随（防穿进坡里），下降缓慢沉降（自然步态下台阶感）。
