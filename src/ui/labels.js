@@ -102,7 +102,10 @@ export class Labels {
       // 此前每帧给全部标签写距离，天空看上去像一块测量仪表盘——
       // 真实星空里你不会在每颗星旁边看到"3.2 AU"。
       const detail = target.id === selectedId || target.id === this.aimedId;
-      el.querySelector('.ld').textContent = detail ? (target.distText ?? formatDist(dist)) : '';
+      // 缓存子元素：每帧对每个标签做 querySelector 会在 199 个标签上白扔掉
+      // 若干毫秒（直接与渲染预算抢）。
+      const ld = item._ld ?? (item._ld = el.querySelector('.ld'));
+      if (ld) ld.textContent = detail ? (target.distText ?? formatDist(dist)) : '';
       el.classList.toggle('selected', target.id === selectedId);
       // 收入本帧可见集，供重叠避让（优先级：选中 > 视半径大 > 近）
       const name = target.name ?? target.nameZh ?? '';
