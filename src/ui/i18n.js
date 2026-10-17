@@ -387,6 +387,7 @@ const HELP_EN = `
         <tr><td>W S A D R F</td><td>Six-axis translation</td></tr>
         <tr><td>Scroll / Shift</td><td>Speed gear (1 m/s→2 AU/s) / boost</td></tr>
         <tr><td>X</td><td>Full stop (hover anywhere)</td></tr>
+        <tr><td>V</td><td>First-person cockpit / third-person external view</td></tr>
         <tr><td>Esc</td><td>Return to explore mode</td></tr>
       </table>
       <h3>⏱ Time</h3>

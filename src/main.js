@@ -46,6 +46,7 @@ import { buildTourUI } from './ui/tourUI.js';
 import { TeacherToolkit } from './ui/teacher.js';
 import { EclipseSystem } from './scene/eclipses.js';
 import { WebXRManager } from './engine/webxr.js';
+import { createCockpit, createShipModel } from './scene/cockpit.js';
 import { createSpacecraftModel, makeSpacecraftGlow, SPACECRAFT_TIMELINES } from './scene/spacecraft.js';
 import { createApolloLandmarks, createRoverSites } from './scene/landmarks.js';
 import { createEphemerisLoader } from './engine/ephemerisLoader.js';
@@ -118,6 +119,32 @@ scene.fog = new THREE.FogExp2(0x000000, 0); // 地形气溶胶透视（仅 fog:t
 // R11：far 扩展到 ~106 ly 以支持亮星真实 3D 位置（视差）+ 奥尔特云粒子（100000 AU=1.58 ly）
 const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 5e-7, 1e15);
 scene.add(camera);
+// 座舱与飞船外形（见 scene/cockpit.js）。
+//
+// **必须用独立的叠加场景 + 独立相机**：主相机的近平面会随最近天体动态调整
+// （飞到 2.2R 时实测 near=5849 km），座舱在 0.6m、飞船在 16m 处会被整块裁掉——
+// 第一版直接挂到 camera 上，结果画面里什么都没有。
+// 叠加层用米制，近平面 1cm，与主场景完全解耦。
+const overlayScene = new THREE.Scene();
+const overlayCam = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.01, 200);
+// 叠加层的光照：座舱与飞船都是金属材质，没有光/环境就是一团黑（第一版正是这样，
+// 座舱框在黑色星空里完全看不见）。主光从前上方来，模拟舷窗透进来的阳光；
+// 环境贴图与主场景共用，让金属有可反射的底。
+{
+  const key = new THREE.DirectionalLight(0xfff4e8, 3.0);
+  key.position.set(0.35, 0.55, -1.0);
+  overlayScene.add(key);
+  const fill = new THREE.DirectionalLight(0x8fa8c8, 0.8);
+  fill.position.set(-0.6, -0.4, 0.8);
+  overlayScene.add(fill);
+  overlayScene.add(new THREE.AmbientLight(0x5a6472, 0.35));
+}
+const cockpit = createCockpit();
+overlayScene.add(cockpit);
+const shipModel = createShipModel();
+overlayScene.add(shipModel);
+let thirdPerson = false;   // V 键在飞行模式切换第一/第三人称
+
 const ambient = new THREE.AmbientLight(0x404858, 0.02);
 scene.add(ambient);
 
@@ -434,7 +461,7 @@ async function init() {
     }
   });
 
-  window.__game = { ship, simClock, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr, smallBodies, quality: QUALITY, ephemerisLoader, renderer, composer, apolloLandmarks, roverSites, sky, labels, tnoScene, comets, oortCloud };
+  window.__game = { ship, simClock, overlayScene, overlayCam, cockpit, shipModel, select, flyTo, orbitCam, orbitEnv, builder, registry, input, terrainMgr, camera, getMode: () => appMode, setOrbitLinesVisible: (v) => { orbitLinesOn = v; }, audioEngine, compass, scaleRef, bookmarks, tourSystem, narrator, teacherToolkit, eclipseSystem, webxr, smallBodies, quality: QUALITY, ephemerisLoader, renderer, composer, apolloLandmarks, roverSites, sky, labels, tnoScene, comets, oortCloud };
   renderer.setAnimationLoop(loop);
 
   // ── 生命周期：后台/标签切换/睡眠恢复后强制同步仿真时钟 ──
@@ -869,6 +896,41 @@ function loop() {
       console.error('[postWorldUpdate]', e);
     }
   }
+  // ── 座舱 / 第三人称 ──────────────────────────────────────────────────────
+  // 飞行与行走都有"我在其中"的实体：飞行=座舱框，行走=无（身体留给后续）。
+  // 第三人称把相机沿机体 +Z 后移并看向原点（浮动原点下飞船恒在原点）。
+  {
+    if (appMode === 'fly' && input.tapped('KeyV')) thirdPerson = !thirdPerson;
+    const showCockpit = appMode === 'fly' && !thirdPerson;
+    cockpit.visible = showCockpit;
+    shipModel.visible = appMode === 'fly' && thirdPerson;
+    if (shipModel.visible) {
+      shipModel.position.set(0, 0, 0);
+      shipModel.quaternion.copy(ship.quat);
+      const fl = shipModel.userData.flame;
+      if (fl) {
+        // 尾焰强度由"当前速度 / 速度档"给出：松手滑行时也会留一点余焰
+        const thr = Math.min(1, ship.vel.length() / Math.max(ship.speedSetting, 1e-9) * 0.9);
+        fl.material.opacity = 0.25 + 0.6 * thr;
+        fl.scale.set(0.8 + 0.5 * thr, 0.6 + 1.4 * thr, 0.8 + 0.5 * thr);
+      }
+    }
+    // 叠加相机：第一人称在原点、随飞船姿态；第三人称后上方 16m、看向飞船。
+    // 座舱框按**当前** FOV/宽高比重新布局，否则窗口变形或机体滚转时框会跑出画面
+    overlayCam.fov = camera.fov;
+    overlayCam.aspect = camera.aspect;
+    overlayCam.updateProjectionMatrix();
+    cockpit.userData.layout?.(overlayCam.fov, overlayCam.aspect);
+    if (thirdPerson && shipModel.visible) {
+      overlayCam.position.set(0, 2.6, 16).applyQuaternion(ship.quat);
+      overlayCam.quaternion.copy(ship.quat);
+      overlayCam.lookAt(0, 0, 0);
+    } else {
+      overlayCam.position.set(0, 0, 0);
+      overlayCam.quaternion.copy(ship.quat);
+    }
+  }
+
   camera.quaternion.copy(ship.quat);
   // 相机语言：在基础姿态上叠加步态/冲击/高速微抖。
   // 只改姿态与 FOV，绝不改视点位置——否则会破坏浮动原点精度与着陆判定。
@@ -1123,6 +1185,14 @@ function loop() {
   try {
     if (renderer.xr.isPresenting) renderer.render(scene, camera);
     else composer.render();
+    // 座舱/飞船叠加层：清深度后单独渲染，用米制近平面（见上面的说明）
+    if (appMode === 'fly' && (cockpit.visible || shipModel.visible)) {
+      if (!overlayScene.environment) overlayScene.environment = scene.environment;
+      renderer.autoClear = false;
+      renderer.clearDepth();
+      renderer.render(overlayScene, overlayCam);
+      renderer.autoClear = true;
+    }
   } catch (e) {
     // 渲染本身异常：记录一次，避免每帧刷屏
     if (!loop._renderErr) {
