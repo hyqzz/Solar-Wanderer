@@ -711,7 +711,7 @@ function loop() {
   }
   try { comets.update(jdTT, ship.posKm); } catch (e) { loopErr('comets', e); }
   try { tnoScene.update(jdTT, ship.posKm); } catch (e) { loopErr('tnoScene', e); }
-  try { smallBodies.update(jdTT); } catch (e) { loopErr('smallBodies', e); }
+  try { smallBodies.update(jdTT, ship.posKm); } catch (e) { loopErr('smallBodies', e); }
   try {
     for (const v of voyagerEntries) {
       const p = voyagerPosition(v.vg, jdTT);

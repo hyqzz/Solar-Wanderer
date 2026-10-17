@@ -43,17 +43,23 @@ export function createSmallBodies() {
     layers = byKind.map((rows, kind) => {
       if (!rows.length) return null;
       const pos = new Float32Array(rows.length * 3);
+      const col = new Float32Array(rows.length * 3);
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
       const st = KIND_STYLE[kind];
+      // 颜色改为**逐点**：亮度由真实视星等决定（见 applyMagnitude），不再是一律
+      // 2.2px 全亮。真实的小行星带肉眼几乎不可见——谷神星 6.7–9.3 等、灶神星
+      // 5.2–8.5 等，其余更暗；一律画成亮点会得到一条"喷带"，与真实相差最远。
       const mat = new THREE.PointsMaterial({
-        color: st.color, size: st.size, sizeAttenuation: false,
-        transparent: true, opacity: st.opacity, depthWrite: false, fog: false,
+        color: 0xffffff, size: st.size, sizeAttenuation: false,
+        vertexColors: true, transparent: true, opacity: st.opacity,
+        depthWrite: false, fog: false,
       });
       const pts = new THREE.Points(geo, mat);
       pts.frustumCulled = false;
       group.add(pts);
-      return { rows, pos, geo };
+      return { rows, pos, geo, col, base: new THREE.Color(st.color) };
     });
   }
 
@@ -81,13 +87,36 @@ export function createSmallBodies() {
         pos[i * 3] = x; pos[i * 3 + 1] = z; pos[i * 3 + 2] = -y; // ecl→world: (x, z, −y)
       }
       layer.geo.attributes.position.needsUpdate = true;
+      layer.geo.attributes.color.needsUpdate = true;
+    }
+  }
+
+  /** 视星等 → 顶点亮度。
+   *  m = H + 5·log10(r·Δ)（忽略相位角；对"看不看得见"这个判断足够）。
+   *  以肉眼极限 6.0 等为 1.0，每暗 2.5 等衰减 10 倍。
+   *  这样只有谷神星/灶神星/智神星/健神星这类大天体可见，与真实夜空一致。 */
+  const NAKED_EYE_M = 6.0;
+  function applyMagnitude(camPosKm) {
+    const cx = camPosKm[0], cy = camPosKm[1], cz = camPosKm[2];
+    for (const layer of layers) {
+      if (!layer) continue;
+      const { rows, pos, col, base } = layer;
+      for (let i = 0; i < rows.length; i++) {
+        const b = rows[i];
+        const px = pos[i * 3], py = pos[i * 3 + 1], pz = pos[i * 3 + 2];
+        const rAU = Math.max(Math.hypot(px, py, pz) / KM_PER_AU, 1e-3);
+        const dAU = Math.max(Math.hypot(px - cx, py - cy, pz - cz) / KM_PER_AU, 1e-3);
+        const m = b[8] + 5 * Math.log10(rAU * dAU);
+        const L = Math.min(1, Math.pow(10, -0.4 * (m - NAKED_EYE_M)));
+        col[i * 3] = base.r * L; col[i * 3 + 1] = base.g * L; col[i * 3 + 2] = base.b * L;
+      }
     }
   }
 
   return {
     group,
     /** 每帧调用；内部按需加载与节流 */
-    update(jdTT) {
+    update(jdTT, camPosKm) {
       if (!bodies) {
         if (!loading) { loading = true; load(); }
         return;
@@ -97,6 +126,7 @@ export function createSmallBodies() {
       lastJd = jdTT;
       lastWall = now;
       propagate(jdTT);
+      if (camPosKm) applyMagnitude(camPosKm);
     },
     /** 已加载天体数（测试/诊断用） */
     get count() { return bodies?.length ?? 0; },

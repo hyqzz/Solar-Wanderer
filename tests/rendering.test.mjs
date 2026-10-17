@@ -989,3 +989,27 @@ test('中英文帮助都列出了全部已实现的按键', () => {
     assert.ok(en.includes(enPat), `英文帮助缺少 ${name}`);
   }
 });
+
+// ── 小天体亮度必须按真实视星等，不能一律画成亮点 ──────────────────────────────
+// 5412 颗小天体此前一律 2.2px 全亮，于是夜空里是一条"喷带"。真实情况是
+// 谷神星 6.7–9.3 等、灶神星 5.2–8.5 等，肉眼极限 6 等——绝大多数根本看不见。
+
+test('小天体按视星等决定可见性，与真实夜空一致', () => {
+  const src = read('src/scene/smallBodies.js');
+  assert.ok(/applyMagnitude/.test(src), '缺少视星等计算');
+  assert.ok(/b\[8\] \+ 5 \* Math\.log10\(rAU \* dAU\)/.test(src),
+    '视星等应为 m = H + 5·log10(r·Δ)（H 是数据里的第 8 列）');
+  assert.ok(/NAKED_EYE_M\s*=\s*6\.0/.test(src), '应以肉眼极限 6.0 等为可见性基准');
+  assert.ok(/vertexColors:\s*true/.test(src), '材质应改为逐点颜色');
+  // 数值验算：谷神星（H=3.34，r=2.77 AU，Δ=1.8 AU）应当可见；典型主带（H=12）不可见
+  const m = (H, r, d) => H + 5 * Math.log10(r * d);
+  const L = (mm) => Math.min(1, Math.pow(10, -0.4 * (mm - 6.0)));
+  assert.ok(L(m(3.34, 2.77, 1.8)) > 0.2, '谷神星应当可见');
+  assert.ok(L(m(12, 2.77, 1.8)) < 0.01, '典型主带天体不应可见');
+});
+
+test('统计点云用小精灵贴图而不是方块（密集时方块肉眼可辨）', () => {
+  const src = read('src/scene/belts.js');
+  assert.ok(/softDotTexture/.test(src), '缺少软边点精灵');
+  assert.ok(/map:\s*softDotTexture\(\)/.test(src), 'PointsMaterial 未使用软边贴图');
+});

@@ -4,6 +4,23 @@
 import * as THREE from 'three';
 import { KM_PER_AU } from '../config.js';
 
+let _softDot = null;
+/** 32×32 径向渐变点精灵（与 starfield.js 同款）。缓存复用。 */
+function softDotTexture() {
+  if (_softDot) return _softDot;
+  const S = 32, cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  const grd = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, S, S);
+  _softDot = new THREE.CanvasTexture(cv);
+  _softDot.colorSpace = THREE.SRGBColorSpace;
+  return _softDot;
+}
+
 function makeBelt({ count, aMinAU, aMaxAU, inclSigmaDeg, color, size, opacity, seed }) {
   const pos = new Float32Array(count * 3);
   let s = seed >>> 0;
@@ -21,9 +38,11 @@ function makeBelt({ count, aMinAU, aMaxAU, inclSigmaDeg, color, size, opacity, s
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  // 软边点精灵：没有 pointMap 时 PointsMaterial 画的是**方块**，密集时肉眼可辨
+  // （starfield.js 早就为此做了 32×32 径向渐变，这里漏了）。
   const mat = new THREE.PointsMaterial({
     color, size, sizeAttenuation: false, transparent: true, opacity,
-    depthWrite: false, fog: false,
+    depthWrite: false, fog: false, map: softDotTexture(),
   });
   const pts = new THREE.Points(geo, mat);
   pts.frustumCulled = false;
@@ -35,12 +54,12 @@ export function createBelts() {
   // 主带 2.1–3.4 AU
   group.add(makeBelt({
     count: 14000, aMinAU: 2.1, aMaxAU: 3.4, inclSigmaDeg: 9,
-    color: 0x9a8e80, size: 1.3, opacity: 0.5, seed: 4242,
+    color: 0x9a8e80, size: 2.6, opacity: 0.16, seed: 4242,
   }));
   // 柯伊伯带 32–48 AU
   group.add(makeBelt({
     count: 9000, aMinAU: 32, aMaxAU: 48, inclSigmaDeg: 4,
-    color: 0x8fa3b8, size: 1.3, opacity: 0.42, seed: 7777,
+    color: 0x8fa3b8, size: 2.6, opacity: 0.14, seed: 7777,
   }));
 
   return group;
