@@ -72,9 +72,11 @@ export class HUD {
       `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     const warn = clock.inHighAccuracyRange() ? '' :
       `<div class="warn">${t('time.outOfRange')}</div>`;
-    this.elTime.innerHTML =
+    const timeHtml =
       `<div class="big">${local}</div>` +
       `<div class="dim">${t('time.rate')} ${this.fmtWarp(clock)}　<span class="key">[</span>${t('time.k.minus')} <span class="key">]</span>${t('time.k.plus')} <span class="key">P</span>${t('time.k.pause')} <span class="key">N</span>${t('time.k.now')}</div>` + warn;
+    // 秒级时间串每秒才变一次；此前每帧都重建这整段 innerHTML
+    if (timeHtml !== this._timeHtml) { this._timeHtml = timeHtml; this.elTime.innerHTML = timeHtml; }
     const tcTimeEl = document.getElementById('tc-time-val');
     if (tcTimeEl) tcTimeEl.textContent = local;
   }
@@ -104,7 +106,11 @@ export class HUD {
     if (mode === 'orbit' && !flight) {
       rows.push(`<div class="dim"><span class="key">F</span> ${t('hud.hintFly')}　<span class="key">T</span> ${t('hud.hintGoto')}</div>`);
     }
-    this.elNav.innerHTML = rows.join('');
+    // 只在内容真的变化时写 DOM。这一行每帧执行，而 innerHTML 赋值会触发
+    // 解析 + 布局 + 重绘——实测这是主循环里纯 UI 开销的大头（每帧白扔 5–10ms，
+    // 直接和渲染预算抢）。字符串比较比一次 DOM 写入便宜两个数量级。
+    const navHtml = rows.join('');
+    if (navHtml !== this._navHtml) { this._navHtml = navHtml; this.elNav.innerHTML = navHtml; }
   }
 
   /** 常驻错误角标：主循环只做兜底捕获，没有它用户看不到任何异常 */
@@ -152,7 +158,8 @@ export class HUD {
       );
     }
     rows.push(`<div class="accent">${t('tgt.goto')}</div>`);
-    this.elTarget.innerHTML = rows.join('');
+    const tgtHtml = rows.join('');
+    if (tgtHtml !== this._tgtHtml) { this._tgtHtml = tgtHtml; this.elTarget.innerHTML = tgtHtml; }
   }
 
   tip(text) {

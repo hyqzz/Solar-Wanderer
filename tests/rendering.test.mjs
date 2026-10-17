@@ -1259,3 +1259,13 @@ test('岩石材质加了程序化法线扰动（否则近看是光滑团块）',
   assert.ok(/rgrad\(vRockPos \* 900\.0\)/.test(src), '缺少岩石法线扰动');
   assert.ok(/uniform mat3 normalMatrix;/.test(src), '片元着色器必须自己声明 normalMatrix');
 });
+
+// ── HUD 只在内容变化时写 DOM ────────────────────────────────────────────────
+// 主循环每帧重建 3 处 innerHTML + 199 个标签投影，其中时间串每秒才变一次。
+test('HUD 的 innerHTML 有内容比对（不是每帧无条件重建）', () => {
+  const src = read('src/ui/hud.js');
+  assert.ok(/_navHtml/.test(src) && /_tgtHtml/.test(src) && /_timeHtml/.test(src),
+    'HUD 三处 innerHTML 都应做内容比对');
+  assert.ok(!/this\.elNav\.innerHTML = rows\.join\(''\);\s*$/m.test(src),
+    '导航栏仍是每帧无条件重建');
+});
