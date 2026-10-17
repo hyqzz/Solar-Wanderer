@@ -1417,3 +1417,24 @@ test('气巨条带按急流剪切生成湍流与涡旋（木星与土星）', ()
   assert.ok(/eddy/.test(src), '缺少涡旋结构');
   assert.ok(/uBodyId == 5 \|\| uBodyId == 6/.test(src), '土星没有走同一条湍流路径');
 });
+
+// ── 极光经度结构 / 银河不放大成方块 / 审计可锁分辨率 ────────────────────────
+test('极光有经度结构（不是绕满整圈的均匀绿环）', () => {
+  const src = read('src/scene/atmosphere.js');
+  assert.ok(/float lonA = atan\(sdir\.z, sdir\.x\)/.test(src), '缺少极光经度');
+  assert.ok(/float arcs = 0\.42 \+ 0\.58 \* pow/.test(src), '缺少分段亮弧');
+  assert.ok(/ovalJitter/.test(src), '缺少卵带随经度的摆动');
+});
+
+test('银河贴图不带逐像素噪声（放大后会成方块）', () => {
+  const src = read('src/scene/starfield.js');
+  assert.ok(!/rnd\(\)/.test(src.split('makeMilkyWayTexture')[1]?.split('const tex =')[0] ?? ''),
+    '银河生成里仍有逐像素随机');
+  assert.ok(/这里只保留结构/.test(src), '缺少"颗粒交给星星"的说明');
+});
+
+test('审计可用 ?pr= 锁定分辨率，避免软件渲染降档造成误判', () => {
+  const q = read('src/engine/quality.js');
+  assert.ok(/get\('pr'\)/.test(q), '缺少 pr 参数');
+  assert.ok(/return \(\) => \{\}/.test(q), '锁定分辨率后应返回空守卫');
+});

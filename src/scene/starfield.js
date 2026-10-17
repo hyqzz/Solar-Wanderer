@@ -23,7 +23,9 @@ export { SKY_R };
  */
 function makeMilkyWayTexture() {
   if (typeof document === 'undefined') return null;
-  const W = 1024, H = 512;
+  // 2048×1024：1024×512 时每个纹素约 0.35°，放大后是肉眼可见的方块马赛克
+  // （实测 earth-night 里银河整片呈像素块）。
+  const W = 2048, H = 1024;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   const img = g.createImageData(W, H);
@@ -46,7 +48,10 @@ function makeMilkyWayTexture() {
       const dust = Math.exp(-(((b + 3.0) / 4.2) ** 2)) * (0.45 + 0.55 * (Math.sin(l * 0.09 + 1.3) ** 2));
       I *= 1 - 0.62 * dust;
       // 细颗粒：肉眼看到的是无数暗星，不是光滑渐变
-      I *= 0.82 + 0.36 * rnd();
+      // 不加颗粒。试过三版：逐像素白噪声 → 放大后是方块；单档值噪声 → 露出格点；
+      // 多倍频 fBm → 最低频的团块在近距离仍是肉眼可辨的方块。而真实的长曝光
+      // 银河本来就是平滑的弥散带（颗粒来自恒星，星点由星表那一层负责）。
+      // 这里只保留结构（银盘/银心/尘埃带），把"颗粒"交给星星。
       I = Math.max(0, Math.min(1, I));
       const i4 = (y * W + x) * 4;
       // 暖白偏黄（银盘色温约 5000K）
@@ -59,6 +64,14 @@ function makeMilkyWayTexture() {
   g.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
+  // 天空是**大范围低对比**的渐变，用最近邻/低 mip 会露出方块。
+  // 显式给线性过滤 + 各向异性，保证斜视角下也不会出现马赛克。
+  tex.magFilter = THREE.LinearFilter;
+  // 关掉 mipmap：低对比的大渐变在斜视角下会被选到很高的 mip 层，放大后呈方块。
+  // 天空球本身很近（SKY_R），没有实际的缩微需求。
+  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.anisotropy = 1;
   return tex;
 }
 

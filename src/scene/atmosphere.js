@@ -222,7 +222,16 @@ export function createAtmosphere(phys, auroraMode = 0) {
             // 远低于步进采样率 → 混叠平均成均匀绿雾，无帘幕结构。
             float curtain1 = pnoise(srel / uRg * 28.0 + vec3(0.0, 0.0, uTime * 0.06));
             float curtain2 = pnoise(srel / uRg * 90.0 + vec3(uTime * 0.03, 0.0, 0.0));
-            float auroraInt = altF * oval
+            // 经度结构：极光卵不是均匀的一圈。真实极光是**分段的亮弧**，
+            // 亚暴期间某一经度段会突然增亮并西向漂移。没有这一项时，从盘边看
+            // 就是一条绕满整圈的均匀绿环（实测 earth-night 正是这样）。
+            vec3 sdir = normalize(srel);
+            float lonA = atan(sdir.z, sdir.x);
+            // 三段弧形分布 + 缓慢漂移（周期约数分钟）
+            float arcs = 0.42 + 0.58 * pow(0.5 + 0.5 * sin(lonA * 3.0 - uTime * 0.02), 2.0);
+            // 卵带的纬度位置随经度轻微摆动（磁场不是完美轴对称）
+            float ovalJitter = 1.0 + 0.004 * sin(lonA * 2.0 + 1.3);
+            float auroraInt = altF * oval * ovalJitter * arcs
                             * (0.12 + 0.88 * smoothstep(0.28, 0.92, curtain1))
                             * (0.55 + 0.45 * curtain2);
             auroraInt *= uSolarActivity * uAuroraStrength * aGain;

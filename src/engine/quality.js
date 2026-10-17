@@ -111,6 +111,19 @@ export function initQuality(renderer) {
 export function makeFpsGuard(renderer, onDegrade, onRestore, onResolutionChange) {
   const baseline = renderer.getPixelRatio();
   const baselineDetail = QUALITY.detail;
+  // 审计开关：?pr=1 固定满分辨率并**不降档**。
+  // 软件渲染（SwiftShader）下守卫会把 960×600 降到 729×456 再放大，画面出现
+  // 方块感——那是测量环境的伪影，会被误判成产品缺陷（本轮就误判过一次）。
+  const PIN_PR = (() => {
+    try {
+      const v = new URLSearchParams(window.location.search).get('pr');
+      return v == null ? null : Math.max(0.25, Math.min(3, Number(v) || 1));
+    } catch { return null; }
+  })();
+  if (PIN_PR != null) {
+    renderer.setPixelRatio(PIN_PR);
+    return () => {};   // 空守卫：不降档、不抖分辨率
+  }
   const scales = [1, 0.88, 0.76, 0.65];
   let level = 0, time = 0, samples = [], lowSec = 0, highSec = 0, cooldown = 0;
   function change(next) {
