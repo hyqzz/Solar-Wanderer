@@ -92,3 +92,26 @@ test('相机语言只改姿态与 FOV，不返回视点偏移', () => {
   assert.deepEqual(Object.keys(r).sort(), ['fovBiasDeg', 'quaternion'],
     '返回值只应有姿态与 FOV —— 叠加视点偏移会破坏浮动原点精度与着陆判定');
 });
+
+test('步态起伏的频率与脚步声同源（曾经视觉 8 Hz、听觉 1.63 Hz）', () => {
+  // 原来这里按 0.75m 步长算步频、又把 pitch 再乘 2，得到 8 Hz；
+  // 而 audio.js 的脚步声间隔算出来是 1.63 Hz。听觉一步、视觉抖八下，
+  // 读起来是"震动"而不是"有重量"。现在两处用同一个公式：
+  //   fStep = 1.2 + min(speedMS / 9, 1) * 1.3
+  const f = createCameraFeel();
+  const dt = 1 / 120;
+  const walk = { mode: 'walk', walking: true, walkSpeedMS: 3, submerged: false, speedKmS: 0.003, boosting: false };
+  // 先跑 1s 让 bobAmp 起振
+  for (let i = 0; i < 120; i++) f.update(dt, walk);
+  // 再采 3s，数 pitch 的过零次数
+  const xs = [];
+  for (let i = 0; i < 360; i++) xs.push(toEuler(f.update(dt, walk).quaternion).x);
+  let crossings = 0;
+  for (let i = 1; i < xs.length; i++) if ((xs[i - 1] < 0) !== (xs[i] < 0)) crossings++;
+  const measuredHz = crossings / 2 / (xs.length * dt);   // 每周期两次过零
+  const fStep = 1.2 + Math.min(3 / 9, 1) * 1.3;           // 与 audio.js / cameraFeel.js 同一公式
+  assert.ok(Math.abs(measuredHz - fStep) < 0.25,
+    `步态起伏频率应 ≈${fStep.toFixed(2)} Hz（与脚步声同源），实测 ${measuredHz.toFixed(2)} Hz`);
+  assert.ok(measuredHz > 1 && measuredHz < 3.5,
+    `步态起伏应在人走路的频率区间内，实测 ${measuredHz.toFixed(2)} Hz`);
+});

@@ -57,12 +57,17 @@ export function createCameraFeel() {
       // 由"走过的距离"推进相位而不是时间，速度变化时步态自然跟随。
       const wantBob = (mode === 'walk' && s.walking && !s.submerged) ? 1 : 0;
       bobAmp += (wantBob - bobAmp) * Math.min(dt * 6, 1);
+      // 步频必须与**脚步声**同源。两处各写一份时差了 5 倍：这里原来按 0.75m 步长
+      // 算步频、又把 pitch 再乘 2，得到 8 Hz；而 audio.js 的脚步声间隔算出来是
+      // 1.63 Hz。听觉一步、视觉抖八下，读起来是"震动"而不是"有重量"。
+      // 现在两处用同一个公式（改这里也要改 audio.js 的 _stepInterval）。
+      const fStep = 1.2 + Math.min(s.walkSpeedMS / 9, 1) * 1.3;    // Hz
       if (mode === 'walk' && s.walkSpeedMS > 0.05) {
-        // 步长约 0.75 m；步频 = 速度 / 步长，起伏频率取其两倍
-        bobPhase += (s.walkSpeedMS / 0.75) * Math.PI * 2 * dt;
+        bobPhase += fStep * Math.PI * 2 * dt;
       }
-      const bobPitch = Math.sin(bobPhase * 2) * 0.0044 * bobAmp;   // ≈0.25°
-      const bobRoll = Math.sin(bobPhase) * 0.0031 * bobAmp;        // ≈0.18°
+      // 每步一次落地 → 俯仰一个周期；横向摆动每两步（一个完整步态周期）一次
+      const bobPitch = Math.sin(bobPhase) * 0.0044 * bobAmp;        // ≈0.25°
+      const bobRoll = Math.sin(bobPhase * 0.5) * 0.0031 * bobAmp;   // ≈0.18°
 
       // ── 冲击衰减 ──
       // 指数衰减 + 频率随时间下降：像弹簧回稳，而不是等幅振动到突然停止。

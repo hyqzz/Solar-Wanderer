@@ -686,6 +686,8 @@ const _sunLocal = new THREE.Vector3();
 let exposureTarget = 1;
 let nearestCache = null;
 let lastTakeoff = -1e9; // 滚轮起飞时间戳（自动登陆 0.8s 冷却，防滞回）
+let prevOrbitDist = 0;   // 上一帧的相机径向距离（km），用来求接近率
+let approachMS = 0;      // 相机径向接近率（m/s，正=靠近），驱动着陆冲击强度
 
 function loop() {
   const frameDelta = clock.getDelta();
@@ -745,6 +747,17 @@ function loop() {
     if (orbitCam.flight && input.drag.active) orbitCam.cancelFlight(orbitEnv);
     orbitCam.update(dtReal, input, orbitEnv);
     syncShipToOrbit();
+    // 接近率（m/s）：着陆冲击强度必须取自这里，不能取 ship.vel——
+    // syncShipToOrbit() 就在上面把 ship.vel 清零了，原来那两处取 ship.vel.length()
+    // 恒为 0，于是注释宣称的"0.004–0.03 rad 由接近速度决定"从未生效，
+    // 软着陆与硬着陆的顿挫感和音效永远是同一个最小值。
+    // 轨道模式下真正在动的是相机的径向距离 dist。
+    {
+      const dDist = prevOrbitDist - orbitCam.dist;
+      // 换焦点时 adoptPosition 会让 dist 跳变，超过 1km/帧 的一律当作跳变不计
+      approachMS = Math.abs(dDist) < 1 ? dDist / Math.max(dtReal, 1e-4) * 1000 : 0;
+      prevOrbitDist = orbitCam.dist;
+    }
     // 登陆：按 G，或滚轮一路拉近贴地自动转行走（NMS 式无缝衔接，R7 #1）
     const landRange = nearest ? Math.max(20, nearest.radiusKm * 0.05) : 0;
     let autoLand = false;
@@ -767,9 +780,10 @@ function loop() {
     if ((autoLand || (input.tapped('KeyG') && nearest?.landable && nearest.distSurface < landRange &&
         terrainMgr.baseReady(nearest.id)))
       && !orbitCam.flight) {
-      // 落地冲击：由接近速度决定强度（0.004–0.03 rad，约 0.23°–1.7°）
-      const landStrength = Math.min(1, ship.vel.length() / 0.05);   // 50 m/s 记满
-      cameraFeel.impulse(Math.min(0.03, 0.004 + ship.vel.length() * 0.0016), 24);
+      // 落地冲击：由接近率决定强度（0.004–0.03 rad，约 0.23°–1.7°）
+      const impactMS = Math.max(0, approachMS);
+      const landStrength = Math.min(1, impactMS / 50);              // 50 m/s 记满
+      cameraFeel.impulse(Math.min(0.03, 0.004 + impactMS * 0.0005), 24);
       audioEngine?.playLandingImpact?.(landStrength);
       ship.enterWalk(env); // 视向严格连续（yaw+pitch 自当前相机反解）
       appMode = 'walk';
