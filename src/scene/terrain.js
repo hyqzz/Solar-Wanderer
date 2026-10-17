@@ -125,6 +125,13 @@ class CraterField {
     const lon = Math.atan2(-dir.z, dir.x);
     const cosLat = Math.max(Math.cos(lat), 1e-3);
     let h = 0;
+    // 坑场是**叠加**的（不做"新坑抹掉老坑"的迭代替换），密集区域会无界累积：
+    // 实测水星有地方到 −17km，而最大单坑只有 8km。这里按最大单坑深度限幅，
+    // 既保留真实的成坑起伏，又不让坑底穿到基底球以下。
+    // 小天体上还要按半径设上限：火卫一半径只有 11km，一个 1.8km 深的坑就占 16%，
+    // 多个叠加会把它挖穿。真实小天体的起伏相对半径确实更小。
+    const maxD = Math.min(this.classes.length ? this.classes[0].depth : 0, this.R * 0.06);
+    let bowl = 0, rim = 0;
     for (const c of this.classes) {
       // 该档的格网：纬度方向 cell/R 弧度，经度方向按 cosLat 展宽（近似等面积）
       const dLat = c.cell / R;
@@ -152,12 +159,38 @@ class CraterField {
           const ang = Math.acos(Math.max(-1, Math.min(1, cosD)));
           const rKm = ang * R;
           if (rKm > cr * 2.4) continue;
-          h += c.depth * craterProfile(rKm / cr, c.complex);
+          const contrib = c.depth * craterProfile(rKm / cr, c.complex);
+          if (contrib < 0) bowl += contrib; else rim += contrib;
         }
       }
     }
+    // 碗部限幅到 −1.2×最大坑深；坑缘/溅射毯限幅到 +0.6×。
+    h = Math.max(-1.2 * maxD, Math.min(0.6 * maxD, bowl)) + Math.min(0.6 * maxD, rim);
     return h;
   }
+}
+
+/** 无 DEM 天体的基底球下移量。
+ *
+ *  盘面球不是完美球：它带着地形的**大尺度分量**（见 _lowRelief），所以下移量
+ *  只需要覆盖大尺度之外的残差——中频构造（freq 30）、行走尺度细节三层、
+ *  反照率高通，以及典型大小的撞击坑。
+ *
+ *  早先这里按"最大坑深 ×1.7"取，量级达 5–10 km：整个近场被抬在一根看不见的
+ *  柱子上，地形补丁外缘要降回球面，形成一圈极显眼的台地边（审计 C-2）。
+ *  现在改成典型量级，深坑由 _heightNoise 末端的钳制兜住——把个别坑底压平，
+ *  比给整个近场垫一根柱子划算得多。
+ *
+ *  渲染（builder 的盘面网格）与地形边缘融合都用这一个函数，保证同源。 */
+export function terrainReliefOffset(phys) {
+  // 不可登陆的天体没有地形补丁，不需要下移（气巨/太阳走盘面材质）
+  if (!phys?.landable) return 0;
+  const amp = Math.min(phys.surface?.ampKm ?? 2, phys.radiusKm * 0.05);
+  // 中高频残差的无量纲幅度（各项系数与 _heightNoise 一一对应）
+  const mid = 0.16 + 0.05 + 0.022 + 0.009 + 0.45 * 0.12;
+  // 典型撞击坑（直径 ≈ 0.1R）而非最大坑（0.45R，全身只有几个）
+  const typD = craterDepth(phys.radiusKm * 0.1) * (phys.surface?.craters ?? 0);
+  return amp * 0.5 * mid + Math.max(0, typD) * 1.2;
 }
 
 export class HeightField {
@@ -169,6 +202,20 @@ export class HeightField {
     // 撞击坑场：有 craters 权重的天体才建。直径上限取半径的 45%——真实的巨型
     // 盆地确实有这么大（土卫一的 Herschel 139km = 0.7R、水星的 Caloris 1550km
     // = 0.64R），而它们的深度由上面的幂律压得很浅，不会把星球挖穿。
+    // 基底球下移量：程序化地形原本整体抬高 0.62·ampKm（保证不缺进基底球），
+    // 于是落点高度比基准半径高 3–6km、方块外缘还要再降回球面形成一圈"台地边"。
+    // 改为：地形围绕 R 对称（±0.5·ampKm），基底球下移 0.5·ampKm 兜住低处。
+    // DEM 天体不走程序化地形，偏移为 0。
+    // 形变天体（火卫一等不规则小天体）的盘面网格由 height() 直接塑形
+    // （builder.deformIrregular 把每个顶点半径**替换**成 height()），
+    // 根本没有独立的基底球——此时既不下移、也不能把地形钳到球面上，
+    // 否则会把真实的深盆地压平。边缘融合同样要跳过（见 _buildLevel）。
+    this.deformed = !!phys.shape?.dims;
+    // 盘面网格是否由 baseSphereRadius 塑形（无 DEM 的可登陆天体）
+    this.reliefSphere = !!phys.landable && !this.deformed;
+    this.baseOffset = this.deformed ? 0 : terrainReliefOffset(phys);
+    // 基底球的有效幅度：与 _heightNoise 的 effAmp 同源
+    this.effAmp = Math.min(this.sp.ampKm ?? 2, phys.radiusKm * 0.05);
     this.craterField = (this.sp.craters ?? 0) > 0
       ? new CraterField(hashSeed(bodyId + ':crater'), phys.radiusKm, phys.radiusKm * 0.45)
       : null;
@@ -264,7 +311,11 @@ export class HeightField {
   }
 
   /** 注入 DEM 瓦片源：启用后 height() 优先查询真实高程，未命中时回退到程序化噪声 */
-  setDEMSource(source) { this.demSource = source; }
+  setDEMSource(source) {
+    this.demSource = source;
+    // 有 DEM 的天体走真实高程，不需要基底球下移，也不做塑形
+    if (source) { this.baseOffset = 0; this.reliefSphere = false; }
+  }
 
   /** 撞击坑形态：噪声等值带 → 环形坑缘 + 坑底 */
   crater(dir, f) {
@@ -276,6 +327,28 @@ export class HeightField {
 
   /** 基准半径：默认正球；shape.dims=[X,Y,Z]（km 全径）时为三轴椭球
    * （火卫一等土豆状不规则体，+X 指向母星 / +Y 北极，R9-2c）。 */
+  /** 基底球（盘面网格）在该方向上的半径 = 基准半径 − 地形下探量 + 大尺度地形。
+   *
+   *  **为什么带大尺度地形**：盘面球如果是完美球，地形补丁的外缘就必须从几公里的
+   *  起伏硬降回球面，形成一圈方正的"台地边"——这是审计 C-2 的可见症状，也是
+   *  从轨道看"星球光滑得像塑料球"的原因。让盘面球自己走一遍地形的大尺度分量，
+   *  外缘残差就只剩中高频（几百米），同时远场也有了真实的大陆/山脉轮廓。
+   *  盘面网格的分辨率（见 builder 的 reliefSphereGeo）刚好能表达这一频段。 */
+  reliefRadius(dir) {
+    if (!this.reliefSphere) return this.baseRadius(dir);
+    return this.baseRadius(dir) - (this.baseOffset ?? 0) + this.effAmp * 0.5 * this._lowRelief(dir);
+  }
+
+  baseSphereRadius(dir) {
+    const r = this.reliefRadius(dir);
+    // 盘面网格是**分片线性**的：弦比弧低一个矢高（~R·4e-4，木卫一上约 0.7km）。
+    // 地形补丁外缘必须落到网格之下，否则两者之间会漏出一条能看见背面的缝。
+    return this.reliefSphere ? r * (1 - 4e-4) : r;
+  }
+
+  /** 盘面网格是否由 height() 塑形（形变天体），此时没有"基底球"这一层。 */
+  get hasBaseSphere() { return !this.deformed; }
+
   baseRadius(dir) {
     const s = this.phys.shape?.dims;
     if (!s) return this.phys.radiusKm;
@@ -337,18 +410,42 @@ export class HeightField {
     return R + demH + detail + fine;
   }
 
+  /** 地形的**大尺度分量**（无量纲，量级 ±1）。盘面球与地形补丁共用。
+   *
+   *  频段上限刻意压到 ~6 cycles/rad：盘面网格在 192×128 下每波长约 6 个采样点，
+   *  再高就开始走样（球面上会出现摩尔纹）。更高频的部分由地形补丁负责，
+   *  而地形补丁的可见范围本来就是近场——远场看不出少了那一层。 */
+  _lowRelief(dir) {
+    const n = this.noise;
+    const mMask = sstep(-0.05, 0.5, n.fbm(dir.x * 2.7 + 31.7, dir.y * 2.7, dir.z * 2.7, 3));
+    return 0.42 * n.fbm(dir.x * 1.6, dir.y * 1.6, dir.z * 1.6, 3)
+      + mMask * 0.6 * this.sp.roughness * (n.ridged(dir.x * 4, dir.y * 4, dir.z * 4, 2) * 2 - 1);
+  }
+
+  /** 地形的中高频分量（无量纲）：盘面球表达不了的那一层。
+   *  地形补丁外缘要收到「解析地形减去坑场」的高度，这一项就是它。 */
+  _midRelief(dir) {
+    const n = this.noise;
+    const bodyR = this.phys.radiusKm;
+    const detailScale = Math.min(1, bodyR / 400);
+    let h = 0.16 * n.fbm(dir.x * 30, dir.y * 30, dir.z * 30, 4);
+    h += 0.05 * detailScale * n.fbm(dir.x * 900, dir.y * 900, dir.z * 900, 3);
+    h += 0.022 * detailScale * n.fbm(dir.x * 8000, dir.y * 8000, dir.z * 8000, 2);
+    h += 0.009 * detailScale * n.fbm(dir.x * 42000, dir.y * 42000, dir.z * 42000, 2);
+    h += 0.45 * this._albedoReliefAt(dir);
+    return h;
+  }
+
   /** 纯程序化噪声地形（现有行为，DEM 不可用时回退到此） */
   _heightNoise(dir) {
     const R = this.baseRadius(dir);
     const sp = this.sp;
     const n = this.noise;
     let hCrater = 0;   // 撞击坑贡献（km，物理量级）
-    // 大尺度构造（高原/盆地）
-    let h = 0.42 * n.fbm(dir.x * 1.6, dir.y * 1.6, dir.z * 1.6, 4);
-    // 山地掩码：山脉成链而非满地皆山（NMS 式地貌分区）
-    const mMask = sstep(-0.05, 0.5, n.fbm(dir.x * 2.7 + 31.7, dir.y * 2.7, dir.z * 2.7, 3));
-    h += mMask * 0.6 * sp.roughness * (n.ridged(dir.x * 7, dir.y * 7, dir.z * 7, 5) * 2 - 1);
-    h += 0.16 * n.fbm(dir.x * 30, dir.y * 30, dir.z * 30, 4);
+    // 大尺度构造（高原/盆地/山脉链）——与盘面球共用，见 _lowRelief
+    let h = this._lowRelief(dir);
+    // 中高频构造（freq-30 构造 + 行走尺度细节三层 + 反照率高通）
+    h += this._midRelief(dir);
     // 撞击坑：由 CraterField 按尺寸-频率分布给出**真实形态**的高程（km），
     // 不再用噪声等值线。它的量级是物理的（深度由直径决定），所以不乘 ampKm；
     // 只按 craters 权重缩放，并给一个"总起伏不超过半径 8%"的安全上限。
@@ -356,22 +453,14 @@ export class HeightField {
       const cap = this.phys.radiusKm * 0.08;
       hCrater = Math.max(-cap, Math.min(cap, this.craterField.at(dir) * sp.craters));
     }
-    // 细节频率（行走尺度起伏：~2km / ~200m / ~40m 波长）。
-    // 小天体（R < 400 km）上固定振幅的高频细节会按半径比例放大尖刺感，
-    // 因此按半径衰减，使 Phobos、Mimas 等呈现月球般的平滑表面。
-    const bodyR = this.phys.radiusKm;
-    const detailScale = Math.min(1, bodyR / 400);
-    h += 0.05 * detailScale * n.fbm(dir.x * 900, dir.y * 900, dir.z * 900, 3);
-    h += 0.022 * detailScale * n.fbm(dir.x * 8000, dir.y * 8000, dir.z * 8000, 2);
-    h += 0.009 * detailScale * n.fbm(dir.x * 42000, dir.y * 42000, dir.z * 42000, 2);
-    // 与可见地貌关联的起伏：把贴图亮度的高通分量当作局部起伏（见 _buildAlbedoField）。
-    // 权重给 0.45——足以让"贴图上的坑"在实地是坑，又不至于喧宾夺主取代程序地形。
-    // 有 DEM 的天体不走这里（height() 命中 DEM 时提前返回），所以不会与真实高程打架。
-    h += 0.45 * this._albedoReliefAt(dir);
     // 安全上限：噪声幅度不超过天体平均半径的 5%，防止小天体（Phobos 等）山脉过高
-    const effAmp = Math.min(sp.ampKm, this.phys.radiusKm * 0.05);
-    // 抬升保证地形在全球光滑球面之上。撞击坑是物理量级（km），单独相加。
-    return R + effAmp * (h * 0.5 + 0.62) + hCrater;
+    const effAmp = this.effAmp;
+    // 围绕 R **对称**（±0.5·effAmp）：基底球由 baseOffset 下移兜住低处。
+    let hh = R + effAmp * h * 0.5 + hCrater;
+    // 非形变天体：盘面球是可见表面，低于它的地形会被挡住 → 钳到球面。
+    // 这一步让 baseOffset 的估算不必是严格上界：估小了只是压平个别坑底。
+    if (!this.deformed) hh = Math.max(this.baseSphereRadius(dir), hh);
+    return hh;
   }
 
   isOcean(dir) {
@@ -1072,13 +1161,17 @@ export class TerrainPatchSet {
         const fy = ((y / GRID) * 2 - 1) * lv.extent;
         dir.copy(u).addScaledVector(east, fx / R).addScaledVector(north, fy / R).normalize();
         let h = this.field.height(dir);
-        // 最外级：边缘高度平滑收回到基准球面，与基底球无缝衔接。
+        // 最外级：边缘高度平滑收回到**盘面球**，与远场无缝衔接。
+        // 收口目标是盘面球而不是解析地形：落到解析地形上等于把落差从"缓坡"变成
+        // "断崖"（地形比球面高 baseOffset，见 terrainReliefOffset）。
         // 不这样做的话，地形方块的外缘是一条硬直边——300km 高度上非常显眼
         // （方块内有大尺度起伏、方块外是完美光滑的球）。
-        if (lv.extent >= R * 0.2) {
+        if (lv.extent >= R * 0.2 && !this.field.deformed) {
           const edge = Math.max(Math.abs(fx), Math.abs(fy)) / lv.extent;
-          const blend = sstep(0.86, 1.0, edge);
-          if (blend > 0) h = h * (1 - blend) + this.field.baseRadius(dir) * blend;
+          // 过渡带取外缘 30%（原 14%）：收口落差是 |地形 − 盘面球|，可能有几公里，
+          // 14% 的宽度会让它变成一道明显的陡坎；30% 把它摊成缓坡。
+          const blend = sstep(0.7, 1.0, edge);
+          if (blend > 0) h = h * (1 - blend) + this.field.baseSphereRadius(dir) * blend;
         }
         hs[k] = h;
         dirs[k * 3] = dir.x; dirs[k * 3 + 1] = dir.y; dirs[k * 3 + 2] = dir.z;

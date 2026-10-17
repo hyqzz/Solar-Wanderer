@@ -13,6 +13,7 @@ import { MOON_PHYS, HAPKE_PARAMS } from '../src/astro/bodies.js';
 import { PRESETS } from '../src/scene/proceduralTextureData.js';
 import { BODIES } from '../src/astro/bodies.js';
 import { TNO_DATA } from '../src/astro/tno.js';
+import { HeightField } from '../src/scene/terrain.js';
 
 const read = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
@@ -1128,8 +1129,8 @@ test('地形外缘覆盖视地平，且边缘高度收回基准球', () => {
   // 外缘级别至少到 600km（300km 高度上可见的地面半径）
   assert.ok(/280, 600, 1500/.test(src), '最外级应扩展到 600/1500km');
   // 边缘高度向 baseRadius 平滑收回
-  assert.ok(/blend > 0\) h = h \* \(1 - blend\) \+ this\.field\.baseRadius\(dir\) \* blend/.test(src),
-    '最外级边缘应收到基准球面，否则与基底球交界是硬直边');
+  assert.ok(/blend > 0\) h = h \* \(1 - blend\) \+ this\.field\.baseSphereRadius\(dir\) \* blend/.test(src),
+    '最外级边缘应收到基底球面，否则交界是硬直边');
 });
 
 // ── 星表失败必须可见；亮星要有层次 ────────────────────────────────────────────
@@ -1560,4 +1561,92 @@ test('GLSL 哈希集中到一处，且不再使用 sin（mediump 下会退化）
     const nUse = (src.match(/glslHash31\(/g) ?? []).length;
     assert.ok(nInject >= nUse, `${f}: 注入 ${nInject} 次但引用 ${nUse} 次（有作用域外的引用）`);
   }
+});
+
+test('基底球：无 DEM 可登陆天体的地形最低点不被盘面球挡住', () => {
+  // 审计 C-2：地形围绕 R 对称（±0.5·ampKm），撞击坑再往下挖。若盘面球下移量
+  // 不足以覆盖这个下探量，大盆地的坑底会被球面切掉——从地面看是"远处一片
+  // 平整的球面"，从轨道看是坑底发亮。
+  const all = { ...BODIES, ...MOON_PHYS };
+  let checked = 0;
+  for (const [id, phys] of Object.entries(all)) {
+    if (!phys?.radiusKm || !phys.landable || phys.shape?.dims) continue;
+    const f = new HeightField(id, phys);
+    checked++;
+    let minH = Infinity;
+    for (let i = 0; i < 400; i++) {
+      const t = Math.acos(1 - 2 * (i + 0.5) / 400), ph = i * 2.39996;
+      const d = { x: Math.sin(t) * Math.cos(ph), y: Math.cos(t), z: Math.sin(t) * Math.sin(ph) };
+      minH = Math.min(minH, f.height(d));
+    }
+    assert.ok(minH >= f.baseSphereRadius({ x: 0, y: 1, z: 0 }) - phys.radiusKm * 0.3,
+      `${id}: 最低点 ${minH.toFixed(2)} 远低于基底球`);
+  }
+  assert.ok(checked > 30, `只检查了 ${checked} 个天体`);
+});
+
+test('盘面球带大尺度地形：收口落差远小于旧设计的整根"柱子"', () => {
+  // 盘面球若是完美球，地形补丁外缘要从几公里硬降回球面 → 一圈方正的台地边
+  // （审计 C-2，Enceladus 地面图上是一块亮方块）。让盘面球走同一份大尺度地形
+  // （terrain._lowRelief）后，收口落差应只剩盘面球表达不了的中频 + 坑场。
+  // 关掉坑场单独测噪声部分：这一层是本次改动真正修掉的东西。
+  // 旧设计里 baseOffset 按"最大坑深 ×1.7"取（5–10km），整个近场被抬在柱子上，
+  // 现在收口落差只剩盘面球表达不了的中频。
+  const smooth = {
+    radiusKm: 6371, landable: true,
+    surface: { ampKm: 8, roughness: 0.6, craters: 0, palette: 'gray' },
+  };
+  const f = new HeightField('synthetic-relief', smooth);
+  let maxDiff = 0;
+  for (let i = 0; i < 600; i++) {
+    const t = Math.acos(1 - 2 * (i + 0.5) / 600), ph = i * 2.39996;
+    const d = { x: Math.sin(t) * Math.cos(ph), y: Math.cos(t), z: Math.sin(t) * Math.sin(ph) };
+    maxDiff = Math.max(maxDiff, f.height(d) - f.baseSphereRadius(d));
+  }
+  assert.ok(maxDiff > 0, '地形应整体高于盘面球');
+  // 落差 = baseOffset（盘面球必须低于地形，否则地形被球面切掉）+ 中频。
+  // 前者是"球面 vs 地形"的固有差，后者是盘面球分辨率表达不了的那一层。
+  assert.ok(maxDiff < 4.5, `纯噪声收口落差 ${maxDiff.toFixed(2)}km 过大（旧设计为 5–10km）`);
+
+  // 带坑场时落差由坑深决定（坑是盘面球分辨率下表达不了的），但仍应远小于旧设计
+  const f2 = new HeightField('synthetic-relief-crater', {
+    ...smooth, surface: { ...smooth.surface, craters: 0.5 },
+  });
+  let diff2 = 0;
+  for (let i = 0; i < 600; i++) {
+    const t = Math.acos(1 - 2 * (i + 0.5) / 600), ph = i * 2.39996;
+    const d = { x: Math.sin(t) * Math.cos(ph), y: Math.cos(t), z: Math.sin(t) * Math.sin(ph) };
+    diff2 = Math.max(diff2, f2.height(d) - f2.baseSphereRadius(d));
+  }
+  assert.ok(diff2 > maxDiff, '坑场应贡献额外落差');
+
+  // 盘面球确实不是正球——大尺度地形真的在球面上（否则远场仍是塑料球）
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < 600; i++) {
+    const t = Math.acos(1 - 2 * (i + 0.5) / 600), ph = i * 2.39996;
+    const d = { x: Math.sin(t) * Math.cos(ph), y: Math.cos(t), z: Math.sin(t) * Math.sin(ph) };
+    const r = f.reliefRadius(d); mn = Math.min(mn, r); mx = Math.max(mx, r);
+  }
+  assert.ok(mx - mn > f.effAmp * 0.2,
+    `盘面球起伏只有 ${(mx - mn).toFixed(2)}km，大尺度地形没生效`);
+});
+
+test('基底球：盘面球不高于地形最低点（否则坑底被球面切掉）', () => {
+  const all = { ...BODIES, ...MOON_PHYS };
+  let checked = 0;
+  for (const [id, phys] of Object.entries(all)) {
+    if (!phys?.radiusKm || !phys.landable || phys.shape?.dims) continue;
+    const f = new HeightField(id, phys);
+    if (!f.reliefSphere) continue;
+    checked++;
+    let worst = -Infinity;
+    for (let i = 0; i < 300; i++) {
+      const t = Math.acos(1 - 2 * (i + 0.5) / 300), ph = i * 2.39996;
+      const d = { x: Math.sin(t) * Math.cos(ph), y: Math.cos(t), z: Math.sin(t) * Math.sin(ph) };
+      worst = Math.max(worst, f.baseSphereRadius(d) - f.height(d));
+    }
+    // 钳制保证不为负；允许极小浮点误差
+    assert.ok(worst < 1e-9, `${id}: 盘面球高出地形 ${worst.toFixed(3)}km，坑底会被切掉`);
+  }
+  assert.ok(checked > 30, `只检查了 ${checked} 个天体`);
 });

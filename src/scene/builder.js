@@ -2,6 +2,8 @@
 // 网格、云层、大气、行星环、轨道线，并提供每帧的星历驱动更新。
 
 import * as THREE from 'three';
+import { DEM_SOURCES } from './demTiles.js';
+import { terrainReliefOffset } from './terrain.js';
 import { isSunOcculted } from './photoExposure.js';
 
 export function readMapDataCache(cache, id, image) {
@@ -240,6 +242,35 @@ async function loadTextures(onProgress, onBgProgress) {
 
 /** 不规则小天体（土豆状）：用与行走碰撞同源的 HeightField 变形球网格
  * （视觉=碰撞严格一致；三轴椭球 + 噪声起伏，R9-2c 火卫一/二等） */
+/** 盘面球的大尺度地形塑形：顶点半径 = baseSphereRadius(dir)。
+ *
+ *  为什么需要：无 DEM 天体的可见表面只有两样东西——近处的**地形补丁**（几十公里）
+ *  和远处的**盘面球**。盘面球若是完美球，补丁外缘就要从几公里的起伏硬降回球面，
+ *  形成一圈方正的台地边；从轨道看也是一个光滑得像塑料球的星球。
+ *  让盘面球走一遍同一份大尺度地形（terrain._lowRelief），两处就接上了，
+ *  远场也终于有大陆/山脉轮廓。频段上限由 _lowRelief 控制，不会走样。 */
+function deformLowRelief(mesh, id, phys) {
+  const hf = new HeightField(id, phys);
+  const pos = mesh.geometry.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    const h = hf.reliefRadius(v);
+    pos.setXYZ(i, v.x * h, v.y * h, v.z * h);
+  }
+  pos.needsUpdate = true;
+  mesh.geometry.computeVertexNormals();
+}
+
+/** 盘面球网格：带大尺度地形的天体用加倍分段（192×108），
+ *  _lowRelief 的频段上限要求每波长 ≥6 个采样点。 */
+function reliefSphereGeo(radiusKm) {
+  const [w, h] = QUALITY.segHi;
+  const [wl, hl] = QUALITY.segLo;
+  const fine = QUALITY.detail !== 0 && QUALITY.segHi[0] >= 64;
+  return new THREE.SphereGeometry(radiusKm, fine ? w * 2 : wl, fine ? h * 2 : hl);
+}
+
 function deformIrregular(mesh, id, phys) {
   const hf = new HeightField(id, phys);
   const pos = mesh.geometry.attributes.position;
@@ -403,7 +434,15 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       bodyId: id,       // Issue #26/#27/#28/#36：天体特定效果
       cloudTex,         // Issue #26：地球云层地表投影
     });
-    const mesh = new THREE.Mesh(sphereGeo(phys.radiusKm, true), mat);
+    // 无 DEM 的天体：程序化地形围绕 R 对称（±0.5·ampKm），基底球下移兜住低处。
+    // 不这样做时地形整体抬高 0.62·ampKm——落点高度比基准半径高 3–6km，
+    // 方块外缘还要降回球面，形成一圈"台地边"。
+    const relief = !DEM_SOURCES[id] && phys.landable;
+    const reliefOffset = relief ? terrainReliefOffset(phys) : 0;
+    const mesh = new THREE.Mesh(
+      relief ? reliefSphereGeo(phys.radiusKm - reliefOffset) : sphereGeo(phys.radiusKm - reliefOffset, true),
+      mat);
+    if (relief) deformLowRelief(mesh, id, phys);
     // 可登陆天体不施加扁率缩放：地形瓦片、行走碰撞、高度查询全建立在正球 R 上，
     // 单独压扁网格会让地表与碰撞错位，而岩质行星扁率 <0.6% 在正球近似下不可辨。
     // 非可登陆天体（四颗巨行星）按真实椭球渲染——它们没有地表，无碰撞可言。
@@ -495,8 +534,17 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       bodyId: id, // Issue #36：海卫一等天体的季节/极光效果
     });
     const big = phys.radiusKm > 1000;
-    const mesh = new THREE.Mesh(sphereGeo(phys.radiusKm, big), mat);
-    if (phys.shape?.dims) deformIrregular(mesh, id, fullPhys);
+    // 与行星路径同一条规则：无 DEM、非形变的卫星，盘面球要按地形下探量下移，
+    // 否则地形最低点被球面挡住、地形补丁外缘还要从 R−offset 硬接回 R。
+    // 形变天体（火卫一等）的几何由 deformIrregular 完全重写，半径传什么都无所谓。
+    const irregular = !!phys.shape?.dims;
+    const relief = !DEM_SOURCES[id] && !irregular && fullPhys.landable;
+    const reliefOffset = relief ? terrainReliefOffset(fullPhys) : 0;
+    const mesh = new THREE.Mesh(
+      relief ? reliefSphereGeo(phys.radiusKm - reliefOffset) : sphereGeo(phys.radiusKm - reliefOffset, big),
+      mat);
+    if (irregular) deformIrregular(mesh, id, fullPhys);
+    else if (relief) deformLowRelief(mesh, id, fullPhys);
     group.add(mesh);
 
     const entry = {
