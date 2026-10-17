@@ -403,8 +403,15 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   const sunShadow = new THREE.DirectionalLight(0xffffff, 0);
   sunShadow.castShadow = false;
   sunShadow.shadow.mapSize.set(QUALITY.shadowSize, QUALITY.shadowSize);
-  sunShadow.shadow.camera.left = -0.4; sunShadow.shadow.camera.right = 0.4;
-  sunShadow.shadow.camera.top = 0.4; sunShadow.shadow.camera.bottom = -0.4;
+  // 阴影框半宽（km）。原来只有 0.4km——近场岩石的自投影够用，但**山地投影
+  // 完全出不来**：真实地表最有力的纵深线索之一就是几公里外的山脊把影子投到
+  // 你脚前（低太阳角时尤其明显），0.4km 的框在画面里根本看不到山。
+  // 扩到 0.8km（高画质 2048 图 → 0.78m/texel）。**不要再往上加**：试过 1.6km，
+  // texel 涨到 1.56m 而 bias/normalBias 没跟着涨，自阴影痤疮会连成一大块
+  // 边缘平直的暗区（比没有阴影还假）。要再扩必须先让 bias 随 texel 缩放。
+  const SHADOW_HALF = 0.8;
+  sunShadow.shadow.camera.left = -SHADOW_HALF; sunShadow.shadow.camera.right = SHADOW_HALF;
+  sunShadow.shadow.camera.top = SHADOW_HALF; sunShadow.shadow.camera.bottom = -SHADOW_HALF;
   sunShadow.shadow.camera.near = 0.02; sunShadow.shadow.camera.far = 6;
   sunShadow.shadow.bias = -0.00008;
   sunShadow.shadow.normalBias = 0.0006; // km 单位 = 0.6m：抵消地形网格 0.4m 采样自遮挡痤疮
