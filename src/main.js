@@ -1149,6 +1149,13 @@ function loop() {
   try {
     // 环境音效（#4, #32）：根据模式/环境/飞船状态驱动
     if (audioEngine) {
+      // 机体滚转 → 引擎轰鸣的左右偏置（座舱里的方位感）。
+      // 完整的 HRTF/多普勒需要 3D 声源，这里先补最直接的那一个维度。
+      {
+        const rollIn = (input.down('KeyQ') ? 1 : 0) - (input.down('KeyE') ? 1 : 0);
+        _audioPan += (rollIn * 0.55 - _audioPan) * Math.min(dtReal * 3, 1);
+        audioEngine.setPan?.(_audioPan);
+      }
       const nearestBody = nearest ? builder.bodies.get(nearest.id) : null;
       const atm = nearestBody?.phys?.atmosphere;
       const inAtmo = !!(atm && nearest.distSurface < atm.heightKm);
@@ -1724,6 +1731,7 @@ function applyLocationHash() {
 }
 
 // ── VR 控制器事件（WebXRManager 回调）─────────────────────────────────
+let _audioPan = 0;   // 立体声偏置的平滑值
 const _shakeE = new THREE.Euler();
 const _shakeQ = new THREE.Quaternion();
 let _plasmaShown = -1;

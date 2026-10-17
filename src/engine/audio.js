@@ -79,6 +79,11 @@ export class AudioEngine {
     // 主链路：bus → underwaterFilter → master → destination
     this._bus = this.ctx.createGain();
     this._bus.gain.value = 1;
+    // 立体声总线：座舱里的引擎/推进器轰鸣按机体滚转做左右偏置。
+    // 此前全部接同一 bus、纯单声道——"听不出方位"是空间听觉缺失的最小一环，
+    // 而完整的 HRTF/多普勒需要 3D 声源，这里先补上最直接的那一个维度。
+    this._stereo = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+    if (this._stereo) { this._bus.connect(this._stereo); }
 
     this._underwaterFilter = this.ctx.createBiquadFilter();
     this._underwaterFilter.type = 'lowpass';
@@ -88,7 +93,7 @@ export class AudioEngine {
     this._master = this.ctx.createGain();
     this._master.gain.value = 0; // 默认静音，setEnabled 时渐入
 
-    this._bus.connect(this._underwaterFilter);
+    (this._stereo ?? this._bus).connect(this._underwaterFilter);
     this._underwaterFilter.connect(this._master);
     this._master.connect(this.ctx.destination);
 
@@ -389,6 +394,14 @@ export class AudioEngine {
     const target = this._enabled ? this._volume : 0;
     // 50ms 平滑过渡，避免咔哒声
     this._master.gain.setTargetAtTime(target, now, 0.05);
+  }
+
+  /** 立体声偏置（-1 左 … +1 右）。用于机体滚转时的引擎方位感。
+   *  浏览器不支持 StereoPanner 时静默降级为单声道。 */
+  setPan(v) {
+    if (!this._stereo) return;
+    this._stereo.pan.setTargetAtTime(
+      Math.max(-1, Math.min(1, v)), this.ctx.currentTime, 0.08);
   }
 
   /** 主音量 0-1 */

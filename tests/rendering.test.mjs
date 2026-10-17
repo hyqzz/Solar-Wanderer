@@ -1538,3 +1538,12 @@ test('大气地面反弹项按 Rayleigh 分光染色（不是中性白）', () =
   assert.ok(/vec3 gTint = normalize\(uBetaR/.test(src), '缺少分光染色');
   assert.ok(/groundLitCol/.test(src), '地面反弹项未使用染色');
 });
+
+// ── 空间音频的最小一环：立体声偏置 ──────────────────────────────────────────
+test('音频有立体声偏置（机体滚转时的引擎方位感）', () => {
+  const a = read('src/engine/audio.js');
+  const m = read('src/main.js');
+  assert.ok(/createStereoPanner/.test(a), '缺少 StereoPanner');
+  assert.ok(/setPan\(v\)/.test(a), '缺少 setPan');
+  assert.ok(/audioEngine\.setPan\?\./.test(m), 'main.js 未驱动 setPan');
+});
