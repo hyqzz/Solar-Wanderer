@@ -29,6 +29,9 @@ const MAX_DIST = 1.5e13;
 
 const smoother = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 
+// 键盘导航键：过渡期间按下其中任意一个即视为"用户要自己开"，放弃延迟焦点
+const NAV_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+
 export class OrbitCamera {
   constructor(camera = null) {
     this.camera = camera;
@@ -160,6 +163,16 @@ export class OrbitCamera {
       : null;
   }
 
+  /** 用户是否正在主动操作视角。过渡期间只要为真，就放弃延迟焦点（见 update 的早退分支）。 */
+  _userNavigating(input) {
+    const d = input.drag, p = input.pan, l = input.look;
+    if (d && (d.active || Math.abs(d.dx) + Math.abs(d.dy) > 0.5)) return true;
+    if (p && (p.active || Math.abs(p.dx) + Math.abs(p.dy) > 0.5)) return true;
+    if (l && l.active) return true;
+    for (const k of NAV_KEYS) if (input.down(k)) return true;
+    return false;
+  }
+
   /** 启动焦点过渡：记录当前位姿并计算目标初始距离 */
   _startTransition(env) {
     if (!this.pendingFocusId || this.pendingFocusId === this.focusId) {
@@ -227,6 +240,12 @@ export class OrbitCamera {
       // 过渡进度由缩放方向驱动：滚轮下/PageDown = 接近（t↑），滚轮上/PageUp = 远离（t↓）
       const advance = Math.abs(input.wheel) * 0.12 + Math.abs(zoomK) * dt * 0.9;
       const dir = (input.wheel < 0 || zoomK < 0) ? 1 : -1;
+      // 向外滚且已无进度可退 = 用户放弃了这个目标。不取消的话相机会原地转向目标
+      // 却永不结束过渡（t 恒为 0，完成条件 t>=1 永不满足），拖拽被早退分支吃掉。
+      if (dir < 0 && tr.t <= 1e-6) {
+        this.adoptPosition(env, this.focusId, this.posKm, this.quat);
+        return;
+      }
       tr.t = THREE.MathUtils.clamp(tr.t + dir * advance, 0, 1);
       // 朝向目标独立推进：滚动后 0.35s 内平滑转向目标
       tr.faceT = Math.min(1, tr.faceT + dt / 0.35);
@@ -421,8 +440,15 @@ export class OrbitCamera {
       }
     }
     if (this.transition) {
-      this._updateTransition(dt, input, env);
-      return;
+      // 拖拽 / 平移 / 环视 / 键盘导航 = 意图改变：取消延迟焦点，当帧就交回手动控制。
+      // 不取消的话过渡态会一直占着这条早退分支，拖拽与键盘全部失效；而向外滚只推进
+      // 朝向（faceT）不推进位置（t），过渡永不结束——表现为"点一下天体，鼠标就坏了"。
+      if (this._userNavigating(input)) {
+        this.adoptPosition(env, this.focusId, this.posKm, this.quat);
+      } else {
+        this._updateTransition(dt, input, env);
+        return;
+      }
     }
     let f = env.get(this.focusId);
     const drag = input.drag;

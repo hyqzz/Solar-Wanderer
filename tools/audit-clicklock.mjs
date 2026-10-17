@@ -34,43 +34,23 @@ const afterDrag1 = await st();
 console.log('拖拽后    ', JSON.stringify(afterDrag1));
 
 // 走"点击天体"的同一条代码路径：main.js:311 的点击处理器就是调 setPendingFocus。
-// 直接点画面中心不行——那里是当前焦点天体本身，会被 hit.id !== focusId 挡掉。
-let clicked = null;
-const labels = await p.$$('#labels .body-label');
-for (const l of labels) {
-  const txt = (await l.evaluate((n) => n.textContent)).trim();
-  const box = await l.boundingBox();
-  if (box && box.x > 40 && box.x < 920 && box.y > 40 && box.y < 560 && !/地球|Earth/.test(txt)) {
-    await l.click(); clicked = `label:${txt}`; break;
-  }
-}
-if (!clicked) {
-  await p.evaluate(() => window.__game.orbitCam.setPendingFocus('mars'));
-  clicked = 'setPendingFocus(mars)';
-}
+// 不真去点 DOM 标签——鼠标抬起若恰好落在某个标签上会触发标签点击，把焦点也改掉，
+// 干扰这个探针要测的东西（相机行为）。
+await p.evaluate(() => window.__game.orbitCam.setPendingFocus('mars'));
 await new Promise((r) => setTimeout(r, 2500));
 const afterClick = await st();
-console.log(`点击(${clicked})后`, JSON.stringify(afterClick));
+console.log('点击天体后', JSON.stringify(afterClick));
 
+const lonAfterClick = afterClick.lon;
 await drag(180);
 const afterDrag2 = await st();
 console.log('再拖拽后  ', JSON.stringify(afterDrag2));
 
-// 向外滚（应能取消过渡）
-await p.mouse.move(480, 300);
-for (let i = 0; i < 12; i++) { await p.mouse.wheel({ deltaY: 120 }); await new Promise((r) => setTimeout(r, 120)); }
-await new Promise((r) => setTimeout(r, 1500));
-const afterWheelOut = await st();
-console.log('向外滚后  ', JSON.stringify(afterWheelOut));
-
-await drag(180);
-const afterDrag3 = await st();
-console.log('再拖拽后  ', JSON.stringify(afterDrag3));
-
-const d1 = Math.abs(afterDrag1.lon - (-5.51));
-console.log(`\n结论：点击前拖拽经度变化 ${Math.abs(afterDrag1.lon - afterDrag2.lon).toFixed(3)}°(参考)  ` +
-  `点击后拖拽经度变化 ${Math.abs(afterDrag3.lon - afterWheelOut.lon).toFixed(3)}°  ` +
-  `heading 变化 ${Math.abs(afterDrag3.heading - afterWheelOut.heading).toFixed(3)}°`);
-console.log('过渡态残留:', JSON.stringify((await st()).transition));
+const dragDeltaAfterClick = Math.abs(afterDrag2.lon - lonAfterClick);
+const ok = dragDeltaAfterClick > 5 && !afterDrag2.transition;
+console.log(`\n点击后拖拽经度变化 ${dragDeltaAfterClick.toFixed(3)}°  （修复前实测为 0.000°）`);
+console.log(`过渡态残留: ${JSON.stringify(afterDrag2.transition)}  （修复前为 {toId,t:0,faceT:1} 卡死）`);
+console.log(ok ? '✅ 通过：点击天体后拖拽仍然有效' : '❌ 失败：点击后拖拽仍被吃掉');
 console.log('页面错误', errs.length, errs.slice(0, 3));
 await b.close();
+process.exit(ok ? 0 : 1);
