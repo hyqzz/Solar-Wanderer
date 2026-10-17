@@ -151,3 +151,101 @@ export function createHelmet() {
   group.userData.isHelmet = true;
   return group;
 }
+
+// ── 行走时的 EVA 服（第一人称身体）────────────────────────────────────────
+//
+// 为什么需要：飞行模式有座舱框、有第三人称飞船，而行走模式此前**画面里没有
+// 自己**——只有一圈 CSS 晕影。真实的第一人称临场感很大一部分来自"余光里的
+// 身体"：低头能看到胸口、抬手能看到手套、走路时手臂在画面下缘摆动。
+//
+// 实现放在叠加层（overlayScene）：它与主场景的浮动原点/近平面无关，姿态直接
+// 跟头部（行走时 ship.quat 就是头部朝向），不需要处理世界坐标。
+//
+// 位置是**按 FOV 布局**的：不同 FOV/宽高比下手臂要留在画面下缘而不是跑到中间，
+// 所以给出 layout(fov, aspect) 而不是写死坐标。
+export function createEvaSuit() {
+  const root = new THREE.Group();
+  const fabric = new THREE.MeshStandardMaterial({ color: 0xdfe3e8, roughness: 0.82, metalness: 0.04, fog: false });
+  const glove = new THREE.MeshStandardMaterial({ color: 0x39404a, roughness: 0.5, metalness: 0.18, fog: false });
+  const accent = new THREE.MeshStandardMaterial({ color: 0xd8802a, roughness: 0.55, metalness: 0.12, fog: false });
+
+  const limb = (a, b, r, mat) => {
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const len = dir.length();
+    const m = new THREE.Mesh(
+      new THREE.CapsuleGeometry(r, Math.max(len - 2 * r, 0.002), 5, 12), mat);
+    m.position.copy(a).addScaledVector(dir, 0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    return m;
+  };
+
+  // 体固系（相对头部）：-Z 是正前方，+Y 上。尺度假定为"眼睛在原点"的人体。
+  // 关节位置要按**可见性**反推：fov 58° 时，深度 z 处画面的下缘在
+  // y = -z·tan(29°) ≈ -0.554z。手自然垂在身侧（眼睛下方 0.5m）是永远看不到的，
+  // 所以刻意把小臂/手套抬到画面下缘之上——这是"第一人称手部"的通用做法，
+  // 上臂留在画面外，转头时才会露出来。
+  const JOINTS = {
+    shoulder: (s) => new THREE.Vector3(s * 0.24, -0.30, 0.12),
+    elbow: (s) => new THREE.Vector3(s * 0.30, -0.26, -0.14),
+    wrist: (s) => new THREE.Vector3(s * 0.27, -0.19, -0.40),
+  };
+  const arms = [];
+  for (const s of [-1, 1]) {
+    const arm = new THREE.Group();
+    const sh = JOINTS.shoulder(s), el = JOINTS.elbow(s), wr = JOINTS.wrist(s);
+    arm.add(limb(sh, el, 0.068, fabric));
+    arm.add(limb(el, wr, 0.055, fabric));
+    // 腕环：EMU 的标志性橙色压力环，也是"这是航天服"最快的识别特征
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.058, 0.011, 6, 16), accent);
+    ring.position.copy(wr);
+    ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), el.clone().sub(wr).normalize());
+    arm.add(ring);
+    // 手套：朝前下方伸，指尖略微内收（真实手在身前的自然姿态）
+    const tip = new THREE.Vector3(s * 0.22, -0.13, -0.60);
+    const g = new THREE.Mesh(new THREE.CapsuleGeometry(0.050, 0.11, 5, 12), glove);
+    const gd = tip.clone().sub(wr).normalize();
+    g.position.copy(wr).addScaledVector(gd, 0.075);
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), gd);
+    arm.add(g);
+    root.add(arm);
+    arms.push({ arm, base: arm.position.clone(), s });
+  }
+
+  let phase = 0, bob = 0;
+  /** dt: 秒；speedKmS: 行走速度（km/s）；walking: 是否有移动输入；submerged: 是否在水下 */
+  root.userData.update = (dt, speedKmS = 0, walking = false, submerged = false) => {
+    // 步频与 audio.js 的脚步声同源（常速 ~1.2Hz，冲刺 ~2.5Hz），视觉与听觉同拍
+    const speedNorm = Math.min(speedKmS / 0.009, 1);
+    const freq = walking ? 1.2 + speedNorm * 1.3 : 0.22;   // 站立时是缓慢的呼吸
+    phase += dt * freq * Math.PI * 2;
+    const amp = walking ? 0.010 + speedNorm * 0.010 : 0.0016;
+    bob += ((walking ? 1 : 0) - bob) * Math.min(dt * 3, 1);
+    for (const { arm, base, s } of arms) {
+      // 手臂前后交替摆动 + 轻微上下，相位差 π
+      const sw = Math.sin(phase + (s > 0 ? Math.PI : 0));
+      arm.position.set(
+        base.x + sw * amp * 0.5 * bob,
+        base.y + Math.abs(sw) * amp * 0.7 * bob,
+        base.z - sw * amp * 2.2 * bob);
+      arm.rotation.x = sw * 0.05 * bob;
+      arm.rotation.z = -s * (0.02 + 0.03 * bob);
+    }
+    // 水下：整体轻微上浮感（失重/浮力），并压暗（水下没有直射光）
+    root.position.y = submerged ? Math.sin(phase * 0.35) * 0.006 : 0;
+    root.visible = true;
+  };
+
+  /** 按当前 FOV/宽高比把手臂留在画面下缘（避免宽屏时跑到画面中间） */
+  root.userData.layout = (fov, aspect) => {
+    const halfH = Math.tan((fov * Math.PI / 180) / 2);
+    const k = THREE.MathUtils.clamp(halfH / Math.tan((58 * Math.PI / 180) / 2), 0.7, 1.5);
+    // 宽屏时视口横向更宽，手臂按比例外移，保持"在画面两下角"的构图
+    const ax = Math.min(Math.max(aspect / 1.7, 0.85), 1.35);
+    for (const { arm, base } of arms) {
+      arm.position.set(base.x * ax, base.y * k, base.z * k);
+    }
+  };
+
+  root.userData.layout(58, 1.7);
+  return root;
+}

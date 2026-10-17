@@ -47,7 +47,7 @@ import { buildTourUI } from './ui/tourUI.js';
 import { TeacherToolkit } from './ui/teacher.js';
 import { EclipseSystem } from './scene/eclipses.js';
 import { WebXRManager } from './engine/webxr.js';
-import { createCockpit, createShipModel, createHelmet } from './scene/cockpit.js';
+import { createCockpit, createShipModel, createHelmet, createEvaSuit } from './scene/cockpit.js';
 import { createSpacecraftModel, makeSpacecraftGlow, SPACECRAFT_TIMELINES,
          NEW_HORIZONS, newHorizonsPosition } from './scene/spacecraft.js';
 import { createApolloLandmarks, createRoverSites } from './scene/landmarks.js';
@@ -149,6 +149,15 @@ overlayScene.add(cockpit);
 const shipModel = createShipModel();
 overlayScene.add(shipModel);
 const helmet = createHelmet();
+// 行走时的第一人称身体（EVA 服手臂/手套），见 cockpit.js 的说明
+const evaSuit = createEvaSuit();
+evaSuit.visible = false;
+// **必须挂在相机下**，不能挂在场景下：叠加相机带 ship.quat 的旋转，挂在场景里
+// 的物体会被反向旋转甩出画面（头一转手臂就没了）。挂在相机下时局部坐标就是
+// 相机坐标——手臂相对"我的眼睛"固定，这正是第一人称身体该有的行为。
+// 代价是相机必须进场景图，否则它的子树不会被遍历到。
+overlayScene.add(overlayCam);
+overlayCam.add(evaSuit);
 overlayScene.add(helmet);
 let thirdPerson = false;   // V 键在飞行模式切换第一/第三人称
 
@@ -970,6 +979,12 @@ function loop() {
     // 晕影与分辨率、FOV、相机姿态全都无关，是最稳的表达。
     document.body.classList.toggle('walk-mode', appMode === 'walk');
     helmet.visible = false;
+    // 行走：画面里要有"自己"（EVA 服前臂/手套 + 步态摆动）
+    evaSuit.visible = appMode === 'walk';
+    if (evaSuit.visible) {
+      const a = ship.audioState ?? {};
+      evaSuit.userData.update?.(dtReal, a.speed ?? 0, !!a.walking, !!a.submerged);
+    }
     if (shipModel.visible) {
       shipModel.position.set(0, 0, 0);
       shipModel.quaternion.copy(ship.quat);
@@ -988,6 +1003,7 @@ function loop() {
     overlayCam.updateProjectionMatrix();
     cockpit.userData.layout?.(overlayCam.fov, overlayCam.aspect);
     helmet.userData.layout?.(overlayCam.fov, overlayCam.aspect);
+    evaSuit.userData.layout?.(overlayCam.fov, overlayCam.aspect);
     if (thirdPerson && shipModel.visible) {
       overlayCam.position.set(0, 2.6, 16).applyQuaternion(ship.quat);
       overlayCam.quaternion.copy(ship.quat);
@@ -1272,7 +1288,8 @@ function loop() {
     if (renderer.xr.isPresenting) renderer.render(scene, camera);
     else composer.render();
     // 座舱/飞船叠加层：清深度后单独渲染，用米制近平面（见上面的说明）
-    if (appMode === 'fly' && (cockpit.visible || shipModel.visible)) {
+    if ((appMode === 'fly' && (cockpit.visible || shipModel.visible))
+        || (appMode === 'walk' && evaSuit.visible)) {
       if (!overlayScene.environment) overlayScene.environment = scene.environment;
       renderer.autoClear = false;
       renderer.clearDepth();

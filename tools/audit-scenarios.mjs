@@ -77,6 +77,10 @@ async function land(id, latDeg, lonShiftDeg) {
     if (await p.evaluate((bid) => window.__game.terrainMgr.baseReady(bid), id)) break;
     await new Promise((r) => setTimeout(r, 500));
   }
+  // 等焦点过渡跑完再设距离：orbit() 会启动一段过渡，它会在随后的若干帧里
+  // 重写 dist/distTarget；紧接着设距离会被它覆盖（实测相机停在离地 85m，
+  // 自动登陆的 2.2m 判据永远不满足，场景因此一直停在 orbit）。
+  await new Promise((r) => setTimeout(r, 2500));
   await p.evaluate((m, bid, la) => {
     const g = window.__game, oc = g.orbitCam;
     if (g.getMode() !== 'orbit' || oc.focusId !== bid) return;
@@ -85,9 +89,18 @@ async function land(id, latDeg, lonShiftDeg) {
     const dir = new V(Math.cos(L) * Math.cos(-m.lon), Math.sin(L), Math.cos(L) * Math.sin(-m.lon));
     oc.dist = oc.distTarget = g.terrainMgr.heightAt(bid, dir) + 0.002;
   }, ss, id, latDeg);
-  for (let i = 0; i < 70; i++) {
+  // 持续重申目标距离直到真的落地：任何一帧的覆盖都会被下一轮纠正回来。
+  for (let i = 0; i < 40; i++) {
     if ((await p.evaluate(() => window.__game.getMode())) === 'walk') break;
-    await new Promise((r) => setTimeout(r, 500));
+    await p.evaluate((m, bid, la) => {
+      const g = window.__game, oc = g.orbitCam;
+      if (g.getMode() !== 'orbit') return;
+      const V = Object.getPrototypeOf(g.camera.position).constructor;
+      const L = la * Math.PI / 180;
+      const dir = new V(Math.cos(L) * Math.cos(-m.lon), Math.sin(L), Math.cos(L) * Math.sin(-m.lon));
+      oc.dist = oc.distTarget = g.terrainMgr.heightAt(bid, dir) + 0.002;
+    }, ss, id, latDeg);
+    await new Promise((r) => setTimeout(r, 250));
   }
   return p.evaluate(() => window.__game.getMode());
 }
@@ -289,6 +302,41 @@ for (const [name, fn] of SCENARIOS) {
           water: (() => {
             const tm = g.terrainMgr;
             return null;
+          })(),
+          eva: (() => {
+            const g = window.__game;
+            let suit = null;
+            g.overlayScene.traverse((o) => { if (o.userData?.update && o.children.length >= 2) suit = o; });
+            if (!suit) return { found: false };
+            return {
+              found: true, visible: suit.visible, kids: suit.children.length,
+              pos: suit.position.toArray().map((v) => +v.toFixed(3)),
+              first: suit.children[0]?.children?.map((c) => c.position.toArray().map((v) => +v.toFixed(3))) ?? null,
+              camQ: g.overlayCam.quaternion.toArray().map((v) => +v.toFixed(3)),
+              shipQ: g.ship.quat.toArray().map((v) => +v.toFixed(3)),
+              mainQ: g.camera.quaternion.toArray().map((v) => +v.toFixed(3)),
+            };
+          })(),
+          land: (() => {
+            const g = window.__game, n = g.__nearest, oc = g.orbitCam;
+            if (!n) return null;
+            const e = g.builder.bodies.get(n.id);
+            const V = Object.getPrototypeOf(g.camera.position).constructor;
+            const rel = new V(g.ship.posKm[0] - n.posKm[0], g.ship.posKm[1] - n.posKm[1], g.ship.posKm[2] - n.posKm[2]);
+            const relLen = rel.length();
+            rel.divideScalar(relLen);
+            const loc = rel.clone().applyQuaternion(e.mesh.quaternion.clone().invert());
+            const hAt = g.terrainMgr.heightAt(n.id, loc);
+            return {
+              mode: g.getMode(), focus: oc.focusId, flight: !!oc.flight,
+              dist: +oc.dist.toFixed(4), distTarget: +oc.distTarget.toFixed(4),
+              minDist: +oc.minDist({ groundRadius: (d) => g.terrainMgr.heightAt(n.id, d), radiusKm: e.phys.radiusKm }).toFixed(4),
+              relLen: +relLen.toFixed(4), hAt: +hAt.toFixed(4),
+              altGround: +(relLen - hAt).toFixed(5),
+              distSurface: +n.distSurface.toFixed(4),
+              baseReady: !!g.terrainMgr.baseReady(n.id),
+              wheel: g.input.wheel,
+            };
           })(),
           walk: (() => {
             const g = window.__game, w = g.ship?.walk;
