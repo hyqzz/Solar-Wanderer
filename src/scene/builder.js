@@ -749,7 +749,13 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
       e.glint.scale.setScalar(glintSize);
       const distFade = THREE.MathUtils.clamp((dist / (e.phys.radiusKm * 300) - 1) * 0.8, 0, 0.9);
       const albedoScale = Math.sqrt((GLINT_ALBEDO[id] ?? 0.15) / 0.3);
-      e.glint.material.opacity = distFade * (0.2 + 0.8 * phaseF) * albedoScale * glintSkyFade;
+      // 距离项：远距光点此前完全没有 1/d²，于是亮度排序完全错——海王星（30 AU
+      // 满相）在天空里比金星（0.3 AU、相位函数压低）还亮，而真实是 −4.5 等对
+      // +7.8 等，差 12 个星等。这里按 1/d²（以 1 AU 归一）压下去。
+      const dAUg = Math.max(Math.hypot(e.posKm[0], e.posKm[1], e.posKm[2]) / KM_PER_AU, 1e-6);
+      const flux = 1 / Math.max(dAUg * dAUg, 1e-6);
+      e.glint.material.opacity = distFade * (0.2 + 0.8 * phaseF) * albedoScale
+        * glintSkyFade * Math.min(1, flux * 1.4);
       // 卫星 LOD：迟滞窗口防闪烁（进入 2.8 亿 km 显示、退出 3.2 亿 km 隐藏）；
       // 网格隐藏时光点保留（远距卫星本就是点源，相位调制后亮度正确）
       if (e.isMoon) {

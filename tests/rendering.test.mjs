@@ -1269,3 +1269,14 @@ test('HUD 的 innerHTML 有内容比对（不是每帧无条件重建）', () =>
   assert.ok(!/this\.elNav\.innerHTML = rows\.join\(''\);\s*$/m.test(src),
     '导航栏仍是每帧无条件重建');
 });
+
+// ── 远距行星光点要有 1/d² ────────────────────────────────────────────────────
+test('远距行星光点按 1/d² 衰减（否则海王星比金星亮）', () => {
+  const src = read('src/scene/builder.js');
+  assert.ok(/const flux = 1 \/ Math\.max\(dAUg \* dAUg, 1e-6\)/.test(src), '缺少距离项');
+  assert.ok(/Math\.min\(1, flux \* 1\.4\)/.test(src), '光点亮度未乘距离项');
+  // 数值验算：金星（0.31 AU）应明显亮于海王星（30 AU）
+  const flux = (d) => Math.min(1, (1 / (d * d)) * 1.4);
+  assert.ok(flux(0.31) > 1, '金星应满亮');
+  assert.ok(flux(30) < 0.002, `海王星应极暗，实际 ${flux(30).toExponential(2)}`);
+});
