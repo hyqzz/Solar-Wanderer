@@ -362,12 +362,16 @@ export class HeightField {
  * radiusKm: 用于缩放高频细节/凹凸幅度，避免小天体（Phobos 等）表面出现尖锐片元噪声。
  * 岸边泡沫：land/water 过渡区（vWater∈(0,1)）叠加动态白沫噪声。
  * 水面波纹：三向行进波叠加（SpaceEngine 式海面）。 */
-function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371, uWaterFade = null, uSunDir = null) {
+export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371, uWaterFade = null, uSunDir = null) {
   const detailScale = Math.min(1, radiusKm / 400); // 与 HeightField.height() 一致
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true, roughness: 0.95, metalness: 0.0, fog: true,
     side: THREE.DoubleSide, // 水下仰望可见海面（R9-2b）
     transparent: true, depthWrite: true, // 支持 uFade 淡入（#18）
+    // 见 rings.js 同名注释：three 默认把 transparent+DoubleSide 渲染两遍。
+    // 地形是全场景最重的片元着色器（多次 tnoise2 + 解析梯度），被光栅化两遍
+    // 既浪费一半算力，又让淡入期的 alpha 变成 a(2-a)、readyCover 判据随之失真。
+    forceSinglePass: true,
     polygonOffset: polyUnits > 0, polygonOffsetFactor: polyUnits > 0 ? 1 : 0,
     polygonOffsetUnits: polyUnits, // 粗级后推，消除 LOD 环带重叠区 z-fight（R9-2a）
   });

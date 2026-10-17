@@ -744,3 +744,51 @@ test('Service Worker 存在且在应用里注册（PWA 清单此前是空壳）'
   // file:// 打开（教师工具包建议的 U 盘用法）没有 serviceWorker，必须能跳过
   assert.ok(/location\.protocol === 'https:'/.test(main), '注册未做协议判断');
 });
+
+// ── 透明双面材质必须单遍渲染 ────────────────────────────────────────────────
+// three r165（three.module.js:29185）对 transparent && DoubleSide && !forceSinglePass
+// 的材质会拆成 BackSide + FrontSide 两遍渲染。对双面共面的单层几何，这会把有效
+// alpha 变成 1-(1-a)²（环的光学深度翻倍），对加色混合是亮度翻倍（日球层辉光），
+// 对地形则是把全场景最重的片元着色器白跑一遍。atmosphere.js 早就知道这个坑，
+// 这三处漏了。
+
+test('环材质为单遍渲染（否则光学深度翻倍）', async () => {
+  const { createRings } = await import('../src/scene/rings.js');
+  const rings = createRings({ rings: { innerKm: 74500, outerKm: 140220, tint: [1, 1, 1], opacity: 1 } }, null);
+  const mats = [];
+  rings.traverse?.((o) => { if (o.material) mats.push(o.material); });
+  if (!mats.length && rings.material) mats.push(rings.material);
+  assert.ok(mats.length > 0, '未取到环材质');
+  for (const m of mats) {
+    if (m.transparent && m.side === 2 /* DoubleSide */) {
+      assert.equal(m.forceSinglePass, true, '环材质缺少 forceSinglePass');
+    }
+  }
+});
+
+test('日球层材质为单遍渲染（否则加色辉光叠加两次）', async () => {
+  const { createHeliosphere } = await import('../src/scene/heliosphere.js');
+  const h = createHeliosphere();
+  const mats = [];
+  h.traverse((o) => { if (o.material) mats.push(o.material); });
+  assert.ok(mats.length > 0, '未取到日球层材质');
+  for (const m of mats) {
+    if (m.transparent && m.side === 2) {
+      assert.equal(m.forceSinglePass, true, '日球层材质缺少 forceSinglePass');
+    }
+  }
+});
+
+test('地形材质为单遍渲染（否则最重的片元着色器白跑一遍）', async () => {
+  const { makeTerrainMaterial } = await import('../src/scene/terrain.js');
+  const mat = makeTerrainMaterial({ value: null }, { value: 0 }, { value: 1 }, 0, 6371, { value: 1 }, { value: null });
+  assert.equal(mat.transparent, true);
+  assert.equal(mat.side, 2, '地形应为 DoubleSide（水下仰望可见海面）');
+  assert.equal(mat.forceSinglePass, true, '地形材质缺少 forceSinglePass');
+});
+
+test('全部透明双面材质（除 atmosphere 已显式处理）都设了 forceSinglePass', () => {
+  for (const f of ['src/scene/rings.js', 'src/scene/heliosphere.js', 'src/scene/terrain.js']) {
+    assert.match(read(f), /forceSinglePass:\s*true/, `${f} 未设 forceSinglePass`);
+  }
+});

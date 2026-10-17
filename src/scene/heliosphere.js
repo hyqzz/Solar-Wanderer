@@ -53,6 +53,9 @@ function makeShell(noseAU, color, opacity, sheath = 0) {
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
+    // 见 rings.js 同名注释：three 默认把 transparent+DoubleSide 渲染两遍，
+    // 加色混合下终止激波/日球层顶的边缘辉光会被叠加两次（亮度翻倍）。
+    forceSinglePass: true,
     blending: THREE.AdditiveBlending,
     vertexShader: /* glsl */ `
       #include <common>

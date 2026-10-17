@@ -71,6 +71,10 @@ export function createRings(phys, ringTex) {
     side: THREE.DoubleSide,
     transparent: true,
     depthWrite: false,
+    // three r165 对 transparent+DoubleSide 默认拆成 BackSide/FrontSide 两遍渲染
+    // （three.module.js:29185）。环是双面共面的单层，两遍会把有效 alpha 变成
+    // 1-(1-a)²：C 环 0.1→0.19 几乎翻倍，窄环的光学深度同样翻倍，环系对比度被压掉。
+    forceSinglePass: true,
     vertexShader: /* glsl */ `
       #include <common>
       #include <logdepthbuf_pars_vertex>
