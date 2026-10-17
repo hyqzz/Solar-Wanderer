@@ -104,6 +104,20 @@ const rows = [];
 for (const view of VIEWS) {
   for (const id of BODIES) {
     try {
+      // 地面视角会切进行走模式，而本工具**回不到轨道**（滚轮起跳在这个
+      // 环境里不生效）。原来只在第一颗天体上有效——地球之后所有天体的
+      // 地面图都拍成了同一帧地球海面（本文档开头记录的那个缺陷）。
+      // 修法：每个地面视角重开页面，代价约 10s/个，但每张图都确实在目标上。
+      if (view === 'ground') {
+        await p.goto(`http://127.0.0.1:4199/?clean=1&quality=${process.env.AUDIT_Q ?? 'medium'}&pr=1`,
+          { waitUntil: 'networkidle2', timeout: 180000 });
+        await p.waitForFunction(() => {
+          const x = document.getElementById('start-btn');
+          return x && !x.disabled;
+        }, { timeout: 120000 });
+        await p.click('#start-btn');
+        await new Promise((r) => setTimeout(r, 9000));
+      }
       const mode = view === 'terminator' ? 'anti' : 'sub';
       const ss = await localOf(id, view === 'pole' ? 'pole' : mode);
       const aim = await p.evaluate((m, bid, view, ssr) => {
