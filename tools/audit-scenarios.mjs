@@ -185,17 +185,15 @@ const SCENARIOS = [
     // 直接写 w.diving / w.localPos 都会被下一帧覆盖。
     await p.evaluate(() => {
       const g = window.__game, w = g.ship.walk;
-      if (w) { w.pitch = 0.55; w.yaw = 0; }
-      // 走输入层：touchDescend 会被触控层（pointerup/blur）清零，单次写会被
-      // 下一帧覆盖，所以用定时器持续按住——这正是"按住下潜键"的真实语义。
-      window.__diveTimer = setInterval(() => { window.__game.input.touchDescend = true; }, 16);
+      if (w) { w.pitch = 0.42; w.yaw = 0; }   // 仰角 ~24°：画面上缘正好压住斯涅尔窗（48.6°）的边界
+      // eslint-disable-next-line no-unused-expressions
+      // 直接往 Input 的按键集合里放 PageDown：这是 input.down() 读的同一个
+      // 集合，等价于"按住下潜键"。dispatchEvent 与写 touchDescend 都试过，
+      // 前者要 target 对（监听在 window 上）、后者会被触控层每帧清零。
+      g.input.keys.add('PageDown');
     });
-    await wait(7000);
-    await p.evaluate(() => {
-      clearInterval(window.__diveTimer);
-      window.__game.input.touchDescend = false;
-    });
-    await wait(4000);
+    // **不松手**：松手后浮力会把人在几秒内推回水面，截图必须在下潜过程中拍。
+    await wait(11000);
   }],
   ['mars-space', async () => { await orbit('mars', 3390 * 3.0, null, null); await wait(7000); }],
   ['mars-ground-horizon', async () => { await land('mars', 18, 0); await look(0.04, 0); await wait(10000); }],
@@ -291,6 +289,21 @@ for (const [name, fn] of SCENARIOS) {
           water: (() => {
             const tm = g.terrainMgr;
             return null;
+          })(),
+          walk: (() => {
+            const g = window.__game, w = g.ship?.walk;
+            if (!w) return null;
+            const e = g.__nearest ? g.builder.bodies.get(g.__nearest.id) : null;
+            const dir = w.localPos.clone().normalize();
+            return {
+              diving: !!w.diving, submerged: !!w.submerged, grounded: !!w.grounded,
+              pageDown: !!g.input.down('PageDown'), touchDescend: !!g.input.touchDescend,
+              r: +w.localPos.length().toFixed(4),
+              surfR: e ? +(e.phys.radiusKm + 0.001).toFixed(4) : null,
+              isWater: e ? !!g.terrainMgr.isWater(e.phys.id, dir) : null,
+              oceanFlag: !!(e && e.phys.surface?.ocean),
+              vAlt: +(w.vAlt ?? 0).toFixed(6),
+            };
           })(),
           fogDbg: (() => {
             const d = g.renderer.__fogDbg;

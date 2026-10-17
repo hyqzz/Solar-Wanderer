@@ -590,7 +590,7 @@ export class HeightField {
  * radiusKm: 用于缩放高频细节/凹凸幅度，避免小天体（Phobos 等）表面出现尖锐片元噪声。
  * 岸边泡沫：land/water 过渡区（vWater∈(0,1)）叠加动态白沫噪声。
  * 水面波纹：三向行进波叠加（SpaceEngine 式海面）。 */
-export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371, uWaterFade = null, uSunDir = null) {
+export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm = 6371, uWaterFade = null, uSunDir = null, uUnderwater = null) {
   const detailScale = Math.min(1, radiusKm / 400); // 与 HeightField.height() 一致
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true, roughness: 0.95, metalness: 0.0, fog: true,
@@ -611,6 +611,7 @@ export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm
     shader.uniforms.uFade = uFade;
     shader.uniforms.uDetailScale = uDetailScale;
     if (uWaterFade) shader.uniforms.uWaterFade = uWaterFade;
+    if (uUnderwater) shader.uniforms.uUnderwater = uUnderwater;
     shader.uniforms.uSunDir = uSunDir ?? { value: new THREE.Vector3(1, 0, 0) };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
@@ -634,6 +635,10 @@ export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm
         uniform float uDetailScale;
         uniform vec3 uSunDir;        // 体固系下的太阳方向（水面环境反射用）
         uniform float uWaterFade;
+        // 相机是否在水面之下。**不能靠 dot(V, normal) 判断**：three 对背面会把
+        // normal 翻向观察者（DOUBLE_SIDED），从水下抬头看水面时法线被翻成朝下，
+        // 点积恒为正，"从下方看"的分支永远进不去（斯涅尔窗因此完全不出现）。
+        uniform float uUnderwater;
         uniform mat3 normalMatrix;
         ${HASH_GLSL}
         float thash(vec3 p) { return glslHash31(p); }
@@ -795,7 +800,8 @@ export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm
         // 发白，近处仍透出水的本色——这个随视角的剧烈变化是"像不像水"的关键。
         if (vWater > 0.001) {
           vec3 V = normalize(vViewPosition);          // 片元 → 相机
-          float cosT = clamp(dot(V, normal), 0.0, 1.0);
+          float ndv = dot(V, normal);
+          float cosT = clamp(ndv, 0.0, 1.0);
           float fres = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);
           vec3 refl = reflect(-V, normal);
           // 解析天空：天顶深蓝 → 地平灰白（同一个 Rayleigh 直觉，不必像大气步进那样精确）
@@ -806,7 +812,31 @@ export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm
           float lowSun = 1.0 - clamp(sunUp * 1.6, 0.0, 1.0);
           skyCol = mix(skyCol, vec3(1.0, 0.55, 0.30),
                        pow(clamp(dot(refl, uSunDir), 0.0, 1.0), 3.0) * lowSun * 0.85);
-          outgoingLight += skyCol * fres * smoothstep(0.0, 0.35, vWater) * uWaterFade;
+          float wmask = smoothstep(0.0, 0.35, vWater) * uWaterFade;
+          if (uUnderwater < 0.5) {
+            // 相机在水面之上：菲涅尔反射天空
+            outgoingLight += skyCol * fres * wmask;
+          } else {
+            // === 相机在水面之下：斯涅尔窗 + 全内反射 ===
+            // 水的折射率 1.333 → 临界角 48.6°（cos = 0.661）。锥**内**看到的是
+            // 折射后的天空——整个上半球被压进这个 97° 的锥里，所以窗内几乎是
+            // 均匀亮的天光，边缘还因压缩而更亮；锥**外**发生全内反射，看到的是
+            // 水下的倒影，而水下没有可反射的亮源，所以锥外是暗的。
+            // 没有这一项时，水下抬头是一片均匀发亮的镜面；而"亮锥 + 锥外暗镜面"
+            // 恰恰是真实水下最标志性的视觉特征（也是判断"这是水下"最快的线索）。
+            // 用 |ndv|：这里的 normal 已被 three 翻向观察者，符号不可依赖。
+            float ca = clamp(abs(ndv), 0.0, 1.0);
+            float win = smoothstep(0.58, 0.70, ca);
+            vec3 through = mix(vec3(0.55, 0.75, 0.90), skyCol, 0.65);
+            // 窗边缘的亮环（掠射时路径压缩，真实照片里很明显）
+            through *= 1.0 + 0.7 * smoothstep(0.70, 0.62, ca) * step(0.58, ca);
+            // 锥外：全内反射的倒影。用该处水体的暗色近似。
+            vec3 below = mix(vec3(0.010, 0.030, 0.045), through, win);
+            // 窗内的焦散：真实水面的折射把阳光聚成网状亮斑（波浪法线已在 normal 里）
+            float caus = tnoise2(vObjPos * 260.0 + vec3(uTime * 0.12, 0.0, uTime * 0.07));
+            below += through * win * pow(caus, 3.0) * 0.6;
+            outgoingLight = mix(outgoingLight, below, wmask);
+          }
         }
         #include <opaque_fragment>`);
   };
@@ -998,6 +1028,7 @@ export class TerrainPatchSet {
     this.uSunDir = { value: new THREE.Vector3(1, 0, 0) };   // 体固系太阳方向
     // 海面高空淡出（0=隐去地形海面，交回盘面海洋材质；陆地不受影响）
     this.uWaterFade = { value: 1 };
+    this.uUnderwater = { value: 0 };
     // 噪声原点：跟随玩家、每 2km 重新吸附（保证片元噪声参数始终小数精度充足）
     this.noiseOriginU = { value: new THREE.Vector3(1e9, 0, 0) };
     this._initialized = false; // 首次激活后标记：指导首帧由外向内构建各级
@@ -1026,7 +1057,7 @@ export class TerrainPatchSet {
       const uFade = { value: 0 }; // 新建级从 0 淡入，避免 LOD 突然弹出（#18）
       // 粗级后推量：原值 li*2 在重叠区仍有 z-fight——表现为沿环带边界的一条
       // **虚线状的暗点行**（月面地面图可见）。加密到 li*6 + 系数 2。
-      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 6, R, this.uWaterFade, this.uSunDir);
+      const mat = makeTerrainMaterial(uPatchRel, this.uTime, uFade, li * 6, R, this.uWaterFade, this.uSunDir, this.uUnderwater);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.frustumCulled = false;
       mesh.receiveShadow = true; // 近场太阳阴影（岩石/地形自我投影）
@@ -1354,6 +1385,10 @@ export class TerrainManager {
       if (nearest) {
         const wf = 1 - THREE.MathUtils.smoothstep(nearest.distSurface, 0.6, 2.5);
         this.active.patches.uWaterFade.value = wf;
+        // 水下判定：该处是海且相机低于水面（水面 = R + 1m）
+        const fld = this.field(this.active.bodyId);
+        this.active.patches.uUnderwater.value =
+          (fld.sp.ocean && nearest.distSurface < 0.0005 && fld.isOcean(camLocalDir)) ? 1 : 0;
       }
       // DEM 瓦片流式：按相机位置请求瓦片 + 检查新瓦片到达
       const dem = this.demSources.get(this.active.bodyId);
