@@ -223,7 +223,10 @@ export function targetInfo(id, registry, dist, dSun = null, jdTT = null) {
   const info = {
     id, nameZh: primary, nameEn: secondary, dist, dSun,
     radiusKm: e.phys?.radiusKm > 1 ? e.phys.radiusKm : null,
-    desc: LANG === 'en' ? (DESC_EN[id] ?? descZh) : descZh,
+    // 五语言回落：此前只在 en 时用 DESC_EN，es/ja/fr/de/ru 一律显示中文描述。
+    // 于是日语用户的界面是"日文按钮 + 英文天体名 + 中文描述 + 英文知识卡"。
+    // 英文至少比中文接近，先回落到英文；正式翻译由 contentEn 体系后续补齐。
+    desc: DESC_EN[id] ?? descZh,
   };
   if (jdTT != null && ['planet','moon','tno','comet','probe'].includes(e.kind)) {
     // 逐时刻判断而非用覆盖区间的并集：分片可能非连续装载，并集会掩盖缺口

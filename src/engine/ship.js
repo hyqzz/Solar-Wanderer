@@ -660,8 +660,23 @@ export class Ship {
     let speed = ((input.down('ShiftLeft') || input.touchSprint) ? 0.009 : 0.003);
     if (inWater) speed *= 0.45;
     const moving = move.lengthSq() > 0;
-    if (moving) move.normalize().multiplyScalar(speed * dt);
-    w.localPos.add(move);
+    if (moving) {
+      move.normalize().multiplyScalar(speed * dt);
+      // 坡度限制：真实的人走不上陡崖。此前只有"把位置半径吸附到地面高度"，
+      // 走向垂直崖壁时新方向的地面更高，于是可以以 3 m/s **垂直爬上去**
+      // （真实 DEM 的火星/月球上，奥林帕斯山、陨石坑壁尤其明显）。
+      //
+      // 判据用本步的爬升率：水平位移 ≈ speed·dt，超过 tan(60°)=1.73 倍即拒绝。
+      // 60° 而不是 45°：程序地形在坑缘处本来就陡，45° 会让人频繁卡住；
+      // 只拦"向上"，下坡不限制。
+      if (!inWater) {
+        const cand = w.localPos.clone().add(move).normalize();
+        const rise = env.heightFn(w.bodyId, cand) - env.heightFn(w.bodyId, dirNow);
+        const run = speed * dt;
+        if (rise > run * 1.73) move.set(0, 0, 0);
+      }
+      w.localPos.add(move);
+    }
 
     if (inWater && input.wheel !== 0) {
       const depth = Math.max(surfR - w.localPos.length(), 0.0002);

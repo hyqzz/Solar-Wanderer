@@ -1139,3 +1139,23 @@ test('书签"最近一条"取的是 list()[0]（list 按 created 降序）', () 
   assert.ok(/const latest = items\[0\];/.test(m), '仍取 items[length-1]（最旧的一条）');
   assert.ok(!/const latest = items\[items\.length - 1\];/.test(m), '旧写法仍在');
 });
+
+// ── 小缺陷：语言回落、窄窗口面板、坡度 ───────────────────────────────────────
+test('非英文语言的天体描述不再回落中文', () => {
+  const h = read('src/ui/hud.js');
+  assert.ok(/desc: DESC_EN\[id\] \?\? descZh,/.test(h),
+    '描述应回落到英文（此前非 en 一律中文，日语用户看到"日文按钮+中文描述"）');
+  assert.ok(!/LANG === 'en' \? \(DESC_EN\[id\]/.test(h), '旧的三元回落仍在');
+});
+
+test('窄窗口桌面浏览器仍能看到目标信息面板', () => {
+  const css = read('src/style.css');
+  assert.ok(/@media \(max-width: 768px\) and \(pointer: fine\)/.test(css),
+    '缺少"窄窗口 + 精细指针"的覆盖规则：桌面窄窗没有 tc-target-btn，面板不能一起隐藏');
+});
+
+test('行走有坡度限制（不能垂直爬崖）', () => {
+  const s = read('src/engine/ship.js');
+  assert.ok(/rise > run \* 1\.73/.test(s), '缺少坡度限制（tan60°）');
+  assert.ok(/if \(rise > run \* 1\.73\) move\.set\(0, 0, 0\);/.test(s), '坡度超限应拒绝这一步');
+});

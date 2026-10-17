@@ -589,7 +589,15 @@ html[lang="zh-CN"] .title-block .title-en { display: none; }
   }
   #hud-target.tc-open { display: block; }
 
-  /* 提示：不遮挡摇杆 */
+    /* 窄窗口的**桌面**浏览器（半屏并排、笔记本小窗很常见）不是触屏，没有
+     tc-target-btn，信息面板不能跟着一起隐藏——否则天体名/距离/半径/重力/描述/
+     知识卡片全部消失，键盘提示也被 .key{display:none} 一起藏掉。 */
+  @media (max-width: 768px) and (pointer: fine) {
+    #hud-target { display: block; }
+    #hud-nav .key { display: inline; }
+  }
+
+/* 提示：不遮挡摇杆 */
   #hud-tip {
     bottom: 115px; font-size: 12px; padding: 5px 12px;
     max-width: 75vw; white-space: normal; text-align: center;
