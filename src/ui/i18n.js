@@ -362,6 +362,7 @@ const HELP_EN = `
         <tr><td>Scroll / PageUp PageDown / + −</td><td>Zoom about screen center (altitude-scaled: metre steps near ground, hover at <b>any altitude</b>)</td></tr>
         <tr><td>Scroll all the way in</td><td><b>Seamless landing</b> (auto switch to walking); oceans land on the water surface</td></tr>
         <tr><td>V</td><td>Inertial view (camera ignores rotation · pair with time-warp to watch moons orbit)</td></tr>
+        <tr><td>Z</td><td><b>Clean / cinematic mode</b>: hide the entire UI (HUD / directory / labels / crosshair / compass), leaving only the universe (press Z again to restore; <code>?clean=1</code> starts in it)</td></tr>
         <tr><td>R</td><td>Reset view (north up, top-down)</td></tr>
         <tr><td>🪐 Directory</td><td>Pick a body → fly-to animation (left, open by default)</td></tr>
         <tr><td>Double-click label / T / 1–9,0</td><td>GE-style fly-to (target centered)</td></tr>
@@ -396,6 +397,11 @@ const HELP_EN = `
       <table>
         <tr><td>O / L / H</td><td>Orbit lines / labels / this help</td></tr>
         <tr><td>K</td><td>Trans-Neptunian (TNO) orbit lines (off by default)</td></tr>
+        <tr><td>C</td><td>Compass</td></tr>
+        <tr><td>M</td><td>Sound (off by default)</td></tr>
+        <tr><td>Y</td><td>Human silhouette reference (walk mode · sense of scale)</td></tr>
+        <tr><td>Ctrl+B / Ctrl+Shift+B</td><td>Save bookmark / jump to the most recent bookmark</td></tr>
+        <tr><td>J</td><td>Real gravity (in flight · off by default; enables free-fall and orbit insertion)</td></tr>
       </table>
     </div>
   </div>

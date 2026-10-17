@@ -965,3 +965,27 @@ test('盘面与地形用同一张分级表（否则同一天体两种亮度）',
     for (let i = 0; i < 3; i++) assert.equal(d.grade[i], t.grade[i], `${id} 第 ${i} 通道盘面/地形不一致`);
   }
 });
+
+// ── 帮助文本必须覆盖已实现的按键 ──────────────────────────────────────────────
+// 用户要的"电影感"开关（Z 纯净模式）实现已久，但英文帮助里没有、而
+// applyDomI18n() 启动时会把 en/index.html 里写好的那行整体覆盖掉——于是
+// 非中文用户永远学不到它。同类还有 C/M/Y/Ctrl+B/Ctrl+Shift+B/J。
+
+test('中英文帮助都列出了全部已实现的按键', () => {
+  const zh = read('index.html');
+  const en = read('src/ui/i18n.js');
+  // [按键, 中文帮助里的写法, 英文帮助里的写法]
+  const keys = [
+    ['Z 纯净模式', '>Z<', '<td>Z</td>'],
+    ['C 指南针', '>C<', '<td>C</td>'],
+    ['M 音效', '>M<', '<td>M</td>'],
+    ['Y 人体剪影', '>Y<', '<td>Y</td>'],
+    ['Ctrl+B 书签', 'Ctrl+B', 'Ctrl+B'],
+    ['Ctrl+Shift+B 书签', 'Ctrl+Shift+B', 'Ctrl+Shift+B'],
+    ['J 真实引力', '>J<', '<td>J</td>'],
+  ];
+  for (const [name, zhPat, enPat] of keys) {
+    assert.ok(zh.includes(zhPat), `中文帮助缺少 ${name}`);
+    assert.ok(en.includes(enPat), `英文帮助缺少 ${name}`);
+  }
+});
