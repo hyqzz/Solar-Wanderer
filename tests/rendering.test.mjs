@@ -1119,3 +1119,23 @@ test('地形外缘覆盖视地平，且边缘高度收回基准球', () => {
   assert.ok(/blend > 0\) h = h \* \(1 - blend\) \+ this\.field\.baseRadius\(dir\) \* blend/.test(src),
     '最外级边缘应收到基准球面，否则与基底球交界是硬直边');
 });
+
+// ── 星表失败必须可见；亮星要有层次 ────────────────────────────────────────────
+test('星表加载失败会告知用户（全链路唯一静默降级）', () => {
+  const m = read('src/main.js');
+  const i = read('src/ui/i18n.js');
+  assert.ok(/hud\.tip\(t\('tip\.starsUnavailable'\)\)/.test(m), '失败时没有提示');
+  assert.ok(/tip\.starsUnavailable/.test(i), '缺少 starsUnavailable 文案');
+});
+
+test('恒星按星等分三档尺寸（两档时天狼星与二等星一样大）', () => {
+  const s = read('src/scene/starfield.js');
+  const layers = s.match(/\{ size: [\d.]+, lo: [^}]+\}/g) ?? [];
+  assert.ok(layers.length >= 3, `亮星尺寸档位只有 ${layers.length} 档`);
+});
+
+test('书签"最近一条"取的是 list()[0]（list 按 created 降序）', () => {
+  const m = read('src/main.js');
+  assert.ok(/const latest = items\[0\];/.test(m), '仍取 items[length-1]（最旧的一条）');
+  assert.ok(!/const latest = items\[items\.length - 1\];/.test(m), '旧写法仍在');
+});

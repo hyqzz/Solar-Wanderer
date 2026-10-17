@@ -214,7 +214,11 @@ async function init() {
   scene.add(sky.brightGroup);
   world.register(new Float64Array(3), sky.brightGroup);
   loadStarCatalog().then((cat) => {
-    if (cat) sky.setCatalog(cat);
+    if (cat) { sky.setCatalog(cat); return; }
+    // 星表是**全链路唯一会静默降级的东西**（星历回退都有 HUD 逐时刻标注）。
+    // 失败后天空只剩银河贴图、一颗可辨认恒星都没有、星座全无——用户完全无从
+    // 判断是"这颗星球的天上就这样"还是"资源没加载"。这里显式告知。
+    hud.tip(t('tip.starsUnavailable'));
   });
 
   // 带/尘光/日球层壳为日心结构：必须注册浮动原点，否则会错误地以相机为中心
@@ -1601,7 +1605,9 @@ function pickBodyByRay(origin, dir) {
 /** 回到最近一条书签（Ctrl+Shift+B）：orbit 状态精确还原；其他模式跳回焦点 */
 function restoreLatestBookmark() {
   const items = bookmarks?.list?.() ?? [];
-  const latest = items[items.length - 1];
+  // list() 按 created **降序**返回（最新的在前），所以最近一条是 items[0]。
+  // 原来取 items[length-1] = 最旧的一条——"回到最近的书签"跑到了最老的位置。
+  const latest = items[0];
   if (!latest) { showActionTip(t('tip.bookmarkNone')); return; }
   const s = latest.state ?? {};
   if (s.jdTT) simClock.set(s.jdTT);

@@ -66,8 +66,11 @@ export function createStarfield(milkywayTex) {
   // 第二层的 min/max 极易写反，而写反的后果是条件永假——那 92 颗亮星会**静默消失**，
   // 画面照出、只是天上少了一批最该有的星（实测就栽在这里：只剩 9004 颗暗星）。
   const LAYERS = [
-    { size: 3.4, lo: -Infinity, hi: 2.5 },   // 亮星：大一点才像"亮星"
-    { size: 1.9, lo: 2.5, hi: Infinity },    // 暗星：小尺寸，避免糊成一片
+    // 三档而不是两档：只有两档时天狼星（−1.46 等）与一颗 2.4 等星圆面一样大，
+    // 只差强度——"亮星"的层次感全压在最亮那一档里。多一档几乎零成本。
+    { size: 5.0, lo: -Infinity, hi: 0.5 },   // 一等星及以上（天狼、老人、南门二…）
+    { size: 3.2, lo: 0.5, hi: 2.0 },         // 二等
+    { size: 1.7, lo: 2.0, hi: Infinity },    // 三等及以下
   ];
   const layers = [];
   for (const spec of LAYERS) {

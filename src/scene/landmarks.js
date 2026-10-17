@@ -222,10 +222,14 @@ function createFootprints() {
     const fp = new THREE.Mesh(
       new THREE.CircleGeometry(m(0.15), 6), mat);
     fp.rotation.x = -Math.PI / 2; // 平铺于地面
+    // 用确定性抖动而不是 Math.random()：地标是世界锚定的，每次刷新位置都变
+    // 与 RockField 的"世界锚定确定性"原则矛盾（刷新后脚印会跳）。
+    const j1 = ((Math.sin(i * 12.9898 + 78.233) * 43758.5453) % 1 + 1) % 1;
+    const j2 = ((Math.sin(i * 39.3468 + 11.135) * 24634.6345) % 1 + 1) % 1;
     fp.position.set(
-      m(1) + i * m(0.4) + (Math.random() - 0.5) * m(0.2),
+      m(1) + i * m(0.4) + (j1 - 0.5) * m(0.2),
       m(0.01), // 1cm 悬浮防 z-fight
-      (i % 2 === 0 ? 1 : -1) * m(0.15) + (Math.random() - 0.5) * m(0.1)
+      (i % 2 === 0 ? 1 : -1) * m(0.15) + (j2 - 0.5) * m(0.1)
     );
     group.add(fp);
   }
