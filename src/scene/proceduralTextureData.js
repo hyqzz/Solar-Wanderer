@@ -81,8 +81,13 @@ export function* proceduralBandsPixels(bodyId, colors, w = 1024, h = 512) {
     const v = y / h;
     for (let x = 0; x < w; x++) {
       const u = x / w;
-      const warp = 0.04 * n.fbm(u * 6, v * 18, 0.5, 4);
-      const band = 0.5 + 0.5 * Math.sin((v + warp) * Math.PI * 14 + 2 * n.noise3(u * 2, v * 5, 7));
+      // 柱面采样：把经度映射到单位圆。直接用 u=x/w 喂噪声时，u=0 与 u=1
+      // 是两个不同的采样点 → 反经线上一条贯穿盘面的竖直硬缝（气巨走程序化
+      // 兜底贴图时可见）。圆上 u=0 与 u=1 是同一点，天然无缝。
+      const ang = u * Math.PI * 2;
+      const cu = Math.cos(ang), su = Math.sin(ang);
+      const warp = 0.04 * n.fbm(cu * 1.0, su * 1.0, v * 18, 4);
+      const band = 0.5 + 0.5 * Math.sin((v + warp) * Math.PI * 14 + 2 * n.noise3(cu * 0.4, su * 0.4, v * 5));
       const k = Math.min(colors.length - 2, Math.floor(band * (colors.length - 1)));
       const f = band * (colors.length - 1) - k;
       const i = (y * w + x) * 4;

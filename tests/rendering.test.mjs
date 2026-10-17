@@ -1504,3 +1504,17 @@ test('新视野号被实例化，且位置在 2026 年约 59 AU', async () => {
   assert.ok(/NEW_HORIZONS/.test(m) && /newHorizonsPosition/.test(m), 'main.js 未接入新视野号');
   assert.ok(/posFn/.test(m), '探测器更新应走统一 posFn（否则新视野号不会动）');
 });
+
+// ── 程序化气巨条带反经线无缝 ────────────────────────────────────────────────
+test('程序化条带贴图左右列连续（反经线无硬缝）', async () => {
+  const { proceduralBandsPixels } = await import('../src/scene/proceduralTextureData.js');
+  const it = proceduralBandsPixels('seamtest', [[200,180,140],[150,120,90],[220,200,170]]);
+  let r; do { r = it.next(); } while (!r.done);
+  const { data, width: w, height: h } = r.value;
+  let diff = 0;
+  for (let y = 0; y < h; y++) {
+    diff += Math.abs(data[(y * w) * 4] - data[(y * w + w - 1) * 4]);
+  }
+  const avg = diff / h;
+  assert.ok(avg < 3, `左右列平均差 ${avg.toFixed(2)}，反经线仍有缝`);
+});
