@@ -12,6 +12,20 @@ import { sampledPosition } from './sampledEphemeris.js';
 // rate: [da, de, di, dL, dϖ, dΩ] per Julian century (only dL significant for TNOs)
 const TABLE = {
   // ── 主要公认矮行星 ──────────────────────────────────────────────────
+  // 谷神星：唯一缺失的 IAU 矮行星（此前的唯一表现是 2.2px 的点精灵）。
+  // 它不在 TNO 区，但这里的数据结构（日心轨道 + 球体 + 标签）完全适用。
+  // 根数取 J2000 密切值：a=2.7675AU、e=0.07582、i=10.593°、
+  // Ω=80.305°、ϖ=73.597°→ω=353.292°、L=95.989°；
+  // 平均运动 n=0.2141°/day ≈ 7820°/世纪（这里 rate 的单位是每世纪）。
+  ceres: {
+    // 注意第 5 个分量是**近日点经度 ϖ**（不是近点幅角 ω）——elementsToEcliptic
+    // 内部用 omega = periDeg − nodeDeg。
+    el: [2.7675, 0.07582, 10.593, 95.989, 73.597, 80.305],
+    rate: [0, 0, 0, 7820.0, 0, 0],
+    nameZh: '谷神星', nameEn: 'Ceres', radiusKm: 469.7,
+    palette: 'gray', dwarfPlanet: true,
+    desc: '小行星带中最大的天体，也是唯一位于内太阳系的矮行星。直径约 940km，占整个主带质量的约三分之一。黎明号发现其表面有碳酸盐沉积与地下盐水活动的证据。',
+  },
   eris: {
     el: [67.864, 0.44068, 44.045, 29.59, 187.59, 35.95],
     rate: [0, 0, 0, 64.4, 0, 0],

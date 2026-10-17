@@ -1459,3 +1459,20 @@ test('DEM 未就绪时按 G 有反馈', () => {
   assert.ok(/t\('tip\.terrainLoading'\)/.test(m), '缺少提示');
   assert.ok(/tip\.terrainLoading/.test(i), '缺少文案');
 });
+
+// ── 谷神星：唯一缺失的 IAU 矮行星 ──────────────────────────────────────────
+test('谷神星在场景里，且日心距与轨道根数自洽', async () => {
+  const { TNO_DATA, TNO_IDS, tnoPosition } = await import('../src/astro/tno.js');
+  assert.ok(TNO_IDS.includes('ceres'), '谷神星不在场景清单里');
+  const d = TNO_DATA.ceres;
+  assert.equal(d.radiusKm, 469.7);
+  const p = tnoPosition('ceres', 2451545.0);   // J2000
+  const r = Math.hypot(p.x, p.y, p.z) / 1.495978707e8;
+  // 解析：M = L−ϖ = 22.392°，r = a(1−e²)/(1+e·cosν) ≈ 2.573 AU
+  assert.ok(Math.abs(r - 2.573) < 0.03, `J2000 日心距 ${r.toFixed(3)} AU 偏离解析值 2.573`);
+  // 一个轨道周期后应回到相同距离（轨道相位一致）
+  const P = d.el[0] ** 1.5 * 365.25;           // 天
+  const q = tnoPosition('ceres', 2451545.0 + P);
+  const r2 = Math.hypot(q.x, q.y, q.z) / 1.495978707e8;
+  assert.ok(Math.abs(r2 - r) < 0.01, `一个周期后距离 ${r2.toFixed(3)} 与 ${r.toFixed(3)} 不符`);
+});
