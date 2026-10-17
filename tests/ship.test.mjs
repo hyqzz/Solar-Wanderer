@@ -125,3 +125,20 @@ test('推进剂：引力模式下推力消耗 Δv 预算，耗尽后无法再加
   for (let i = 0; i < 20; i++) s.update(0.02, thrustInput, makeEnv(earth));
   assert.ok(s.vel.length() <= v0 + 1e-6, 'Δv 耗尽后仍在加速');
 });
+
+test('大气内有升力，且低于失速速度时骤降', () => {
+  const atm = { rayleighScaleKm: 8.5, rho0: 1.225 };
+  const earth = makeEarth(20, atm);          // 20km 高度，空气够稠
+  const run = (speedKmS) => {
+    const s = new Ship();
+    s.mode = 'fly'; s.gravityMode = true;
+    s.posKm[0] = AU + R_EARTH + 20;
+    s.vel.set(0, 0, speedKmS);               // 水平飞行
+    for (let i = 0; i < 30; i++) s.update(0.016, idleInput, makeEnv(earth));
+    return s.aero.liftMS ?? 0;
+  };
+  const fast = run(1.0);                     // 1000 m/s
+  const slow = run(0.03);                    // 30 m/s，低于失速速度
+  assert.ok(fast > 100, `高速时升力 ${fast.toFixed(0)} m/s² 太小`);
+  assert.ok(slow < 1, `低速时升力 ${slow.toFixed(1)} m/s² 应接近 0（失速）`);
+});

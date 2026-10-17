@@ -249,6 +249,7 @@ export function createPlanetMaterial({
     // 亮度来自实测反照率标定（DISPLAY_GRADE 已把它折进去）
     uGrade: { value: new THREE.Vector3(...(DISPLAY_GRADE[bodyId]?.grade ?? [1, 1, 1])) },
     uInvScaleY: { value: 1 },
+    uDetailScaleN: { value: Math.min(1, radiusKm / 400) },
     // Hapke 盘面归一化：让 shade 的盘面平均等于兰伯特球的 2/3，
     // 从而 albedo(=实测几何反照率) × shade 的盘面平均 = A_geo × 2/3（定义基准）。
     uHapkeNorm: { value: (() => {
@@ -279,6 +280,7 @@ export function createPlanetMaterial({
     vertexShader: /* glsl */ `
       #include <common>
       uniform float uInvScaleY;   // 见片元：非均匀缩放的逆转置
+      uniform float uDetailScaleN;
       #include <logdepthbuf_pars_vertex>
       varying vec2 vUv;
       varying vec3 vNormalW;
@@ -323,6 +325,7 @@ export function createPlanetMaterial({
       uniform int uHasClouds;
       uniform vec3 uGrade;
       uniform float uInvScaleY;
+      uniform float uDetailScaleN;
       uniform float uHapkeNorm;
       uniform float uSat;
       uniform vec3 uNaturalTint;
@@ -388,6 +391,21 @@ ${CLOUD_GLSL}
               float t2 = pnoise(p * 340.0) * smoothstep(0.2, 0.75, app);
               float t3 = pnoise(p * 1200.0) * smoothstep(0.35, 0.9, app);
               albedo *= 1.0 + fade * ((t1 - 0.5) * 0.22 + (t2 - 0.5) * 0.14 + (t3 - 0.5) * 0.07);
+              // === 细节同时扰动法线 ===
+              // 此前程序化细节**只改反照率**，法线始终是光滑球面——近看就是
+              // "画在球上的斑块"，没有起伏感（岩石/地形那边是扰动的，这里不是）。
+              // 用与细节同一套噪声的中心差分求梯度，幅度随 fade 淡入。
+              {
+                vec3 pn = vObjPos / uRadius;
+                float k = 64.0;
+                float e = 0.05;                      // 噪声空间步长（约 1/20 格）
+                float f0 = pnoise(pn * k);
+                vec3 g = vec3(
+                  pnoise(pn * k + vec3(e, 0, 0)) - f0,
+                  pnoise(pn * k + vec3(0, e, 0)) - f0,
+                  pnoise(pn * k + vec3(0, 0, e)) - f0);
+                n = normalize(n + g * (1.6 * fade * uDetailScaleN));
+              }
             }
           }
           // === Issue #28：木星动态云带 + 大红斑 ===
@@ -558,6 +576,21 @@ ${CLOUD_GLSL}
           vec3 toOcc = uEclPos - vPosW;
           float dOcc = max(length(toOcc), 1.0);
           float aOcc = asin(clamp(uEclR / dOcc, 0.0, 1.0));
+          // === 贝利珠 ===
+          // 遮挡体的边缘不是完美的圆：月面山谷让阳光从边缘漏过，全食开始/结束时
+          // 会看到一串亮点（Baily's beads）。这里按"太阳方向绕遮挡体轴的方位角"
+          // 给角半径加一点起伏——不是真实月面地形，但给出了正确的**现象**。
+          {
+            vec3 toOccN = toOcc / dOcc;
+            vec3 helper = abs(toOccN.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+            vec3 e1 = normalize(cross(toOccN, helper));
+            vec3 e2 = cross(toOccN, e1);
+            vec3 toSunN = -normalize(uSunDir);
+            float az = atan(dot(toSunN, e2), dot(toSunN, e1));
+            float edge = 1.0 + 0.0045 * (sin(az * 9.0) * 0.5
+                        + sin(az * 17.0 + 1.3) * 0.3 + sin(az * 31.0 + 2.7) * 0.2);
+            aOcc *= edge;
+          }
           float aSun = asin(clamp(SUN_RADIUS_KM / max(uSunDistKm, 1.0), 0.0, 1.0));
           float sep = acos(clamp(dot(toOcc / dOcc, normalize(uSunDir)), -1.0, 1.0));
           // 两圆盘重叠比例。下界必须是 |aOcc−aSun| 而不是 aSun−aOcc：

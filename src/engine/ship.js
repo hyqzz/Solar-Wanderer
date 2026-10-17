@@ -533,6 +533,32 @@ export class Ship {
       this.vel.x -= aSun * dt * this.posKm[0] / rSunLen;
       this.vel.y -= aSun * dt * this.posKm[1] / rSunLen;
       this.vel.z -= aSun * dt * this.posKm[2] / rSunLen;
+
+      // === 升力与失速（仅在大气内）===
+      // 真实机翼升力 ∝ ½ρv²·CL·A，且在**低于失速速度**时骤降。
+      // 此前大气内只有阻力，没有升力——飞行因此只是"带减速的平移"，
+      // 既不能靠速度维持高度，也体会不到"速度不够就掉下去"。
+      {
+        const nb2 = env.nearest;
+        const atmL = nb2?.phys?.atmosphere;
+        if (atmL && this.aero && this.aero.q > 200) {
+          _v3.set(this.posKm[0] - nb2.posKm[0], this.posKm[1] - nb2.posKm[1], this.posKm[2] - nb2.posKm[2]);
+          const rl = _v3.length() || 1;
+          _v3.multiplyScalar(1 / rl);                    // 当地的"上"
+          // 水平速度（km/s）：去掉沿当地上方向的分量
+          const vrUp = this.vel.dot(_v3);
+          const vhMS = Math.sqrt(Math.max(0, this.vel.lengthSq() - vrUp * vrUp)) * 1000;
+          // 失速门限：60–140 m/s 平滑过渡
+          const t = Math.max(0, Math.min(1, (vhMS - 60) / 80));
+          const stall = t * t * (3 - 2 * t);
+          // 升力加速度（m/s²）：动压 × 经验升力系数；再转回 km/s²
+          const liftMS = this.aero.q * 0.00040 * stall;
+          this.vel.addScaledVector(_v3, liftMS * 1e-3 * dt);
+          this.aero.liftMS = liftMS;
+        } else if (this.aero) {
+          this.aero.liftMS = 0;
+        }
+      }
       if (input.tapped('KeyX')) { /* 引力模式下 X 不再清零速度：那等于凭空消掉动量 */ }
     } else if (this.damping) {
       _v2.copy(_v1).multiplyScalar(cap * boost);
