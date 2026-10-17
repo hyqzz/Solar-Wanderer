@@ -873,3 +873,28 @@ test('食系统不再往场景里插锥体网格（夜面硬边黑矩形的成�
   sys.update(2451545, bodies, [0, 0, 0]);
   assert.ok(pushed.length > 0, '应把遮挡体推给接收体材质');
 });
+
+// ── 地表细节：只按足迹衰减，不再叠一道距离淡出 ──────────────────────────────
+// 落地平视曾是一片平板（纹理能量 0.09–0.29，而轨道视角 1.8）。归因不是 fp32——
+// vObjPos 本来就是相机相对坐标（uPatchRel 减掉了每 2km 跟随玩家吸附的 noiseOriginU）。
+// 真正的原因是两道重复的闸门：距离淡出 f2/f3/f4 与足迹门限 aa* 在差不多的距离上
+// 各自衰减同一种东西，距离淡出还更早一步。现只保留物理上正确的那一种（足迹）。
+// 判据用分带实测（tools/audit-bands.mjs）：近景 +96%、中景 +70%、近地平线带不变。
+
+test('地形细节只按足迹衰减：距离淡出已删除，足迹门限为标定值', () => {
+  const src = read('src/scene/terrain.js');
+  assert.ok(/fwidth\(vObjPos\)/.test(src), '必须保留足迹计算');
+  assert.ok(/smoothstep\(0\.7, 1\.6, fp \* 26000\.0\)/.test(src), '最高频档的足迹门限应为标定值');
+  assert.ok(/smoothstep\(0\.7, 1\.6, fp \* 35\.0\)/.test(src), '最低频档的足迹门限应为标定值');
+  // 距离淡出（按 vViewPosition 的 smoothstep）不得再出现在细节增益里
+  assert.ok(!/float f2 = 1\.0 - smoothstep/.test(src), '不应再有 f2 距离淡出');
+  assert.ok(!/float f3 = 1\.0 - smoothstep/.test(src), '不应再有 f3 距离淡出');
+  assert.ok(!/float f4 = 1\.0 - smoothstep/.test(src), '不应再有 f4 距离淡出');
+  assert.ok(!/float g2 = f2 \* aa2/.test(src), '细节增益不应再乘距离淡出');
+});
+
+test('地表明暗调制保留增益与限幅（否则噪声方差太小，看着仍是平板）', () => {
+  const src = read('src/scene/terrain.js');
+  assert.ok(/clamp\(1\.0 \+ 2\.2 \* \(nsum - 0\.5\), 0\.62, 1\.38\)/.test(src),
+    'dm 的增益与限幅应保持（±38% 表土质感，不死黑不过曝）');
+});
