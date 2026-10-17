@@ -484,10 +484,27 @@ export class HeightField {
     const lon = Math.atan2(-dir.z, dir.x); // 东经为正（网格本地约定）
     const u = (lon / Math.PI + 1) * 0.5;
     const v = 0.5 - lat / Math.PI;
-    const x = Math.min(this.map.width - 1, Math.max(0, (u * this.map.width) | 0));
-    const y = Math.min(this.map.height - 1, Math.max(0, (v * this.map.height) | 0));
-    const i = (y * this.map.width + x) * 4;
-    return [this.map.data[i], this.map.data[i + 1], this.map.data[i + 2]];
+    // **双线性**，不是最近邻。地形顶点色取自盘面同一张贴图，而盘面走 GPU 的
+    // 双线性 + mipmap；顶点色用最近邻时，贴图 2048px 在月面是 5.3km/texel，
+    // 300km 低轨上每个 texel 约占 9px —— 地形补丁会变成一块块方格，与周围
+    // 平滑的盘面之间显出一块方片（审计 C-5 的可见症状）。
+    // 经度是环绕的（列 W-1 与列 0 是同一条子午线），x 用模而不是钳制。
+    const W = this.map.width, H = this.map.height;
+    const fx = u * W - 0.5, fy = v * H - 0.5;
+    const x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const tx = fx - x0, ty = fy - y0;
+    const x0w = ((x0 % W) + W) % W, x1w = ((x0 + 1) % W + W) % W;
+    const y0c = Math.min(H - 1, Math.max(0, y0));
+    const y1c = Math.min(H - 1, Math.max(0, y0 + 1));
+    const d = this.map.data;
+    const out = [0, 0, 0];
+    for (let k = 0; k < 3; k++) {
+      const a = d[(y0c * W + x0w) * 4 + k], b = d[(y0c * W + x1w) * 4 + k];
+      const c = d[(y1c * W + x0w) * 4 + k], e = d[(y1c * W + x1w) * 4 + k];
+      const top = a + (b - a) * tx, bot = c + (e - c) * tx;
+      out[k] = top + (bot - top) * ty;
+    }
+    return out;
   }
 
   /** 顶点颜色：真实贴图反照率 × 坡度岩壁 × 高度调制 */
