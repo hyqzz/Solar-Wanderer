@@ -7,10 +7,34 @@
 // 旧数据缺少速率字段时自动回退为零（行为同旧版）。
 
 import { elementsToEcliptic, KM_PER_AU } from './kepler.js';
-import { MOON_ELEMENTS, MOON_EPOCH_JD } from './moonsData.generated.js';
+import { MOON_ELEMENTS as FITTED_ELEMENTS, MOON_EPOCH_JD } from './moonsData.generated.js';
 import { MOON_PHYS } from './bodies.js';
 import { sampledPosition, sampledState } from './sampledEphemeris.js';
 import { moonGeocentric } from './moon.js';
+
+/**
+ * 冥卫二/三/四/五：**不是** Horizons 拟合值，而是已发表的轨道根数。
+ *
+ * 为什么单独放：`moonsData.generated.js` 由 tools/fit-moons.mjs 自动生成，手工
+ * 插进去会被下次拟合覆盖；而这几颗此前因为"902–905 解析不到正确目标"被排除，
+ * 于是冥王星系统只有冥卫一颗（新视野号把四颗全拍到了，缺了很扎眼）。
+ *
+ * 数据来源：New Horizons 之后的观测解（半长轴/周期取自 JPL Solar System
+ * Dynamics 与 Buie 等 2012 的轨道拟合；e、i 量级 <0.01 / <1°，对"看起来对"
+ * 足够）。**一旦能连上 Horizons，应当跑 npm run fit-moons 用实测值替换**——
+ * 那样它们会进入 MOON_ELEMENTS 并被这里自动跳过（见下方合并逻辑）。
+ *
+ * 历元与生成文件一致，用圆轨道近似（四颗的 e 都 <0.006）。
+ */
+const PUBLISHED_ELEMENTS = {
+  nix:      { aKm: 48694, e: 0.0020, iDeg: 0.15, nodeDeg: 223.0, periDeg: 0, M0Deg: 0, nDegPerDay: 360 / 24.8546, nodeDotDegPerDay: 0, periDotDegPerDay: 0 },
+  hydra:    { aKm: 64738, e: 0.0059, iDeg: 0.24, nodeDeg: 223.0, periDeg: 0, M0Deg: 0, nDegPerDay: 360 / 38.2018, nodeDotDegPerDay: 0, periDotDegPerDay: 0 },
+  kerberos: { aKm: 57783, e: 0.0035, iDeg: 0.39, nodeDeg: 223.0, periDeg: 0, M0Deg: 0, nDegPerDay: 360 / 32.1676, nodeDotDegPerDay: 0, periDotDegPerDay: 0 },
+  styx:     { aKm: 42656, e: 0.0002, iDeg: 0.81, nodeDeg: 223.0, periDeg: 0, M0Deg: 0, nDegPerDay: 360 / 20.1616, nodeDotDegPerDay: 0, periDotDegPerDay: 0 },
+};
+
+/** 拟合值与发表值合并：**拟合值优先**（有实测就用实测）。 */
+const MOON_ELEMENTS = { ...PUBLISHED_ELEMENTS, ...FITTED_ELEMENTS };
 
 export const MOON_IDS = Object.keys(MOON_ELEMENTS);
 

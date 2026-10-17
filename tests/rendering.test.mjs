@@ -1183,3 +1183,19 @@ test('TNO 会自转，且用纯反平方光照（与曝光律一致）', () => {
   assert.ok(/e\.mesh\.rotation\.y = ang/.test(s), 'TNO 仍未自转');
   assert.ok(!/Math\.pow\(sunIRaw, 0\.55\)/.test(s), 'TNO 仍用旧的 ^0.55 光照压缩');
 });
+
+// ── 冥王星系统应有 5 颗卫星 ────────────────────────────────────────────────────
+test('冥卫二/三/四/五进入卫星清单（此前写好了物理数据却从不渲染）', async () => {
+  const { MOON_IDS, moonLocalPosition } = await import('../src/astro/moons.js');
+  const { MOON_EPOCH_JD } = await import('../src/astro/moonsData.generated.js');
+  for (const id of ['charon', 'nix', 'hydra', 'kerberos', 'styx']) {
+    assert.ok(MOON_IDS.includes(id), `${id} 不在卫星清单里`);
+  }
+  // 半长轴应落在发表值附近（±5%）
+  const expect = { nix: 48694, hydra: 64738, kerberos: 57783, styx: 42656 };
+  for (const [id, a] of Object.entries(expect)) {
+    const p = moonLocalPosition(id, MOON_EPOCH_JD);
+    const r = Math.hypot(p.x, p.y, p.z);
+    assert.ok(Math.abs(r - a) / a < 0.05, `${id} 距冥王星 ${r.toFixed(0)}km，期望约 ${a}km`);
+  }
+});
