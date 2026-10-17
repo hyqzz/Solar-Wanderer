@@ -1537,7 +1537,12 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       const gasGiant = e.phys.type === 'gas' || e.phys.type === 'ice';
       const depth = inAtmo ? 1 - Math.max(nearest.distSurface, 0) / atm.heightKm : 0;
       let boostVal = 1, boostMVal = 1;
-      if (gasGiant && inAtmo) {
+      // depth 可能为 NaN（落地过渡帧 distSurface 未就绪）——它经 interiorBoost
+      // 一路传到 uBoost，再污染大气壳与地形雾的整条散射积分（雾色变 NaN，
+      // three 的雾会把整个地形刷黑）。就地兜住。
+      if (!Number.isFinite(depth)) {
+        // 保持 1 / 1
+      } else if (gasGiant && inAtmo) {
         boostVal = boostMVal = 1 + depth * depth * 24;
       } else if (inAtmo && atm.interiorBoost) {
         const t = THREE.MathUtils.smoothstep(depth, 0.05, 0.35);
@@ -1608,7 +1613,19 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
         boostM: e.atmoMesh?.material.userData.uniforms.uBoostM.value ?? 1,
         dustStorm: e.atmoMesh?.material.userData.uniforms.uDustStorm.value ?? 0,
       });
-      if (fogRes) {
+      renderer.__fogDbg = {
+        color: fogRes ? [...fogRes.color] : null, alpha: fogRes?.alpha, density: fogRes?.density,
+        alt, up: [_fogUp.x, _fogUp.y, _fogUp.z], view: [_fogView.x, _fogView.y, _fogView.z],
+        sun: [_fogSun.x, _fogSun.y, _fogSun.z], sunI: 5 * (atm.multiplier ?? 1) / Math.max(dSunAU * dSunAU, 1e-6),
+        boost: e.atmoMesh?.material.userData.uniforms.uBoost.value,
+        boostM: e.atmoMesh?.material.userData.uniforms.uBoostM.value,
+        dust: e.atmoMesh?.material.userData.uniforms.uDustStorm.value,
+        distSurface: nearest.distSurface,
+      };
+      // 有限性守卫：任一输入出现 NaN（历史上见过 distSurface 在落地过渡帧为
+      // NaN，经 depth→interiorBoost→uBoost 一路污染到散射积分）都会让雾色变成
+      // NaN，three 的雾会把整个地形刷成黑。宁可退回上一帧的雾色也不要 NaN。
+      if (fogRes && fogRes.color.every(Number.isFinite) && Number.isFinite(fogRes.density)) {
         // 源函数 = L/α：FogExp2 混向它等价于 mix(地形, 霾) = 地形·(1−α) + L，
         // 与壳层在地平线处的合成完全一致。fogDensityMult 仍是"美术修正"（金星
         // 用 Venera 实测能见度标定），但现在它乘的是**物理消光系数**而不是经验常数。

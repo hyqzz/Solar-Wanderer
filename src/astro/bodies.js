@@ -72,6 +72,7 @@ export const BODIES = {
     atmosphere: {
       groundAlbedo: 0.12,
       ozone: 1,
+      msDesat: 1.0,        // 纯散射为主（瑞利 + 弱吸收气溶胶）→ 高阶散射趋向白
       skyFraction: 0.20,   // 晴空漫射/总辐照（地面被天空照亮的那一份）
       heightKm: 60, rayleighScaleKm: 8.5, mieScaleKm: 1.2,
       // multiplier 0.72：太空视角减弱盘面内散射（真实 Blue Marble 观感为深蓝海洋，
@@ -100,6 +101,7 @@ export const BODIES = {
     atmosphere: {
       groundAlbedo: 0.2,
       ozone: 0.12,
+      msDesat: 0.75,       // 尘埃有一定吸收（单次散射反照率 ≈0.9）
       skyFraction: 0.45,   // 尘埃大气：漫射占比高于地球（沙尘期可达一半）
       rho0: 0.020,         // 地面大气密度 kg/m³（地球的 1.6%）
       // 白昼：Rayleigh 红>蓝（模拟尘埃主导的黄褐色调）+ Mie 漫射 → 奶油黄褐色天空。
@@ -296,6 +298,7 @@ export const MOON_PHYS = {
                              groundTint: [1.0, 0.60, 0.28], groundDim: 0.9,
                              // 近地面再加一层更薄的浓霾（Huygens 下降段在 20 km 以下
                              // 见到明显的近地霾），标高取主层的 0.22 倍
+                             msDesat: 0.0, // tholin 强烈吸蓝：高阶散射**仍是橙的**，去饱和会把天空洗成灰白
                              haze: 0.30 }, // 烃类烟霾（tholin），橙色近地面雾霾极厚
                desc: '唯一拥有浓密大气的卫星（1.5 倍地球气压），表面有液态甲烷的湖泊与河流，橙色烟霾笼罩全球。' },
   iapetus:   { nameZh: '土卫八', nameEn: 'Iapetus', parent: 'saturn', radiusKm: 734.5, gm: 120.51,

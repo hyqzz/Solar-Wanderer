@@ -156,38 +156,46 @@ const SCENARIOS = [
   ['earth-ground-horizon', async () => { await land('earth', 30, 0); await look(0.03, 0); await wait(9000); }],
   ['earth-ground-up', async () => { await look(1.15, 0); await wait(3000); }],
   ['earth-underwater', async () => {
-    // 先真的落到海面（每个场景都会重开页面，不能依赖上一个场景的状态），
-    // 再下潜：陆地上设 underwater 是无效的——水下环境由 isWater 决定。
-    // 先找一个**海面**落点：land() 默认落在日下点，那里可能是陆地。
+    // 水下机位。走到这一步踩过两次坑，记在这里：
+    //  1) 每个场景都重开页面，不能依赖上一个场景的状态；
+    //  2) 直接改 ship.posKm 是没用的——行走模式每帧把相机吸附到地表。
+    // 正确做法是直接摆 w.localPos（体固系、以天体中心为原点）并置 diving，
+    // 深度由 |localPos| 相对水面半径决定。
     const sea = await p.evaluate(() => {
       const g = window.__game, e = g.builder.bodies.get('earth');
       const V = Object.getPrototypeOf(g.camera.position).constructor;
-      const q = e.mesh.quaternion.clone().invert();
-      for (let lat = -60; lat <= 60; lat += 4) {
-        for (let lon = -180; lon < 180; lon += 4) {
+      for (let lat = -60; lat <= 60; lat += 5) {
+        for (let lon = -180; lon < 180; lon += 5) {
           const L = lat * Math.PI / 180, O = lon * Math.PI / 180;
+          // isWater 要的是**体固系**方向：lat/lon 本身就是体固系坐标，
+          // 再乘一次逆四元数等于把它当世界系转了一遍（此前因此永远找不到海域）。
           const d = new V(Math.cos(L) * Math.cos(O), Math.sin(L), Math.cos(L) * Math.sin(O));
-          if (g.terrainMgr.isWater('earth', d.clone().applyQuaternion(q))) return { lat, lon };
+          if (g.terrainMgr.isWater('earth', d)) return { lat, lon };
         }
       }
       return null;
     });
-    if (sea) await orbit('earth', 6371 + 0.002, sea.lat * Math.PI / 180, sea.lon * Math.PI / 180);
-    else await land('earth', 12, 0);
+    if (!sea) throw new Error('找不到海域落点');
+    await orbit('earth', 6371 + 0.002, sea.lat * Math.PI / 180, sea.lon * Math.PI / 180);
     for (let i = 0; i < 70; i++) {
       if ((await p.evaluate(() => window.__game.getMode())) === 'walk') break;
       await wait(500);
     }
+    // 下潜必须走**输入**：ship.js 每帧重算 w.diving = inWater && wantDescend，
+    // 直接写 w.diving / w.localPos 都会被下一帧覆盖。
     await p.evaluate(() => {
-      const g = window.__game, e = g.builder.bodies.get('earth');
-      // 沿**本地垂线**下沉 60m（此前直接改 posKm[0]/[1]，那是黄道 X/Y 方向，
-      // 在多数纬度上是水平移动，根本没有下潜）。
-      const v = [g.ship.posKm[0] - e.posKm[0], g.ship.posKm[1] - e.posKm[1], g.ship.posKm[2] - e.posKm[2]];
-      const L = Math.hypot(...v);
-      for (let i = 0; i < 3; i++) g.ship.posKm[i] -= (v[i] / L) * 0.06;
-      if (g.ship.walk) g.ship.walk.pitch = 0.35;
+      const g = window.__game, w = g.ship.walk;
+      if (w) { w.pitch = 0.55; w.yaw = 0; }
+      // 走输入层：touchDescend 会被触控层（pointerup/blur）清零，单次写会被
+      // 下一帧覆盖，所以用定时器持续按住——这正是"按住下潜键"的真实语义。
+      window.__diveTimer = setInterval(() => { window.__game.input.touchDescend = true; }, 16);
     });
-    await wait(9000);
+    await wait(7000);
+    await p.evaluate(() => {
+      clearInterval(window.__diveTimer);
+      window.__game.input.touchDescend = false;
+    });
+    await wait(4000);
   }],
   ['mars-space', async () => { await orbit('mars', 3390 * 3.0, null, null); await wait(7000); }],
   ['mars-ground-horizon', async () => { await land('mars', 18, 0); await look(0.04, 0); await wait(10000); }],
@@ -283,6 +291,16 @@ for (const [name, fn] of SCENARIOS) {
           water: (() => {
             const tm = g.terrainMgr;
             return null;
+          })(),
+          fogDbg: (() => {
+            const d = g.renderer.__fogDbg;
+            if (!d) return null;
+            const clean = (v) => (Array.isArray(v)
+              ? v.map((x) => (Number.isFinite(x) ? +x.toFixed(5) : 'NaN'))
+              : (Number.isFinite(v) ? +v.toFixed(5) : 'NaN'));
+            const o = {};
+            for (const k of Object.keys(d)) o[k] = clean(d[k]);
+            return o;
           })(),
           terrHeight: (() => {
             const tm = g.terrainMgr;

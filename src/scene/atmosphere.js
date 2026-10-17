@@ -33,6 +33,12 @@ export function createAtmosphere(phys, auroraMode = 0) {
     // 它吸收黄红多于蓝，是暮光深蓝色带与"金星带"的成因；缺了它，黄昏只会偏橙红。
     // 值 = 该天体的臭氧柱量相对地球的倍数（地球 1.0，火星约 0.1，其余 0 关闭）。
     uOzone: { value: a.ozone ?? 0.0 },
+    // 多次散射去饱和强度 = 该大气"保守程度"的代理（单次散射反照率）。
+    // 纯散射介质（瑞利）里高阶散射最终把能量全部还回来、谱趋向入射光（白），
+    // 所以地平线发白；而吸收性气溶胶（土卫六的 tholin 强烈吸蓝）把蓝端吃掉了，
+    // 高阶散射**仍然是橙的**——这时去饱和会把天空洗成灰白，是错的。
+    // 本模型不分离吸收，用这个系数表达"有多少能量被吸收掉"。
+    uMsDesat: { value: a.msDesat ?? 1.0 },
     // 地表反照率：阳光穿过整层大气打到地表后按它返回一部分。
     // 这是低空天空偏亮、雪原/沙漠/云顶上方整片天光发白的主因，原实现完全缺失。
     // 气巨与无固体表面者取 0（没有"地面"可反弹）。
@@ -88,6 +94,7 @@ export function createAtmosphere(phys, auroraMode = 0) {
       uniform vec3 uSunDir;
       uniform float uRg, uRa, uHR, uHM, uSunI, uBoost, uBoostM, uHaze, uStretch;
       uniform float uOzone;
+      uniform float uMsDesat;
       uniform float uGroundAlbedo;
       uniform vec3 uBetaR, uBetaM, uG, uAxis; // uG 分光：蓝光前向峰更尖 → 日落蓝色光晕
       // === Issue #27/#29 uniforms ===
@@ -303,7 +310,7 @@ export function createAtmosphere(phys, auroraMode = 0) {
         float smax = max(max(scatTint.r, scatTint.g), scatTint.b);
         vec3 sNorm = smax > 1e-12 ? scatTint / smax : vec3(0.0);
         float msMean = (msFrac.r + msFrac.g + msFrac.b) * (1.0 / 3.0);
-        sNorm = mix(sNorm, vec3(1.0), msMean);
+        sNorm = mix(sNorm, vec3(1.0), msMean * uMsDesat);
         float litFrac = odR > 1e-6 ? odRlit / odR : 0.0;
         L += uSunI * sNorm * (1.0 / (4.0 * PI)) * msFrac * msFrac * litFrac;
 
@@ -386,10 +393,18 @@ export function atmosphereFog(phys, opts) {
   const boost = opts.boost ?? 1;
   const boostM = opts.boostM ?? 1;
   const hazeEff = haze + (opts.dustStorm ?? 0) * 0.6;
+  const msDesat = a.msDesat ?? 1.0;
   const sunI = opts.sunI;
 
-  const { altKm, up, viewDir, sunDir } = opts;
-  // 相机在原点（浮动原点），行星中心在 -up·(Rg+alt)
+  const { up, viewDir, sunDir } = opts;
+  // 相机高度取**眼高**下限（1.7m）。
+  //
+  // 为什么必须钳：调用方在贴地时传 altKm = max(distSurface, 0) = 0，于是相机
+  // 正好落在地面球面上，射线-球求交退化——det = b²，两根重合，`gr[0]` 变成
+  // ±1ulp 的极小正数，t1 被钳到 ~1e-9，整个积分塌成 0：alpha = 0、L = 0，
+  // 雾色恒为黑（实测 `fogDbg` 里 out 全 0、density 正常，就是这个症状）。
+  // 真实的人眼本就在地面上方 1.7m，取它既是物理值也顺带消掉退化。
+  const altKm = Math.max(opts.altKm ?? 0, 0.0017);
   const cx = -up.x * (Rg + altKm), cy = -up.y * (Rg + altKm), cz = -up.z * (Rg + altKm);
   const rdx = viewDir.x, rdy = viewDir.y, rdz = viewDir.z;
   const sdx = sunDir.x, sdy = sunDir.y, sdz = sunDir.z;
@@ -413,7 +428,13 @@ export function atmosphereFog(phys, opts) {
   if (!shell) return null;
   let t0 = Math.max(shell[0], 0), t1 = shell[1];
   const gr = hit(0, 0, 0, Rg);
-  if (gr && gr[0] > 0) t1 = Math.min(t1, gr[0]);
+  if (gr && gr[1] > 0) {
+    // gr[0] ≤ 0 = 相机在地面球内（贴地时浮点误差就能做到，或者真的在地下）。
+    // 这时**绝不能**让积分跑到球外去：那会让视线穿过整个行星，odR 冲到 1e83，
+    // exp(−τ) 全下溢、alpha 变成 1 或 NaN。直接判定这条视线被地面挡住。
+    if (gr[0] <= 0) return null;
+    t1 = Math.min(t1, gr[0]);
+  }
   if (t1 <= t0) return null;
 
   const N = 16, NL = 8;
@@ -424,7 +445,9 @@ export function atmosphereFog(phys, opts) {
   for (let i = 0; i < N; i++) {
     const t = t0 + (i + 0.5) * ds;
     const px = rdx * t, py = rdy * t, pz = rdz * t;
-    const h = hAbove(px, py, pz);
+    // 高度夹到 0：任何让采样点落到行星内部的路径（浮点、退化求交）都会让
+    // exp(−h/H) 爆成 1e80 量级，整条链路随之失真。夹住后最坏情况是"密度取满"。
+    const h = Math.max(hAbove(px, py, pz), 0);
     const dR = Math.exp(-h / HR) * boost;
     const dM = (Math.exp(-h / HM) + hazeEff * Math.exp(-h / Math.max(HM * 0.22, 0.5))) * boostM;
     odR += dR * ds;
@@ -444,7 +467,7 @@ export function atmosphereFog(phys, opts) {
       let olR = 0, olM = 0, olO = 0;
       for (let j = 0; j < NL; j++) {
         const q = (j + 0.5) * sl;
-        const hq = hAbove(px + sdx * q, py + sdy * q, pz + sdz * q);
+        const hq = Math.max(hAbove(px + sdx * q, py + sdy * q, pz + sdz * q), 0);
         olR += Math.exp(-hq / HR) * sl;
         olM += Math.exp(-hq / HM) * sl;
         olO += Math.exp(-(((hq - 25) / 8) ** 2)) * sl;
@@ -471,7 +494,7 @@ export function atmosphereFog(phys, opts) {
   }
   // 一阶多重散射（与着色器同一式：源项用相机处密度 × 气柱等效程长，不是路径加权的
   // inscR——见着色器里的说明，后者会让地平线变成橄榄色）
-  const hCam0 = Math.max(altKm, 0);
+  const hCam0 = altKm;
   const rhoRc = Math.exp(-hCam0 / HR) * boost;
   const rhoMc = (Math.exp(-hCam0 / HM)
     + hazeEff * Math.exp(-hCam0 / Math.max(HM * 0.22, 0.5))) * boostM;
@@ -482,12 +505,15 @@ export function atmosphereFog(phys, opts) {
     scatTint[k] = bR[k] * rhoRc + bM[k] * rhoMc;
     smax = Math.max(smax, scatTint[k]);
   }
+  for (let k = 0; k < 3; k++) {
+    msFrac[k] = 1 - Math.exp(-(bR[k] * odR + bM[k] * 1.1 * odM));
+  }
+  // msMean 必须在 msFrac 填好之后算——早先写在循环前面，去饱和项恒为 0，
+  // JS 侧的地平线因此比着色器蓝（两边的"同一套模型"名不副实）。
   const msMean = (msFrac[0] + msFrac[1] + msFrac[2]) / 3;
   for (let k = 0; k < 3; k++) {
-    const viewT = Math.exp(-(bR[k] * odR + bM[k] * 1.1 * odM));
-    msFrac[k] = 1 - viewT;
     const sNorm = smax > 1e-12 ? scatTint[k] / smax : 0;
-    const sMix = sNorm + (1 - sNorm) * msMean;   // 高阶散射去饱和（与着色器同式）
+    const sMix = sNorm + (1 - sNorm) * msMean * msDesat;   // 高阶散射去饱和（与着色器同式）
     out[k] += sunI * sMix * (1 / (4 * Math.PI)) * msFrac[k] * msFrac[k] * litFrac;
   }
   // 地面反照率反弹（同样只算受照地面那一份）
@@ -520,7 +546,7 @@ export function atmosphereFog(phys, opts) {
   // 没有哪个 ρ 能处处吻合；按**能见度**（Koschmieder L=3.912/σ）对齐最划算：
   // 令 1−exp(−(ρL)²)=0.98 ⇒ ρL=1.98 ⇒ ρ≈0.5σ。取 σ/2 后 20km 处两种曲线
   // 相差 <2%（0.91 vs 0.92），近场略偏清但量级正确。
-  const hCam = Math.max(altKm, 0);
+  const hCam = altKm;
   let density = 0;
   for (let k = 0; k < 3; k++) {
     density += bR[k] * Math.exp(-hCam / HR) * boost
