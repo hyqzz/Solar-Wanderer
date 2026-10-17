@@ -664,13 +664,20 @@ export function makeTerrainMaterial(uPatchRel, uTime, uFade, polyUnits, radiusKm
           if (aa3 > 0.01) grad += tnoise2Grad(vObjPos * 5200.0) * (5200.0 * 0.00002 * aa3 * fade * uDetailScale);
           #endif
           if (vWater > 0.001) {
-            float w1 = 1.0 - smoothstep(0.25, 0.65, fp * 820.0);
-            float w2 = 1.0 - smoothstep(0.25, 0.65, fp * 2800.0);
-            float w3 = 1.0 - smoothstep(0.25, 0.65, fp * 7200.0);
+            // 海面波纹的足迹门限。原先 (0.25, 0.65) 在**水面**上过于保守：
+            // 站在水面时眼高只有 ~0.3m，掠射角让足迹迅速超过波格，于是连
+            // 十几米外的水面都只剩一块平色。放宽到 (0.7, 1.6)（与表土细节同一
+            // 标定），近场波纹因此可见。
+            float w1 = 1.0 - smoothstep(0.7, 1.6, fp * 820.0);
+            float w2 = 1.0 - smoothstep(0.7, 1.6, fp * 2800.0);
+            float w3 = 1.0 - smoothstep(0.7, 1.6, fp * 7200.0);
             vec3 waterGrad = tnoiseGrad(vObjPos * 820.0 + vec3(uTime * 0.07, 0.0, uTime * 0.05)) * (820.0 * 0.50 * w1);
             if (w2 > 0.01) waterGrad += tnoiseGrad(vObjPos * 2800.0 - vec3(uTime * 0.12, uTime * 0.04, 0.0)) * (2800.0 * 0.35 * w2);
             if (w3 > 0.01) waterGrad += tnoiseGrad(vObjPos * 7200.0 + vec3(uTime * 0.19, -uTime * 0.09, uTime * 0.11)) * (7200.0 * 0.15 * w3);
-            grad = mix(grad, waterGrad * 0.00025 * (1.0 - smoothstep(0.05, 14.0, vd)), vWater);
+            // 振幅：0.00025 时波峰坡度只有 ~0.15，掠射下几乎看不出起伏；
+            // 0.0012 对应约 0.7 的坡度（≈35°），才像有风的海面。
+            // 距离延到 30km 淡出——真实海面的波纹到地平线都还在（只是趋于平坦）。
+            grad = mix(grad, waterGrad * 0.0012 * (1.0 - smoothstep(0.3, 30.0, vd)), vWater);
           }
           vec3 gradView = normalMatrix * grad;
           normal = normalize(normal - gradView + normal * dot(normal, gradView));

@@ -29,7 +29,7 @@ async function freshPage() {
   p.on('pageerror', (e) => errs.push(String(e)));
   p.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
   await p.setViewport({ width: 960, height: 600 });
-  await p.goto('http://127.0.0.1:4199/?clean=1&quality=high', { waitUntil: 'networkidle2', timeout: 180000 });
+  await p.goto(`http://127.0.0.1:4199/?clean=1&quality=${process.env.AUDIT_Q ?? 'high'}`, { waitUntil: 'networkidle2', timeout: 180000 });
   await p.waitForFunction(() => {
     const x = document.getElementById('start-btn');
     return x && !x.disabled;
