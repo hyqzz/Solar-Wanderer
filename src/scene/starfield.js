@@ -16,21 +16,75 @@ const DEG = Math.PI / 180;
 const SKY_R = 9e14;
 export { SKY_R };
 
+/**
+ * 程序化银河：等距柱状图，u=银经、v=银纬（与下面的球面定向一致）。
+ * 结构 = 银道面高斯亮带 × 银心亮度增强 × 尘埃暗带 × 细颗粒。
+ * 颜色偏暖白（银盘以老年星为主，整体偏黄白），尘埃带用低亮度而不是纯黑。
+ */
+function makeMilkyWayTexture() {
+  if (typeof document === 'undefined') return null;
+  const W = 1024, H = 512;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  const img = g.createImageData(W, H);
+  const d = img.data;
+  // 确定性伪随机（同一张图每次一致）
+  let seed = 20240611;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const angDiff = (a, b) => { let x = (a - b) % 360; if (x > 180) x -= 360; if (x < -180) x += 360; return x; };
+  for (let y = 0; y < H; y++) {
+    const b = (0.5 - y / H) * 180;               // 银纬 −90..+90
+    for (let x = 0; x < W; x++) {
+      const l = x / W * 360;                     // 银经 0..360
+      // 银盘：半高宽约 7°（真实银盘可见部分大致如此），外侧还有一层更淡的厚盘
+      // 两层：银盘（亮、窄）+ 银晕（暗、宽）——单层指数在边界处会切出硬边
+      let I = 0.40 * Math.exp(-Math.abs(b) / 9) + 0.12 * Math.exp(-Math.abs(b) / 30);
+      // 银心方向（l≈0）明显更亮更大
+      const dl = angDiff(l, 0);
+      I *= 1 + 1.9 * Math.exp(-(dl * dl) / (52 * 52));
+      // 尘埃带：沿银道面偏南 2–4° 的一条暗带，被经度调制出团块
+      const dust = Math.exp(-(((b + 3.0) / 4.2) ** 2)) * (0.45 + 0.55 * (Math.sin(l * 0.09 + 1.3) ** 2));
+      I *= 1 - 0.62 * dust;
+      // 细颗粒：肉眼看到的是无数暗星，不是光滑渐变
+      I *= 0.82 + 0.36 * rnd();
+      I = Math.max(0, Math.min(1, I));
+      const i4 = (y * W + x) * 4;
+      // 暖白偏黄（银盘色温约 5000K）
+      d[i4] = Math.round(255 * I * 1.00);
+      d[i4 + 1] = Math.round(255 * I * 0.955);
+      d[i4 + 2] = Math.round(255 * I * 0.88);
+      d[i4 + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 export function createStarfield(milkywayTex) {
   const group = new THREE.Group();
   const fadeMats = []; // 白昼大气内星空淡出（真实：日光散射淹没星光）
   let milkyMat = null;
 
   // 银河球：银道坐标定向（NGP: RA 192.8595°, Dec 27.1284°；银心: RA 266.405°, Dec −28.936°）
+  //
+  // 贴图换成**程序化生成**的银道面。仓库里的 milkyway.jpg 实测均值 0/255
+  // （峰值 46）——它几乎是一张全黑图，于是夜空里只有星点、没有银河。
+  // 真实银河是肉眼最容易认出的天球结构：一条从地平线拱到地平线的乳白色带，
+  // 银心方向更亮、被尘埃带切成两半。这里按银道坐标直接合成，不依赖下载。
+  milkywayTex = makeMilkyWayTexture() ?? milkywayTex;
   if (milkywayTex) {
     milkywayTex.colorSpace = THREE.SRGBColorSpace;
     const mat = new THREE.MeshBasicMaterial({
       map: milkywayTex, side: THREE.BackSide, depthWrite: false, fog: false,
       transparent: true,
-      color: new THREE.Color(0.5, 0.5, 0.55), // 压暗，避免压过前景
+      color: new THREE.Color(0.34, 0.34, 0.38), // 压暗，避免压过前景
     });
     milkyMat = mat;
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(SKY_R, 64, 32), mat);
+    // 分段给足：银盘亮带半高宽只有 ~7°，32 段时一个面跨 5.6°——带子会被切成
+    // 多边形块（实测出现一条边缘笔直的灰色色块）。128×64 后是平滑的乳白带。
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(SKY_R, 256, 128), mat);
     const xg = raDecToWorld(266.405 * DEG, -28.936 * DEG, new THREE.Vector3()); // 银心 → 本地+X
     const zg = raDecToWorld(192.8595 * DEG, 27.1284 * DEG, new THREE.Vector3()); // NGP → 本地+Y
     // 正交化；银经向东增加映射到本地 −Z（球面UV约定），故 Z 列 = −(xg×y)

@@ -1280,3 +1280,15 @@ test('远距行星光点按 1/d² 衰减（否则海王星比金星亮）', () =
   assert.ok(flux(0.31) >= 1, '金星应满亮');
   assert.ok(flux(30) < 0.002, `海王星应极暗，实际 ${flux(30).toExponential(2)}`);
 });
+
+// ── 银河必须真的在天上 ──────────────────────────────────────────────────────
+// milkyway.jpg 实测均值 0/255、峰值 46——几乎全黑，于是夜空只有星点、没有银河。
+test('银河改为程序化生成（贴图本身是全黑的）', () => {
+  const src = read('src/scene/starfield.js');
+  assert.ok(/function makeMilkyWayTexture/.test(src), '缺少程序化银河');
+  assert.ok(/makeMilkyWayTexture\(\) \?\? milkywayTex/.test(src), '未作为贴图回退');
+  assert.ok(/Math\.exp\(-Math\.abs\(b\) \/ 9\)/.test(src), '缺少银盘亮度带');
+  assert.ok(/dust/.test(src), '缺少尘埃暗带');
+  // 球面分段：银盘半高宽 ~7°，32 段时一面跨 5.6°，会被切成多边形色块
+  assert.ok(/SphereGeometry\(SKY_R, 256, 128\)/.test(src), '银河球分段不足');
+});
