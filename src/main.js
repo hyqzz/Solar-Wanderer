@@ -81,6 +81,40 @@ const STAR_DEG = Math.PI / 180; // 星表赤经/赤纬（度）→ 弧度
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x000000, 0); // 地形气溶胶透视（仅 fog:true 材质受影响）
+
+// 环境贴图（IBL）。此前全仓库没有 envMap，却有 metalness 0.6–0.8 的材质——
+// 旅行者号的"金色铝箔"、登月舱金箔、月球车底盘、火星车车体全部渲染成暗褐剪影：
+// MeshStandardMaterial 的金属在没有环境反射时，漫反射被 (1−metalness) 砍到 20%，
+// 间接镜面为 0，只剩点光源一个高光斑。这是"登陆看地标"这条线上最直接的出戏点。
+//
+// 用一张程序化的等距柱状图：上半球是暗蓝的星空底，太阳方向一块暖白高亮，
+// 下半球是地表反照率的灰。它不追求准确，只给金属一个"有东西可反射"的环境。
+{
+  const W = 256, H = 128;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0.0, '#1a2233');   // 天顶：暗蓝
+  grd.addColorStop(0.5, '#2a2a30');   // 地平线
+  grd.addColorStop(1.0, '#3a332c');   // 地面：暖灰
+  g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  // 太阳：一块暖白高亮（金属上因此有方向性的高光带，而不是均匀灰）
+  const sunGrd = g.createRadialGradient(W * 0.5, H * 0.28, 0, W * 0.5, H * 0.28, W * 0.16);
+  sunGrd.addColorStop(0, 'rgba(255,244,230,1)');
+  sunGrd.addColorStop(0.25, 'rgba(255,230,200,0.55)');
+  sunGrd.addColorStop(1, 'rgba(255,230,200,0)');
+  g.fillStyle = sunGrd; g.fillRect(0, 0, W, H);
+  const envTex = new THREE.CanvasTexture(cv);
+  envTex.mapping = THREE.EquirectangularReflectionMapping;
+  envTex.colorSpace = THREE.SRGBColorSpace;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  pmrem.compileEquirectangularShader();
+  scene.environment = pmrem.fromEquirectangular(envTex).texture;
+  // 强度压得很低：地形/岩石是粗糙介质，主要照明仍来自直射阳光与天空光；
+  // 环境贴图在这里主要是给金属一个可反射的底，避免把地表整体洗亮。
+  scene.environmentIntensity = 0.35;
+  envTex.dispose(); pmrem.dispose();
+}
 // R11：far 扩展到 ~106 ly 以支持亮星真实 3D 位置（视差）+ 奥尔特云粒子（100000 AU=1.58 ly）
 const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 5e-7, 1e15);
 scene.add(camera);

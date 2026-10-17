@@ -1093,3 +1093,16 @@ test('太阳光球不随场景曝光变化（否则远日轨道会被削成白�
   assert.ok(/uInvExposure\.value = 1 \/ Math\.max\(renderer\.toneMappingExposure/.test(main),
     'main.js 每帧应写入曝光倒数');
 });
+
+// ── 环境贴图：金属材质不能是暗剪影 ────────────────────────────────────────────
+// 全仓库此前没有 envMap，却有 metalness 0.6–0.8 的材质（旅行者号金箔、登月舱、
+// 月球车、火星车）。MeshStandardMaterial 的金属没有环境反射时，漫反射被
+// (1−metalness) 砍到 20%、间接镜面为 0，凑近看就是一团暗褐剪影。
+
+test('主场景设置了程序化环境贴图（金属材质才有东西可反射）', () => {
+  const src = read('src/main.js');
+  assert.ok(/PMREMGenerator/.test(src), '缺少 PMREM 生成');
+  assert.ok(/scene\.environment = pmrem\.fromEquirectangular/.test(src),
+    'scene.environment 未设置');
+  assert.ok(/environmentIntensity/.test(src), '环境强度应显式压低，避免把地表整体洗亮');
+});
