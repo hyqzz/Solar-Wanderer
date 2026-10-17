@@ -197,6 +197,7 @@ export function createPlanetMaterial({
     uRingInner: { value: ringShadow?.innerKm ?? 1 },
     uRingOuter: { value: ringShadow?.outerKm ?? 2 },
     uRingNormal: { value: new THREE.Vector3(0, 1, 0) }, // 环面法向（世界，每帧更新）
+    uRingShine: { value: 0 },                          // 环照强度（无环天体为 0）
     uCenter: { value: new THREE.Vector3() },            // 行星中心（相机相对，每帧更新）
     uDetailMode: { value: detailMode },                 // 可运行时降档置 0
     uRadius: { value: radiusKm },
@@ -259,6 +260,7 @@ export function createPlanetMaterial({
       uniform sampler2D uRingTex;
       uniform float uRingInner, uRingOuter;
       uniform vec3 uRingNormal;
+      uniform float uRingShine;
       uniform vec3 uCenter;
       uniform vec3 uSunDir;
       uniform float uSunI;
@@ -515,7 +517,16 @@ ${CLOUD_GLSL}
           col = mix(col, col * dustColor * 0.7 + dustColor * 0.12, haze);
         }
         // 极微弱环境光（星光/行星际散射），避免夜面纯黑
-        col += albedo * 0.0035;
+        // 夜面底光（地照/星光下的最低可见度）。**必须随太阳辐照缩放**：
+        // 此前是个常数 0.0035，在土星处（sunI≈0.011）相当于白昼亮度的 31%，
+        // 外太阳系行星的夜面因此异常亮；在地球处只有 0.35%，反而偏暗。
+        col += albedo * 0.0035 * uSunI;
+        // 环照（ringshine）：土星夜面被环系反射的阳光照亮，不是全黑。
+        // 这是卡西尼最有辨识度的画面之一（夜面呈暗金色、近环侧更亮）。
+        if (uHasRing == 1) {
+          float ringSide = max(0.0, dot(n, uRingNormal));
+          col += albedo * uRingShine * ringSide;
+        }
         if (uHasNight == 1) {
           vec3 city = texture2D(uNight, vUv).rgb;
           // 城市灯光：3.0 倍增益 + 微暖色温（ISS 夜拍观感——金色灯网；ACES 低照度区压缩需补偿）

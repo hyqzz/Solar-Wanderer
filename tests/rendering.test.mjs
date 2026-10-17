@@ -1199,3 +1199,17 @@ test('冥卫二/三/四/五进入卫星清单（此前写好了物理数据却�
     assert.ok(Math.abs(r - a) / a < 0.05, `${id} 距冥王星 ${r.toFixed(0)}km，期望约 ${a}km`);
   }
 });
+
+// ── 夜面底光必须随辐照缩放；有环天体要有环照 ────────────────────────────────
+test('夜面底光随 uSunI 缩放（否则外太阳系行星夜面异常亮）', () => {
+  const src = read('src/scene/planetMaterial.js');
+  assert.ok(/col \+= albedo \* 0\.0035 \* uSunI;/.test(src), '夜面底光仍是常数');
+  assert.ok(!/col \+= albedo \* 0\.0035;/.test(src), '旧的常数底光仍在');
+});
+
+test('有环天体有环照（土星夜面不是全黑）', () => {
+  const mat = read('src/scene/planetMaterial.js');
+  const b = read('src/scene/builder.js');
+  assert.ok(/uRingShine/.test(mat) && /uRingShine\.value = /.test(b), '缺少环照强度');
+  assert.ok(/col \+= albedo \* uRingShine \* ringSide;/.test(mat), '缺少环照贡献项');
+});

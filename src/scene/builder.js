@@ -665,6 +665,10 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
           // 环面法向 = 行星自转轴（世界系）
           e.mat.userData.uniforms.uRingNormal.value
             .set(0, 1, 0).applyQuaternion(e.mesh.quaternion);
+          // 环照强度：环从行星表面看占的天区比例 × 环反照率 ≈ 0.09（土星）
+          // × 太阳辐照度。木星/海王星环极稀薄，按各自 rings.opacity 缩放。
+          const ringOpacity = e.phys.rings.opacity ?? 1;
+          e.mat.userData.uniforms.uRingShine.value = 0.09 * ringOpacity * sunI;
         }
       }
       if (e.cloudMat) {
