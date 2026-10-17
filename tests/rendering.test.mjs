@@ -1531,3 +1531,10 @@ test('叠加层主光在相机后方（否则照亮的是背面，座舱是黑�
   const m = read('src/main.js');
   assert.ok(/key\.position\.set\(0\.35, 0\.55, 1\.0\)/.test(m), '主光仍在画面前方');
 });
+
+// ── 地面反弹的光应按大气分光染色 ────────────────────────────────────────────
+test('大气地面反弹项按 Rayleigh 分光染色（不是中性白）', () => {
+  const src = read('src/scene/atmosphere.js');
+  assert.ok(/vec3 gTint = normalize\(uBetaR/.test(src), '缺少分光染色');
+  assert.ok(/groundLitCol/.test(src), '地面反弹项未使用染色');
+});

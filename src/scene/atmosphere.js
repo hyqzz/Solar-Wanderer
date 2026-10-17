@@ -293,7 +293,13 @@ export function createAtmosphere(phys, auroraMode = 0) {
           float below = clamp(-dot(rd, up), 0.0, 1.0);
           float groundLit = odR > 1e-6 ? odRlit / odR : 0.0;
           vec3 twoWay = exp(-(uBetaR * odR + uBetaM * 1.1 * odM) * 1.5);
-          L += uSunI * uGroundAlbedo * twoWay * (0.35 + 0.65 * below) * msFrac
+          // 地面反弹的光本身要穿过整层大气才进视线，所以它**不是中性白**：
+          // 短波段在路上被散射掉了。这里按该天体的 Rayleigh 分光给这一项染色
+          // （地球偏蓝、火星偏赭）。不染色时它与蓝色 Rayleigh 混合，在地平线
+          // 的长路径上会退化成一条棕黄色带（实测 RGB 110,101,61）。
+          vec3 gTint = normalize(uBetaR + vec3(1e-9));
+          vec3 groundLitCol = mix(vec3(1.0), gTint * 1.7, 0.55);
+          L += uSunI * uGroundAlbedo * groundLitCol * twoWay * (0.35 + 0.65 * below) * msFrac
              * (1.0 / PI) * groundLit;
         }
 
