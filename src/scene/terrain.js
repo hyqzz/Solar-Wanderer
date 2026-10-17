@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { HASH_GLSL } from './glslNoise.js';
+import { shapeRadiusKm, hasShapeModel } from './shapeModels.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeNoise, hashSeed } from '../util/noise.js';
 import { QUALITY } from '../engine/quality.js';
@@ -210,7 +211,8 @@ export class HeightField {
     // （builder.deformIrregular 把每个顶点半径**替换**成 height()），
     // 根本没有独立的基底球——此时既不下移、也不能把地形钳到球面上，
     // 否则会把真实的深盆地压平。边缘融合同样要跳过（见 _buildLevel）。
-    this.deformed = !!phys.shape?.dims;
+    // 形变 = 盘面网格由 height() 塑形。实测形状模型也算（同样没有独立基底球）
+    this.deformed = !!phys.shape?.dims || hasShapeModel(bodyId);
     // 盘面网格是否由 baseSphereRadius 塑形（无 DEM 的可登陆天体）
     this.reliefSphere = !!phys.landable && !this.deformed;
     this.baseOffset = this.deformed ? 0 : terrainReliefOffset(phys);
@@ -350,6 +352,10 @@ export class HeightField {
   get hasBaseSphere() { return !this.deformed; }
 
   baseRadius(dir) {
+    // 实测形状模型优先（PDS 的 Thomas 半径网格）：有实测就不该用椭球近似。
+    // 贴图上的坑在实测形状里是真的凹下去，程序化椭球上它是平的。
+    const sm = shapeRadiusKm(this.bodyId, dir);
+    if (sm != null) return sm;
     const s = this.phys.shape?.dims;
     if (!s) return this.phys.radiusKm;
     const a = s[0] / 2, b = s[1] / 2, c = s[2] / 2;

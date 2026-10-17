@@ -221,11 +221,16 @@ const SCENARIOS = [
   ['mars-ground-dusk', async () => { await land('mars', 18, 80); await look(0.05, 0); await wait(10000); }],
   ['mercury-ground-horizon', async () => { await land('mercury', 20, 0); await look(0.05, 0); await wait(10000); }],
   // 低轨机位：判"地形方块与基底球的交界"是否可见（R4）
-  ['moon-loworbit', async () => { await orbit('moon', 1737 + 300, 0.3, null); await wait(12000); }],
+  // 低轨必须对着**日下点**：lon 传 null 会落在夜面，整幅图全黑（此前就是这样，
+  // 白拍了好几轮）。顺带这也是检验盘面 Hapke 与地形 Lambert 是否同源的最佳机位。
+  ['moon-loworbit', async () => { const s = await localOf('moon', 'sub'); await orbit('moon', 1737 + 300, s.lat, s.lon); await wait(14000); }],
   ['mars-loworbit', async () => { await orbit('mars', 3390 + 300, 0.2, null); await wait(12000); }],
   ['europa-ground-horizon', async () => { await land('europa', 12, 0); await look(0.05, 0); await wait(10000); }],
   ['enceladus-ground-horizon', async () => { await land('enceladus', 5, 0); await look(0.05, 0); await wait(10000); }],
   ['io-ground-horizon', async () => { await land('io', 15, 0); await look(0.05, 0); await wait(10000); }],
+  ['phobos-space', async () => { await orbit('phobos', 11.3 * 3.2, null, null); await wait(8000); }],
+  ['phobos-ground-horizon', async () => { await land('phobos', 5, 0); await look(0.03, 0); await wait(9000); }],
+  ['hyperion-space', async () => { await orbit('hyperion', 135 * 3.0, null, null); await wait(8000); }],
   ['io-space', async () => { await orbit('io', 1821 * 2.6, null, null); await wait(7000); }],
   ['enceladus-space', async () => { await orbit('enceladus', 252 * 2.6, null, null); await wait(7000); }],
   ['saturn-rings-edge', async () => { await orbit('saturn', 60268 * 2.3, 0.02, null); await wait(9000); }],

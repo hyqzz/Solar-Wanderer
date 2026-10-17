@@ -226,14 +226,16 @@ export const MOON_PHYS = {
                textures: { map: 'moon.jpg' },
                desc: '地球唯一的天然卫星，潮汐锁定使其永远以同一面朝向地球。人类唯一踏足过的地外天体。' },
   phobos:    { nameZh: '火卫一', nameEn: 'Phobos', parent: 'mars', radiusKm: 11.27, gm: 7.087e-4,
-               landable: true, shape: { dims: [27.0, 18.4, 22.0] }, // 真实土豆状（长轴指向火星）
+               landable: true, shape: { dims: [27.0, 18.4, 22.0] }, // 三轴椭球兜底；优先用实测形状
+               shapeModel: 'phobos',   // PDS Thomas 半径网格（2°×2°），见 tools/fetch-shapes.mjs
                // 降低相对起伏：真实 Phobos 虽有大撞击坑，但程序噪声在高 roughness 下会生成尖锐山脊；
                // 目标为月球般的平滑撞击坑地貌（amp ≈ 0.4% R）。
                surface: { ampKm: 0.05, roughness: 0.45, craters: 0.7, palette: 'gray' },
                textures: { map: 'phobos.jpg' },
                desc: '火星的大卫星，土豆状（27×22×18 km），轨道极低（9376 km），正以每百年 1.8 米的速度向火星坠落。' },
   deimos:    { nameZh: '火卫二', nameEn: 'Deimos', parent: 'mars', radiusKm: 6.2, gm: 9.6e-5,
-               landable: true, shape: { dims: [15.0, 11.0, 12.2] }, // 不规则（15×12.2×11 km）
+               landable: true, shape: { dims: [15.0, 11.0, 12.2] }, // 三轴椭球兜底；优先用实测形状
+               shapeModel: 'deimos',
                // 与 Phobos 同理：小天体噪声幅度按半径缩放，避免尖峰。
                surface: { ampKm: 0.03, roughness: 0.45, craters: 0.7, palette: 'gray' },
                textures: { map: 'deimos.jpg' },
@@ -351,15 +353,18 @@ export const MOON_PHYS = {
                landable: true, surface: { ampKm: 0.5, roughness: 0.6, craters: 0.8, palette: 'jupInner' } },
 
   hyperion:  { nameZh: '土卫七', nameEn: 'Hyperion', parent: 'saturn', radiusKm: 135.0, gm: 0.375,
-               landable: true, surface: { ampKm: 6, roughness: 0.8, craters: 1.1, palette: 'hyperion' },
+               landable: true, shapeModel: 'hyperion',
+               surface: { ampKm: 6, roughness: 0.8, craters: 1.1, palette: 'hyperion' },
                desc: '太阳系最大的高度不规则天体（410×260×220 km），自转混沌——没有固定的一天。表面布满深坑，反照率仅 0.3。' },
   phoebe:    { nameZh: '土卫九', nameEn: 'Phoebe', parent: 'saturn', radiusKm: 106.5, gm: 0.553,
                landable: true, surface: { ampKm: 4, roughness: 0.7, craters: 1.0, palette: 'phoebe' },
                desc: '逆行轨道，很可能是被捕获的柯伊伯带天体。土卫九环就是它被微流星撞击溅出的碎屑。' },
   janus:     { nameZh: '土卫十', nameEn: 'Janus', parent: 'saturn', radiusKm: 89.5, gm: 0.127,
-               landable: true, surface: { ampKm: 2.5, roughness: 0.6, craters: 0.9, palette: 'satIce' } },
+               landable: true, shapeModel: 'janus',
+               surface: { ampKm: 2.5, roughness: 0.6, craters: 0.9, palette: 'satIce' } },
   epimetheus:{ nameZh: '土卫十一', nameEn: 'Epimetheus', parent: 'saturn', radiusKm: 58.1, gm: 0.0352,
-               landable: true, surface: { ampKm: 2, roughness: 0.6, craters: 0.9, palette: 'satIce' },
+               landable: true, shapeModel: 'epimetheus',
+               surface: { ampKm: 2, roughness: 0.6, craters: 0.9, palette: 'satIce' },
                desc: '与土卫十共用几乎同一条轨道，每四年交换一次位置——太阳系里唯一一对"换轨"的卫星。' },
   prometheus: { nameZh: '土卫十六', nameEn: 'Prometheus', parent: 'saturn', radiusKm: 43.1, gm: 0.01065,
                landable: true, surface: { ampKm: 1.8, roughness: 0.7, craters: 0.8, palette: 'satIce' } },

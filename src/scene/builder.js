@@ -41,6 +41,7 @@ import { createRings } from './rings.js';
 import { createSun } from './sun.js';
 import { proceduralMapLazy, proceduralBandsLazy } from './proceduralTextures.js';
 import { HeightField } from './terrain.js';
+import { loadShapeModels } from './shapeModels.js';
 import { idbGet, idbPut } from '../engine/texCache.js';
 import { resourceQueue, whenIdle } from '../engine/resourceQueue.js';
 
@@ -367,6 +368,14 @@ function detailModeOf(phys) {
 export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
   // 诊断开关由 main.js 从 URL 写入（?noatmo=1 不建大气壳，用于隔离壳层贡献）
   const skipAtmo = !!globalThis.__noAtmo;
+  // 实测小天体形状（PDS Thomas 半径网格）：必须在建天体**之前**就绪，因为
+  // HeightField.baseRadius 是同步热路径。任何一个失败都静默回退到程序化椭球。
+  const shapeIds = [...Object.values(BODIES), ...Object.values(MOON_PHYS)]
+    .map((p) => p?.shapeModel).filter(Boolean);
+  if (shapeIds.length) {
+    const n = await loadShapeModels(shapeIds, asset(''));
+    if (n) console.log(`[shapes] 实测形状模型已加载 ${n}/${shapeIds.length}`);
+  }
   const { cache, upgrades, boost } = await loadTextures(onProgress, onBgProgress);
   const bodies = new Map();
   const orbitLines = new THREE.Group();
