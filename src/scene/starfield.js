@@ -84,6 +84,8 @@ function createZodiacalLight() {
   const uniforms = {
     uSunDir: { value: new THREE.Vector3(1, 0, 0) },
     uIntensity: { value: 0.020 },
+    // 随星空一起淡出（见 createStarfield 里的说明）
+    uFade: { value: 1.0 },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,
@@ -105,6 +107,7 @@ function createZodiacalLight() {
       varying vec3 vDir;
       uniform vec3 uSunDir;
       uniform float uIntensity;
+      uniform float uFade;
       void main() {
         #include <logdepthbuf_fragment>
         vec3 d = normalize(vDir);
@@ -115,7 +118,7 @@ function createZodiacalLight() {
         float elon = acos(clamp(cosEl, -1.0, 1.0));    // 日心距（弧度）
         // 朝太阳方向增亮，~80° 外基本消失
         float bright = exp(-(elon * elon) / (1.15 * 1.15));
-        float I = band * (0.25 + 0.75 * bright) * uIntensity;
+        float I = band * (0.25 + 0.75 * bright) * uIntensity * uFade;
         // 略偏暖白（尘埃散射略红于太阳）
         gl_FragColor = vec4(vec3(1.0, 0.965, 0.90) * I, 1.0);
       }
@@ -248,6 +251,11 @@ export function createStarfield(milkywayTex) {
   // 黄道光挂在同一个 group 上（一起受白昼淡出控制）
   const zodiacal = createZodiacalLight();
   group.add(zodiacal.mesh);
+  // 黄道光必须与星空**同一条淡出曲线**：此前它不在 fadeMats 里，白昼/近行星时
+  // 星点被淡到 2%、黄道光仍是 100%，画面就变成"星星没了、只剩一层灰雾"
+  // （太空机位里非常刺眼）。
+  // （ShaderMaterial 不认 opacity，用专门的 uFade）
+  zodiacal.uniforms.uFade.value = 1;
 
   return {
     group,
@@ -261,6 +269,7 @@ export function createStarfield(milkywayTex) {
     setFade(f) {
       for (const m of fadeMats) m.opacity = f;
       if (milkyMat) milkyMat.opacity = f;
+      zodiacal.uniforms.uFade.value = f;
       group.visible = f > 0.01;
       brightGroup.visible = f > 0.01;
     },

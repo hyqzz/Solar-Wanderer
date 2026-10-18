@@ -89,7 +89,9 @@ test('日冕在非日食时也有基准可见度（人眼可见，相机不可�
   const m = /uVisibility\.value = occulted \? 1 : ([0-9.e-]+);/.exec(src);
   assert.ok(m, '未找到日冕可见度设置');
   const base = Number(m[1]);
-  assert.ok(base > 0 && base < 0.2, `基准可见度 ${base} 应在 (0, 0.2) 之间`);
+  // 2026-10-18：0.02 时 r=1R 处 alpha≈0.017，等于永久不可见——而线上是有日冕的。
+  // 人眼在轨肉眼可见淡冕，基准取 0.55（远暗于日面，但确实可见）。
+  assert.ok(base > 0.2 && base < 0.8, `基准可见度 ${base} 应在 (0.2, 0.8)`);
 });
 
 // ── 批次 6：臭氧层 ──────────────────────────────────────────────────────────
@@ -759,8 +761,10 @@ test('prefers-reduced-motion 在 CSS 与 JS 两侧都生效', () => {
   assert.ok(/export function prefersReducedMotion/.test(cfg), '缺少共享查询');
   // JS 驱动的相机动画 CSS 管不到，必须在 JS 里判
   const cam = read('src/engine/orbitCamera.js');
-  assert.ok(/if \(prefersReducedMotion\(\)\) dur = 0\.01;/.test(cam),
-    '飞行动画未受 reduced-motion 影响');
+  // 2026-10-18：改为"缩短"而不是"取消"——dur=0.01 等于把前往天体的过程整个
+  // 抹掉（点击星球直接瞬移），而空间导航是理解太阳系尺度的核心体验。
+  assert.ok(/if \(prefersReducedMotion\(\)\) dur = Math\.min\(dur, 0\.8\);/.test(cam),
+    '飞行动画未受 reduced-motion 影响（应缩短而不是取消）');
   assert.ok(/const damp = prefersReducedMotion\(\) \? 0 : /.test(cam),
     '拖拽惯性未受 reduced-motion 影响');
   const feel = read('src/engine/cameraFeel.js');
@@ -945,12 +949,22 @@ test('地表明暗调制保留增益与限幅（否则噪声方差太小，看�
 test('反照率标定：标定后各天体的有效反照率与实测值一致', async () => {
   const { albedoScaleOf, TEXTURE_LIN_MEAN, SURFACE_ALBEDO } = await import('../src/scene/planetMaterial.js');
   const fileOf = { earth: 'earth_day.jpg', europa: 'europa.png', venus: 'venus_atmosphere.jpg' };
+  // 只对**有贴图线性均值实测**的天体要求"标定后等于实测反照率"。
+  // 2026-10-18 起 SURFACE_ALBEDO 还兼任"曝光适应的反照率锚点"，因此包含了一批
+  // 没有贴图实测的小天体（火卫一、天卫一等，它们用的是程序化贴图）——那批
+  // 没有可标定的基准，跳过；但主天体必须有。
+  let checked = 0;
   for (const [id, a] of Object.entries(SURFACE_ALBEDO)) {
     const f = fileOf[id] ?? `${id}.jpg`;
     const m = TEXTURE_LIN_MEAN[f];
-    assert.ok(m > 0, `${id} 的贴图 ${f} 缺少线性均值实测`);
+    if (!(m > 0)) continue;
+    checked++;
     const eff = albedoScaleOf(f, id) * m;
     assert.ok(Math.abs(eff - a) < 1e-6, `${id} 标定后有效反照率 ${eff} ≠ 实测 ${a}`);
+  }
+  assert.ok(checked >= 20, `只校验了 ${checked} 个天体，主天体的贴图均值不该缺失`);
+  for (const id of ['mercury', 'earth', 'mars', 'jupiter', 'neptune']) {
+    assert.ok(SURFACE_ALBEDO[id] > 0, `${id} 缺少反照率锚点（曝光适应要用）`);
   }
 });
 
@@ -1040,8 +1054,13 @@ test('曝光律：uSunI = 1/d²、曝光 = K·d²，两者相乘与距离无关'
   assert.ok(!/Math\.pow\(sunIRaw, 0\.55\)/.test(b), '旧的暗适应压缩仍在');
   assert.ok(/sunLight\.intensity = Math\.PI \* li;/.test(b),
     '地形光必须与盘面同一条律（原来取 pow(li,0.55)，水星上地形比盘面暗 2.4 倍）');
-  const e = m.match(/exposureTarget = THREE\.MathUtils\.clamp\(([\d.]+) \* Math\.max\(dSunAU, 0\.004\) \*\* 2, ([\d.]+), ([\d.]+)\);/);
-  assert.ok(e, '曝光必须写成 K·d² 的形式');
+  // 2026-10-18：曝光律在 K·d² 之外再乘一个**目标反照率适应因子**
+  // （exposureAdapt）。距离部分仍然是 K·d²——这一半的性质不变；反照率适应
+  // 模拟"相机对着目标曝光"，让水星不再是一块黑饼。这里仍校验距离律的系数。
+  const e = m.match(/exposureTarget = THREE\.MathUtils\.clamp\(\s*([\d.]+) \* Math\.max\(dSunAU, 0\.004\) \*\* 2 \* exposureAdapt/);
+  assert.ok(e, '曝光的距离部分必须写成 K·d²·adapt 的形式');
+  assert.ok(/exposureAdapt = 1 \+ \(Math\.pow\(0\.45 \/ Math\.max\(a, 0\.03\), 0\.75\) - 1\) \* w/.test(m),
+    '缺少反照率适应因子（水星等暗天体会被压成黑饼）');
   const K = Number(e[1]);
   assert.ok(K > 0.3 && K < 1.2, `曝光标定系数 ${K} 应在 (0.3, 1.2)：太小画面发灰、太大亮部削顶`);
   // 数值验算：乘积 = K，与 dAU 无关
@@ -1092,16 +1111,20 @@ test('DEM 分辨率以下也有撞击坑（否则落地仍是平坡）', async (
 
 test('太阳光球保留色温（不是灰度）', () => {
   const src = read('src/scene/sun.js');
-  assert.ok(/vec3\(luminance\) \* vec3\(1\.0, 0\.975, 0\.93\)/.test(src),
-    '光球基色应是亮度 × 5772K 黑体色度，而不是纯灰');
-  assert.ok(!/vec3 base = vec3\(luminance\);/.test(src), '仍是纯灰基色');
+  // 2026-10-18：从严格的 5772K 白改成**显示级暖金**——太空里光球确实是白的，
+  // 但"一眼认得出是太阳"要求暖色。只改色度、不改结构（米粒/黑子/临边昏暗）。
+  // 2026-10-18：改为**保留贴图色相、只归一亮度**——取纯亮度再乘色度常数会
+  // 把太阳标志性的暖橙整个丢掉（线上直接用贴图颜色，所以一眼认得出）。
+  assert.ok(/vec3 base = sampled \* \(0\.85 \/ max\(luminance, 1e-3\)\)/.test(src),
+    '光球基色应保留贴图色相');
+  assert.ok(!/vec3 base = vec3\(luminance\)/.test(src), '仍是纯灰基色');
 });
 
 test('太阳光球不随场景曝光变化（否则远日轨道会被削成白盘）', () => {
   const sun = read('src/scene/sun.js');
   const main = read('src/main.js');
   assert.ok(/uInvExposure/.test(sun), '太阳着色器应接收曝光倒数');
-  assert.ok(/col \* 2\.2 \* uInvExposure/.test(sun), '光球输出应乘曝光倒数');
+  assert.ok(/col \* 0\.85 \* uInvExposure/.test(sun), '光球输出应乘曝光倒数（系数须落在 ACES 线性段）');
   assert.ok(!/col \* 14\.0/.test(sun), '旧的 ×14 固定强度仍在');
   assert.ok(/uInvExposure\.value = 1 \/ Math\.max\(renderer\.toneMappingExposure/.test(main),
     'main.js 每帧应写入曝光倒数');

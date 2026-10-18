@@ -388,6 +388,7 @@ export async function buildSolarSystem(scene, world, onProgress, onBgProgress) {
     id: 'sun', phys: sunPhys, isMoon: false, parentId: null,
     group: sun.group, mesh: sun.mesh, posKm: new Float64Array(3),
     uniforms: sun.uniforms,   // 供诊断读取（太阳表面着色器的 uniform）
+    coronaUniforms: sun.coronaUniforms,
   };
   // 太阳点光源（物理上太阳是光源本身；行星用自定义着色器，光源供地形 StandardMaterial 用）
   // 太阳光基准色 = 纯白：行星盘面材质（planetMaterial）用的是无染色白光照，

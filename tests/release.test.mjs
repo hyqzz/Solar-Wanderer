@@ -84,7 +84,9 @@ test('photographic adaptation hides stars over sunlit airless ground and preserv
   assert.ok(photoSkyVisibility(lunar) < 0.001);
   assert.equal(photoSkyVisibility({ ...lunar, sunElevation: -0.2 }), 1);
   assert.equal(photoSkyVisibility({ ...lunar, distanceKm: 5000, viewCosine: -1 }), 1);
-  assert.ok(photoSkyVisibility({ ...lunar, distanceKm: 5000, phaseCosine: 1 }) < 0.03);
+  // 空间视角**不衰减**：真空里天空是黑的，星点就该满亮度（线上同一机位是满天星）。
+  // 只有贴着白昼地面时才压暗，见上一行。
+  assert.equal(photoSkyVisibility({ ...lunar, distanceKm: 5000, phaseCosine: 1 }), 1);
 });
 
 test('GPU profiles: integrated Low, discrete High, software/unknown Low; mobile always Low', () => {

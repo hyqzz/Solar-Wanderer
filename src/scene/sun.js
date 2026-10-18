@@ -79,7 +79,13 @@ export function createSun(radiusKm, mapTex) {
         // 可见光下最不该错的颜色反而错了。真实的日面是略带暖调的白：
         // 归一化黑体色度约 (1.0, 0.975, 0.93)（蓝端略低，所以看着"白里透暖"）。
         float luminance = dot(sampled, vec3(0.2126, 0.7152, 0.0722));
-        vec3 base = vec3(luminance) * vec3(1.0, 0.975, 0.93);
+        // **保留贴图自身的色相**，只把亮度归一。
+        //
+        // 旧实现取纯亮度再乘一个色度常数（先是纯灰，后来是暖金），等于把贴图
+        // 里最宝贵的那部分——太阳标志性的暖橙色——整个丢掉了。线上是直接用
+        // 贴图颜色，所以一眼就是太阳；本地被画成灰白/土黄的麻点球。
+        // 归一亮度是为了不依赖 sun.jpg 的曝光，色相与结构（米粒、黑子）全保留。
+        vec3 base = sampled * (0.85 / max(luminance, 1e-3));
         // Solar granules are ~1 Mm, rather than planet-scale flowing patches.
         // Suppress frequencies below a pixel to avoid scintillation in orbit.
         float fp = length(fwidth(p));
@@ -100,7 +106,7 @@ export function createSun(radiusKm, mapTex) {
         float spots = 1.0 - smoothstep(spotThr - 0.02, spotThr + 0.03,
                                        fbm(p * 13.0 + 13.7 + uTime * 0.004));
         vec3 col = base * granule * (1.0 - 0.75 * spots);
-        col *= vec3(1.0, 0.985, 0.97);
+        col *= vec3(1.0, 0.98, 0.94);
         // 临边昏暗：Neckel & Labs (1994) 五阶多项式，而不是一阶线性近似。
         // 真实光球在视线切向要穿过更厚的、更冷的层，边缘比中心暗且**明显偏红**
         // （边缘有效温度低约 1000 K）。线性式在 μ≈0.2 处凑巧接近，中段偏暗约 6%，
@@ -117,10 +123,12 @@ export function createSun(radiusKm, mapTex) {
         // tonemapping_fragment 会再乘一次 toneMappingExposure，所以这里先除掉，
         // 净输入恒定：日面在海王星轨道与在地球轨道上看起来一样亮。
         //
-        // 系数 2.2 是**色调映射的标定**：让日面中心落在 ACES 压缩拐点之下，
-        // 否则临边昏暗与米粒组织会被削顶吃掉（此前 ×14 配曝光，中心与边缘
-        // 一起钳到 1.0，画面上就是一颗没有任何结构的白球）。
-        gl_FragColor = vec4(col * 2.2 * uInvExposure, 1.0);
+        // 系数是**色调映射的标定**，必须让日面落在 ACES 的线性段（≲0.8）：
+        // 一旦越过拐点，ACES 会把三个通道一起压向白，色相与米粒组织全部丢失。
+        // 此前取 2.2 —— 那已经在肩部以上，实测日面被削成一颗灰白麻点球，
+        // 与"一眼认得出是太阳"直接冲突（对比线上：橙黄米粒组织）。
+        // 0.92 让中心落在拐点下方，临边昏暗与色温都保留下来。
+        gl_FragColor = vec4(col * 0.85 * uInvExposure, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }
@@ -134,6 +142,7 @@ export function createSun(radiusKm, mapTex) {
   const coronaUniforms = {
     uTime: { value: 0 },
     uVisibility: { value: 0.000001 },
+    uInvExposure: { value: 1 },
   };
   const coronaMat = new THREE.ShaderMaterial({
     uniforms: coronaUniforms,
@@ -156,6 +165,7 @@ export function createSun(radiusKm, mapTex) {
       #include <logdepthbuf_pars_fragment>
       uniform float uTime;
       uniform float uVisibility;
+      uniform float uInvExposure;   // 与光球同一套"不随场景曝光变化"的处理
       varying vec2 vUvC;
 
       ${HASH_GLSL}
@@ -183,7 +193,9 @@ export function createSun(radiusKm, mapTex) {
         // 颜色：近缘暖白 → 远处冷白
         vec3 col = mix(vec3(1.0, 0.93, 0.78), vec3(0.85, 0.9, 1.0), smoothstep(1.0, 4.0, rR));
         float alpha = clamp(i * 0.85 * uVisibility, 0.0, 1.0);
-        gl_FragColor = vec4(col * i * 2.2, alpha);
+        // 与光球同样先除掉场景曝光：日冕辐亮度同样是常数，不该因为相机在
+        // 水星轨道还是海王星轨道而变黑。系数 0.9 让 r=1R 处落在 ACES 线性段。
+        gl_FragColor = vec4(col * i * 0.9 * uInvExposure, alpha);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }
@@ -200,7 +212,7 @@ export function createSun(radiusKm, mapTex) {
   group.add(corona);
 
   return {
-    group, mesh, corona, uniforms,
+    group, mesh, corona, coronaUniforms, uniforms,
     update(timeSec, camDistKm, occulted = false, solarActivity = null) {
       uniforms.uTime.value = timeSec;
       coronaUniforms.uTime.value = timeSec;
@@ -211,7 +223,9 @@ export function createSun(radiusKm, mapTex) {
       // 日冕的。这里按"人眼观察"渲染：平时给一个很低的基准可见度，形成贴着日面
       // 边缘的淡冕（远亮于无、远暗于日面），日全食时再提升到全强度。
       // 这是显式的显示适配系数，不是物理比值。
-      coronaUniforms.uVisibility.value = occulted ? 1 : 0.02;
+      // 0.02 时 r=1R 处 alpha≈0.017——等于永久不可见（线上是有日冕的）。
+      // 人眼在轨肉眼可见淡冕，取 0.55；日全食时 1.0。
+      coronaUniforms.uVisibility.value = occulted ? 1 : 0.55;
     },
   };
 }

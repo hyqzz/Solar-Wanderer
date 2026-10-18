@@ -414,7 +414,11 @@ export class OrbitCamera {
     let dur = THREE.MathUtils.clamp(1.6 + Math.log10(Math.max(sep + h0, 10) / 1e4) * 0.55, 1.8, 7);
     // 减少动效：把飞行压成瞬间到位，而不是"飞得慢一点"——
     // 用户要的是不要这段动画，不是要看一段更慢的动画。
-    if (prefersReducedMotion()) dur = 0.01;
+    // 减少动效：**缩短并简化**行程，而不是取消行程。
+    // 此前写成 dur = 0.01 —— 等于把"前往某个天体"这件事整个抹掉：点击星球
+    // 画面直接瞬移，没有任何空间连续性（线上在同样设置下仍是 4.5s 的推进）。
+    // 空间导航是理解"太阳系有多大"的核心体验，属于必要动效，只做降级。
+    if (prefersReducedMotion()) dur = Math.min(dur, 0.8);
     // 墙钟驱动（GE 行为：固定真实时长，低帧率下跳帧前进）
     this.flight = { toId, fromId: fromIdOverride ?? this.focusId, t: 0, dur, h0, h1, dir0, dir1, start: performance.now() };
   }

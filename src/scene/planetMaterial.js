@@ -140,6 +140,18 @@ export const SURFACE_ALBEDO = {
   io: 0.63, europa: 0.67, ganymede: 0.43, callisto: 0.17,
   mimas: 0.962, enceladus: 0.99, tethys: 0.80, dione: 0.998, rhea: 0.949,
   titan: 0.22, iapetus: 0.25, triton: 0.76, charon: 0.38,
+  // ── 2026-10-18 补齐：曝光适应需要**每个**可聚焦天体都有反照率锚点，
+  // 缺一个就等于那个天体的"自动曝光"失效（要么过暗要么过亮）。
+  // 数值取各任务的几何反照率（NSSDC / JPL 小体数据库 / 探测器反演）。
+  phobos: 0.071, deimos: 0.068, ceres: 0.09,
+  hyperion: 0.30, phoebe: 0.081, janus: 0.71, epimetheus: 0.73,
+  prometheus: 0.60, pandora: 0.50, pan: 0.50, atlas: 0.40,
+  miranda: 0.32, ariel: 0.39, umbriel: 0.21, titania: 0.27, oberon: 0.23,
+  puck: 0.32, portia: 0.30,
+  proteus: 0.10, nereid: 0.155, larissa: 0.09, galatea: 0.60,
+  hydra: 0.35, nix: 0.35, kerberos: 0.35, styx: 0.35,
+  amalthea: 0.09, thebe: 0.05, metis: 0.06, adrastea: 0.05,
+  daphnis: 0.50, helene: 0.60, telesto: 0.60, calypso: 0.60,
 };
 
 /** 贴图 → 标定系数。无贴图 / 无实测值 / 无实测反照率时返回 1（不改）。 */

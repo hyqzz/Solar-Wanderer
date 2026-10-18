@@ -23,6 +23,8 @@ import { createStarfield, SKY_R } from './scene/starfield.js';
 import { loadStarCatalog } from './astro/starCatalog.js';
 import { NAMED_STARS } from './astro/stars.generated.js';
 import { photoSkyVisibility } from './scene/photoExposure.js';
+import { SURFACE_ALBEDO } from './scene/planetMaterial.js';
+import { createMetering } from './engine/metering.js';
 import { atmosphereFog } from './scene/atmosphere.js';
 import { createBelts, createOortCloud } from './scene/belts.js';
 import { createSmallBodies } from './scene/smallBodies.js';
@@ -799,6 +801,9 @@ const _fogSun = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _sunLocal = new THREE.Vector3();
 let exposureTarget = 1;
+let meter = null;
+let lastMeterAt = 0;
+let meteredLog2 = null;
 let nearestCache = null;
 let lastTakeoff = -1e9; // 滚轮起飞时间戳（自动登陆 0.8s 冷却，防滞回）
 let prevOrbitDist = 0;   // 上一帧的相机径向距离（km），用来求接近率
@@ -1287,6 +1292,19 @@ function loop() {
   try {
     if (renderer.xr.isPresenting) renderer.render(scene, camera);
     else composer.render();
+    // ── 实时测光（?meter=1，默认关）────────────────────────────────────
+    // 每 150ms 从 HDR 缓冲取一次对数平均亮度，驱动"对着画面曝光"。
+    // 默认关的理由：它会把整条曝光律换成测光律，需要逐场景标定；先把代码
+    // 与验证通路备好，标定完再决定是否默认启用。
+    if (DEBUG_FLAGS.meter) {
+      if (!meter) meter = createMetering(renderer);
+      if (meter && performance.now() - lastMeterAt > 150) {
+        lastMeterAt = performance.now();
+        const src = composer.readBuffer?.texture ?? null;
+        const lg = meter.sample(src);
+        if (lg !== null) meteredLog2 = lg;
+      }
+    }
     // 座舱/飞船叠加层：清深度后单独渲染，用米制近平面（见上面的说明）
     if ((appMode === 'fly' && (cockpit.visible || shipModel.visible))
         || (appMode === 'walk' && evaSuit.visible)) {
@@ -1366,7 +1384,7 @@ const PLANET_KEYS = {
 // 轨道线默认**关闭**：它是示意图层，不是天体本身。默认开启时任何一张太空视角的
 // 画面里都横着 6–8 条彩色线（实测 earth-space），与"任何角度都逼真"直接冲突。
 // 需要时按 O 打开。TNO 轨道线同样默认关闭（数量多且远）。
-let orbitLinesOn = false;
+let orbitLinesOn = true;   // 与线上一致：首屏就能看到太阳系的结构
 let tnoOrbitsOn = false;
 let directoryTabKeyBound = false;
 
@@ -1458,7 +1476,7 @@ function setCinematic(on) {
 //   ?nofog=1   关闭气溶胶透视雾
 const DEBUG_FLAGS = (() => {
   const q = new URLSearchParams(window.location.search);
-  const f = { noatmo: q.get('noatmo') === '1', nofog: q.get('nofog') === '1' };
+  const f = { noatmo: q.get('noatmo') === '1', nofog: q.get('nofog') === '1', meter: q.get('meter') === '1' };
   globalThis.__noAtmo = f.noatmo;   // builder 在构建期读取
   return f;
 })();
@@ -1523,7 +1541,38 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   // 系数 0.75 是**色调映射的标定**：反照率 1（纯白面）在相机所在距离处应当落在
   // ACES 压缩拐点（约 0.8 线性）之下，这样比平均更亮的地貌（冥王星"心形"亮区
   // 反照率 ~0.86）才不会被削成白斑。取 1.0 时冥王星盘面 10.6% 过曝、亮心糊成一片白。
-  exposureTarget = THREE.MathUtils.clamp(0.75 * Math.max(dSunAU, 0.004) ** 2, 0.02, 2000);
+  // ── 目标反照率曝光适应 ─────────────────────────────────────────────────
+  // 只按日心距曝光（0.75·d²）补偿了**距离**，没补偿**反照率**：水星（0.106）
+  // 因此被压成一块黑饼、月球（0.136）发灰，而冰卫星顶到高光。真实相机和眼睛
+  // 都是对着目标曝光的——没有哪张水星照片是把水星拍成黑球的。
+  // 这里按当前聚焦天体的实测几何反照率做**部分**适应（指数 0.75）：每个天体
+  // 在被凝视时有正常可辨的亮度，同时保留"同一画面里暗的确实更暗"的排序。
+  // 只在相机确实靠近该天体（40R 内全量、100R 外归零）时生效，看太阳系全景时
+  // 退回纯距离曝光。
+  let exposureAdapt = 1;
+  {
+    const fid = orbitCam.focusId ?? nearest?.id;
+    const a = fid ? SURFACE_ALBEDO[fid] : null;
+    const e = fid ? builder.bodies.get(fid) : null;
+    if (a > 0 && e && fid !== 'sun') {
+      const rr = Math.hypot(
+        ship.posKm[0] - e.posKm[0], ship.posKm[1] - e.posKm[1], ship.posKm[2] - e.posKm[2]
+      ) / Math.max(e.phys.radiusKm, 1e-6);
+      const w = 1 - THREE.MathUtils.smoothstep(rr, 40, 100);
+      if (w > 0) {
+        exposureAdapt = 1 + (Math.pow(0.45 / Math.max(a, 0.03), 0.75) - 1) * w;
+      }
+    }
+  }
+  exposureTarget = THREE.MathUtils.clamp(
+    0.75 * Math.max(dSunAU, 0.004) ** 2 * exposureAdapt, 0.02, 6000);
+  // 测光优先：把"画面平均亮度"映射到 0.22 的显示锚点。
+  // 这是真正的相机行为——对着什么就按什么曝光；上面的距离律退化为
+  // 测光尚未就绪（前几帧 / 读回失败）时的兜底。
+  if (DEBUG_FLAGS.meter && meteredLog2 !== null) {
+    const L = Math.pow(2, meteredLog2);
+    if (L > 1e-9) exposureTarget = THREE.MathUtils.clamp(0.30 / L, 0.02, 6000);
+  }
 
   let fogDensity = 0;
   let skyFade = 1; // 白昼大气内星空淡出（日光散射淹没星光，物理正确）
@@ -1721,7 +1770,10 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   builder.setSkyFade(skyFade);
   for (const v of voyagerEntries) v.group.visible = surfVis;
   oortCloud.update(dSunAU);            // 进入云内部按距离淡出（#5）
-  document.getElementById('labels').classList.toggle('daysky', skyFade < 0.5);
+  // 恒星名标签只在**真正身处白昼大气内**时隐藏。此前用 skyFade<0.5 判定，
+  // 而 skyFade 会被"附近有受照天体"的辉光拉到很低——于是从轨道上看地球时，
+  // 满天恒星的名字全被藏起来了（线上是有的）。
+  document.getElementById('labels').classList.toggle('daysky', skyFade < 0.5 && appMode === 'walk');
   // 行走地表：暗弱目标标签（TNO/彗星/探测器/边界/区域）肉眼不可见，夜晚亦然
   document.getElementById('labels').classList.toggle('walksky', appMode === 'walk');
 
@@ -1748,6 +1800,9 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
   {
     const su = builder.bodies.get('sun')?.uniforms;
     if (su?.uInvExposure) su.uInvExposure.value = 1 / Math.max(renderer.toneMappingExposure, 1e-4);
+    // 日冕同样不随场景曝光变化（见 sun.js 的说明）
+    const cu = builder.bodies.get('sun')?.coronaUniforms;
+    if (cu?.uInvExposure) cu.uInvExposure.value = 1 / Math.max(renderer.toneMappingExposure, 1e-4);
     // 大气壳的抖动同样按曝光归一化（否则高曝光天体整片天空是雪花）。
     // 这里遍历所有天体：大气壳是常驻场景的，不只最近的那一个会被看到
     // （远处行星的临边大气同样在画面里），而写入 uniform 的成本可忽略。
