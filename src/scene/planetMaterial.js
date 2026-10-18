@@ -668,7 +668,10 @@ ${CLOUD_GLSL}
         col += cityGlow * (1.0 - day) * 3.0;
         }
         if (uOcean == 1) {
-          float oceanMask = clamp((albedo.b - max(albedo.r, albedo.g * 0.9)) * 6.0, 0.0, 1.0);
+          // 海陆掩码用 smoothstep 而不是线性钳制：线性阈值在海岸线附近会在
+          // 0/1 之间抖动（低轨上是一圈白色点状锯齿）。给 0.02–0.12 的过渡带，
+          // 海岸线变成连续的浅水渐变。
+          float oceanMask = smoothstep(0.02, 0.12, albedo.b - max(albedo.r, albedo.g * 0.9));
           vec3 v = normalize(cameraPosition - vPosW);
           vec3 h = normalize(uSunDir + v);
           // 太阳耀斑：真实海面耀斑是紧凑亮斑（阵风粗糙海面 ~3° 散布），
