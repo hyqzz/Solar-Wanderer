@@ -66,3 +66,4 @@ tools/.reference/
 
 # ---- 版本对比产物 ----
 .cmp/
+tools/__pycache__/
