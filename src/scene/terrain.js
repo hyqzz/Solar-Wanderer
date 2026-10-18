@@ -1277,8 +1277,13 @@ export class TerrainPatchSet {
     if (fadeMode === 'none' || fadeMode === 'dem') {
       lv.uFade.value = 1; // 移动重建：保持不透明，不重启淡入
     } else {
-      lv.fadeFrom = fadeMode === 'dem' ? 0.35 : 0;
-      lv.fadeDur = fadeMode === 'dem' ? 500 : 800;
+      // 移动重建的淡入起点从 0 抬到 0.55：从 0 起意味着重建后最初几帧地形
+      // 几乎全透明，掠过时会看到地面"闪一下再回来"——这是掠飞跳变里最显眼的
+      // 一部分。0.55 只保留一层薄过渡，同时把时长压到 600ms。
+      // 注意：这只缓解了透明度跳变，**几何跳变**（锚点重新吸附导致采样方向
+      // 整体平移）仍未做渐变，要根治必须在新旧采样之间插值顶点高度。
+      lv.fadeFrom = fadeMode === 'dem' ? 0.55 : 0.55;
+      lv.fadeDur = fadeMode === 'dem' ? 450 : 600;
       lv.uFade.value = lv.fadeFrom;
       lv.fadeStart = performance.now();
     }
