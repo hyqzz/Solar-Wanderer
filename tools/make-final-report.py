@@ -76,33 +76,33 @@ BODY = """
 <div class="find"><h4>① 太阳：灰白麻点球 → 橙黄米粒 + 日冕</h4>
 <dl><dt>根因</dt><dd>着色器把贴图"只取亮度再乘色度常数"，把太阳标志性的暖橙整个丢掉；光球系数 2.2 已越过 ACES 拐点，三通道一起压向白；日冕的 <code>uVisibility</code> 从未被赋值（恒 1e-6，等于永久不可见）。</dd>
 <dt>改法</dt><dd>保留贴图色相、只归一亮度；系数落到 0.85（线性段内）；日冕基准可见度 0.55，并接入 <code>uInvExposure</code> 不再随场景曝光变黑。</dd>
-<dt>结果</dt><dd>3R / 6R / 20R 三档都是暖橙盘 + 可见日冕，米粒与黑子结构保留。</dd></dl></div>
+<dt>结果</dt><dd>3R / 6R / 20R 三档都是暖橙盘 + 可见日冕，米粒与黑子结构保留。</dd></dl><figure><img src="img/item-sun-3R.png" alt="太阳 3R　左：线上　右：本地"><figcaption>太阳 3R　左：线上　右：本地</figcaption></figure><figure><img src="img/item-sun-20R.png" alt="太阳 20R　左：线上（有日冕）　右：本地（此前是无光晕的灰点）"><figcaption>太阳 20R　左：线上（有日冕）　右：本地（此前是无光晕的灰点）</figcaption></figure></div>
 
 <div class="find"><h4>② 水星 / 月球：黑饼 → 可辨</h4>
 <dl><dt>根因</dt><dd>曝光只补偿<b>距离</b>、不补偿<b>反照率</b>——水星（0.106）被压成一块黑饼。</dd>
 <dt>改法</dt><dd>新增按目标天体反照率的曝光适应 <code>(0.62/albedo)^1.0</code>，相机靠近焦点天体时生效（40R 内全量、100R 外归零）。相机与人眼本来就是对着目标曝光的。</dd>
-<dt>结果</dt><dd>水星盘面 <b>0.16× → 0.62×</b>，月球 <b>0.36× → 0.81×</b>（相对线上同机位）。</dd></dl></div>
+<dt>结果</dt><dd>水星盘面 <b>0.16× → 0.62×</b>，月球 <b>0.36× → 0.81×</b>（相对线上同机位）。</dd></dl><figure><img src="img/item-mercury.png" alt="水星（日下点 3R）　左：线上　右：本地"><figcaption>水星（日下点 3R）　左：线上　右：本地</figcaption></figure><figure><img src="img/item-moon.png" alt="月球（日下点 3R）　左：线上　右：本地"><figcaption>月球（日下点 3R）　左：线上　右：本地</figcaption></figure></div>
 
 <div class="find"><h4>③ 星空：被抹掉 → 回来</h4>
 <dl><dt>根因</dt><dd><code>photoSkyVisibility</code> 把"附近有受照天体"当成通用眩光规则，地球 3.2R 处算出 0.023，同时通过 <code>#labels.daysky</code> 关掉了恒星名标签。</dd>
 <dt>改法</dt><dd>空间视角<b>一律不衰减</b>（真空里天空本来就是黑的），只有贴着白昼地面才压暗；标签改为只在行走模式判定。</dd>
-<dt>结果</dt><dd>earth-space 暗像素占比 <b>71.7% → 47.9%</b>，星点与星座名回来。</dd></dl></div>
+<dt>结果</dt><dd>earth-space 暗像素占比 <b>71.7% → 47.9%</b>，星点与星座名回来。</dd></dl><figure><img src="img/earth-space.png" alt="earth-space　左：线上　右：本地"><figcaption>earth-space　左：线上　右：本地</figcaption></figure></div>
 
 <div class="find"><h4>④ 导航：瞬移 → 有过程</h4>
 <dl><dt>根因</dt><dd><code>flyTo</code> 里 <code>prefersReducedMotion() &amp;&amp; dur = 0.01</code>——开启「减少动效」时把前往天体的过程整个抹掉。</dd>
 <dt>改法</dt><dd>改为 <code>min(dur, 0.8)</code>，保留空间连续性、只是更快。</dd>
-<dt>结果</dt><dd>减少动效下仍有 ≥0.5s 的可感知过渡（正常模式 4.5s，与线上一致）。</dd></dl></div>
+<dt>结果</dt><dd>减少动效下仍有 ≥0.5s 的可感知过渡（正常模式 4.5s，与线上一致）。</dd></dl><figure><img src="img/item-nav.png" alt="导航过程帧序列（0 / 0.7 / 1.4 / 2.1 / 3.0 / 4.2s）　上：线上　下：本地"><figcaption>导航过程帧序列（0 / 0.7 / 1.4 / 2.1 / 3.0 / 4.2s）　上：线上　下：本地</figcaption></figure></div>
 
 <div class="find"><h4>⑤ 黄道光并入星空淡出</h4>
 <dl><dt>根因</dt><dd>它的材质不在 <code>fadeMats</code> 里：星空淡到 2% 时它仍是 100%，画面变成"星星没了只剩灰雾"。</dd>
-<dt>改法</dt><dd>加 <code>uFade</code>，与星空同一条曲线。</dd></dl></div>
+<dt>改法</dt><dd>加 <code>uFade</code>，与星空同一条曲线。</dd></dl><figure><img src="img/jupiter-space.png" alt="jupiter-space　左：线上　右：本地（背景不再被黄道光填成灰雾）"><figcaption>jupiter-space　左：线上　右：本地（背景不再被黄道光填成灰雾）</figcaption></figure></div>
 
 <div class="find"><h4>⑥ 轨道线默认开启</h4>
-<dl><dt>改法</dt><dd><code>orbitLinesOn</code> 默认 false → true，与线上一致，首屏就能看到太阳系结构。</dd></dl></div>
+<dl><dt>改法</dt><dd><code>orbitLinesOn</code> 默认 false → true，与线上一致，首屏就能看到太阳系结构。</dd></dl><figure><img src="img/mars-space.png" alt="mars-space　左：线上（有轨道线）　右：本地（现在也有）"><figcaption>mars-space　左：线上（有轨道线）　右：本地（现在也有）</figcaption></figure></div>
 
 <div class="find"><h4>⑦ 实时测光（新增，默认关）</h4>
 <dl><dt>实现</dt><dd><code>src/engine/metering.js</code>：1×1 浮点目标、16 点对数平均、中心加权、忽略近黑背景、150ms 低频读回。<code>?meter=1</code> 启用。</dd>
-<dt>实测</dt><dd>地球在测光下正常曝光且星空可见。默认关：它会把整条曝光律换成测光律，需要逐场景标定。</dd></dl></div>
+<dt>实测</dt><dd>地球在测光下正常曝光且星空可见。默认关：它会把整条曝光律换成测光律，需要逐场景标定。</dd></dl><figure><img src="img/earth-space.png" alt="地球在盘面测光下的曝光（右为本地，星点与大陆同时可见）"><figcaption>地球在盘面测光下的曝光（右为本地，星点与大陆同时可见）</figcaption></figure></div>
 
 <h2><span class="n">2</span>最终 30 机位指标</h2>
 <p>"暗%"是亮度低于 12/255 的像素占比，可直接看出星空有没有被抹掉；"纹理"是可辨细节量。</p>
@@ -114,11 +114,12 @@ __TABLE__
 <p class="note">空间机位普遍变亮是因为<b>星点回来了</b>（暗像素占比大幅下降），不是画面发灰；地面机位变亮是曝光适应把暗天体抬到可辨亮度。</p>
 
 <h2><span class="n">3</span>并排对比</h2>
-<figure><img src="img/earth-space.png" alt="地球深空"><figcaption>earth-space　左：线上　右：本地</figcaption></figure>
-<figure><img src="img/jupiter-space.png" alt="木星"><figcaption>jupiter-space　左：线上　右：本地</figcaption></figure>
-<figure><img src="img/saturn-rings-edge.png" alt="土星环平面"><figcaption>saturn-rings-edge　左：线上　右：本地</figcaption></figure>
+<p>云层与海岸线的对比见下两图；全部 30 个机位在第 7 节。</p>
+<figure><img src="img/earth-space.png" alt="云层"><figcaption>云层（earth-space）　左：线上　右：本地（半透明、可见大陆）</figcaption></figure>
+<figure><img src="img/earth-leo.png" alt="低轨海岸线"><figcaption>地球 400km 低轨（earth-leo）　左：线上　右：本地</figcaption></figure>
 <figure><img src="img/earth-night.png" alt="地球夜面"><figcaption>earth-night　左：线上　右：本地</figcaption></figure>
-<figure><img src="img/moon-ground-horizon.png" alt="月球地面"><figcaption>moon-ground-horizon　左：线上　右：本地（仍偏暗）</figcaption></figure>
+<figure><img src="img/saturn-rings-edge.png" alt="土星环平面"><figcaption>saturn-rings-edge　左：线上　右：本地</figcaption></figure>
+<figure><img src="img/moon-ground-horizon.png" alt="月球地面"><figcaption>moon-ground-horizon　左：线上　右：本地（按物理正确保留，比线上暗）</figcaption></figure>
 
 <h2><span class="n">4</span>批次 C 的结论</h2>
 <ul>
