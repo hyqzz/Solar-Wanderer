@@ -898,7 +898,10 @@ ${CLOUD_GLSL}
           // 旧版把 hFrac=0.5 处的密度直接当 alpha 用，等于只看了半层，
           // 又叠加阈值截断，于是云要么全透要么全白，没有中间态。
           vec2 luv = cloudUV(latLonOf(ro + rd * tEnter), uTime);
-          float alpha = cloudAlpha(textureGrad(uMap, luv, gX, gY).rgb) * mix(0.42, 1.0, dayF);
+          // 云壳是**alpha 合成**，而线上是在盘面材质里把云当反照率乘上去——
+          // 前者在厚云处的轮廓天然更硬（白斑贴在不透明的盘面上）。把不透明度
+          // 整体收到 0.65，让它读作"覆盖在贴图上的一层"，而不是一块块白。
+          float alpha = cloudAlpha(textureGrad(uMap, luv, gX, gY).rgb) * mix(0.42, 1.0, dayF) * 0.65;
           vec3 col = vec3(max(dot(n, L), 0.0)) * uSunI + nightTint;
           gl_FragColor = vec4(col * alpha, alpha);
           #include <tonemapping_fragment>
