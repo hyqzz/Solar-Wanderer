@@ -253,6 +253,13 @@ export function createPlanetMaterial({
     uRingShine: { value: 0 },                          // 环照强度（无环天体为 0）
     uCenter: { value: new THREE.Vector3() },            // 行星中心（相机相对，每帧更新）
     uDetailMode: { value: detailMode },                 // 可运行时降档置 0
+    // 盘面程序化细节的幅度系数。冰卫星（反照率 0.8–1.0）表面本来就光滑，
+    // 叠同样的噪声会变成"雪球上的噪点"——实测土卫三/土卫四的盘面纹理能量
+    // 是线上的 15–17 倍。按反照率衰减：岩石 1.0，纯冰 0.2。
+    uDetailAmp: { value: (() => {
+      const a = bodyId ? SURFACE_ALBEDO[bodyId] : undefined;
+      return a == null ? 1 : Math.max(0.2, Math.min(1, 1.45 - a));
+    })() },
     uRadius: { value: radiusKm },
     // === Issue #26/#27/#28/#29/#36：真实感着色器 uniforms ===
     uTime: { value: 0 },           // 秒（实时，驱动云层/条带/极光帘幕动画）
@@ -331,6 +338,7 @@ export function createPlanetMaterial({
       uniform vec3 uSunDir;
       uniform float uSunI;
       uniform int uDetailMode;
+      uniform float uDetailAmp;
       uniform float uRadius;
       // === Issue #26/#27/#28/#36 uniforms ===
       uniform float uTime;
@@ -407,7 +415,10 @@ ${CLOUD_GLSL}
               float t1 = pnoise(p * 64.0);
               float t2 = pnoise(p * 340.0) * smoothstep(0.2, 0.75, app);
               float t3 = pnoise(p * 1200.0) * smoothstep(0.35, 0.9, app);
-              albedo *= 1.0 + fade * ((t1 - 0.5) * 0.22 + (t2 - 0.5) * 0.14 + (t3 - 0.5) * 0.07);
+              // 幅度整体收一档（3R 处 app=0.33 时 fade 已=1，原来的 0.22 让盘面
+              // 布满噪声，而线上同一距离只有贴图本身的结构），再乘冰面衰减系数。
+              albedo *= 1.0 + fade * uDetailAmp
+                      * ((t1 - 0.5) * 0.13 + (t2 - 0.5) * 0.075 + (t3 - 0.5) * 0.035);
               // === 细节同时扰动法线 ===
               // 此前程序化细节**只改反照率**，法线始终是光滑球面——近看就是
               // "画在球上的斑块"，没有起伏感（岩石/地形那边是扰动的，这里不是）。
