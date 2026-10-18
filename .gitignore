@@ -63,3 +63,6 @@ tools/.audit-scenarios/
 # ---- 本地审计产物 ----
 .audit-reports/
 tools/.reference/
+
+# ---- 版本对比产物 ----
+.cmp/

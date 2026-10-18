@@ -11,13 +11,21 @@
 import puppeteer from 'puppeteer';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-const OUT = new URL('./.audit-scenarios/', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
+// 对比模式：AUDIT_BASE 指向任意站点（含线上），AUDIT_OUT 指定输出目录，
+// 于是同一份场景表可以在本地构建与线上版本上各跑一遍做同机位对比。
+const BASE = process.env.AUDIT_BASE ?? 'http://127.0.0.1:4199';
+const OUT = (process.env.AUDIT_OUT
+  ? new URL('../' + process.env.AUDIT_OUT + '/', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')
+  : new URL('./.audit-scenarios/', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1'));
 mkdirSync(OUT, { recursive: true });
 const FILTER = process.argv[2] ?? '';
 
 const b = await puppeteer.launch({
   headless: true,
-  args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+  // 线上站点走自签/非信任链时 curl 会 000，浏览器同样要放行（实测 sw.icodestar.net）
+  acceptInsecureCerts: true,
+  args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
+    '--ignore-certificate-errors'],
 });
 
 let p = null, errs = [];
@@ -29,7 +37,11 @@ async function freshPage() {
   p.on('pageerror', (e) => errs.push(String(e)));
   p.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
   await p.setViewport({ width: 960, height: 600 });
-  await p.goto(`http://127.0.0.1:4199/?clean=1&quality=${process.env.AUDIT_Q ?? 'high'}&pr=1${process.env.AUDIT_FLAGS ?? ''}`, { waitUntil: 'networkidle2', timeout: 180000 });
+  // AUDIT_CLEAN=0 时不带 clean：clean 在**当前**代码里会关掉轨道线/标签/HUD
+// （cinematic），而线上是旧版、忽略这个参数——做版本对比时必须两边一致，
+// 否则会把"纯净模式"误判成"本地少了东西"。
+const CLEAN = process.env.AUDIT_CLEAN === '0' ? '' : 'clean=1&';
+await p.goto(`${BASE}/?${CLEAN}quality=${process.env.AUDIT_Q ?? 'high'}&pr=1${process.env.AUDIT_FLAGS ?? ''}`, { waitUntil: 'networkidle2', timeout: 180000 });
   await p.waitForFunction(() => {
     const x = document.getElementById('start-btn');
     return x && !x.disabled;
@@ -74,7 +86,12 @@ async function land(id, latDeg, lonShiftDeg) {
   const ss = await localOf(id, 'sub');
   await orbit(id, ss.R + 0.002, ss.lat, ss.lon + (lonShiftDeg ?? 0) * Math.PI / 180);
   for (let i = 0; i < 70; i++) {
-    if (await p.evaluate((bid) => window.__game.terrainMgr.baseReady(bid), id)) break;
+    // 线上（旧版本）的 terrainMgr 没有 baseReady——直接取会抛 TypeError 让整个
+    // 地面场景失败。取不到就当作"已就绪"继续（它的 DEM 加载没那么激进）。
+    if (await p.evaluate((bid) => {
+      const tm = window.__game.terrainMgr;
+      return typeof tm.baseReady === 'function' ? tm.baseReady(bid) : true;
+    }, id)) break;
     await new Promise((r) => setTimeout(r, 500));
   }
   // 等焦点过渡跑完再设距离：orbit() 会启动一段过渡，它会在随后的若干帧里
@@ -112,8 +129,12 @@ const look = (pitch, yaw) => p.evaluate((pi, ya) => {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// 指标读取对**旧版本站点**要容错：线上（sw.icodestar.net）的 window.__game 只导出
+// 22 个键，连 renderer/composer 都没有，直接取会抛 TypeError 让整个场景失败。
+// 取不到就返回 null，改用离线的 PNG 指标（tools/cmp-metrics.py）对比。
 const metrics = () => p.evaluate(() => new Promise((res) => {
   const g = window.__game;
+  if (!g?.renderer?.getContext || !g?.composer?.render) { res(null); return; }
   const gl = g.renderer.getContext();
   const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
   const orig = g.composer.render.bind(g.composer);
@@ -146,6 +167,7 @@ const metrics = () => p.evaluate(() => new Promise((res) => {
 }));
 
 const fps = () => p.evaluate(() => new Promise((res) => {
+  if (!window.__game?.renderer?.getContext) { res(null); return; }
   let f = 0; const t0 = performance.now();
   const tick = () => { f++; if (performance.now() - t0 < 2000) requestAnimationFrame(tick); else res(+(f / ((performance.now() - t0) / 1000)).toFixed(1)); };
   requestAnimationFrame(tick);
@@ -167,7 +189,7 @@ const SCENARIOS = [
   ['earth-leo', async () => { await orbit('earth', 6371 + 400, null, null); await wait(9000); }],
   ['earth-night', async () => { const s = await localOf('earth', 'anti'); await orbit('earth', 6371 * 3.2, s.lat, s.lon); await wait(7000); }],
   ['earth-ground-horizon', async () => { await land('earth', 30, 0); await look(0.03, 0); await wait(9000); }],
-  ['earth-ground-up', async () => { await look(1.15, 0); await wait(3000); }],
+  ['earth-ground-up', async () => { await land('earth', 30, 0); await look(1.15, 0); await wait(9000); }],
   ['earth-underwater', async () => {
     // 水下机位。走到这一步踩过两次坑，记在这里：
     //  1) 每个场景都重开页面，不能依赖上一个场景的状态；
@@ -210,15 +232,15 @@ const SCENARIOS = [
   }],
   ['mars-space', async () => { await orbit('mars', 3390 * 3.0, null, null); await wait(7000); }],
   ['mars-ground-horizon', async () => { await land('mars', 18, 0); await look(0.04, 0); await wait(10000); }],
-  ['mars-ground-up', async () => { await look(1.15, 0); await wait(3000); }],
+  ['mars-ground-up', async () => { await land('mars', 18, 0); await look(1.15, 0); await wait(9000); }],
   ['titan-ground-horizon', async () => { await land('titan', 40, 0); await look(0.04, 0); await wait(10000); }],
-  ['titan-ground-up', async () => { await look(1.15, 0); await wait(3000); }],
+  ['titan-ground-up', async () => { await land('titan', 40, 0); await look(1.15, 0); await wait(9000); }],
   ['moon-ground-horizon', async () => { await land('moon', 8, 0); await look(0.05, 0); await wait(10000); }],
-  ['moon-ground-up', async () => { await look(1.15, 0); await wait(3000); }],
+  ['moon-ground-up', async () => { await land('moon', 8, 0); await look(1.15, 0); await wait(9000); }],
   // 低太阳角机位：日下点正顶照时起伏不投影、看不见——判"地面有没有地貌"
   // 必须在斜射光下看。偏 80° 经度约等于太阳高度 10°。
-  ['moon-ground-dusk', async () => { await land('moon', 8, 80); await look(0.05, 0); await wait(10000); }],
-  ['mars-ground-dusk', async () => { await land('mars', 18, 80); await look(0.05, 0); await wait(10000); }],
+  ['moon-ground-dusk', async () => { await land('moon', 8, 80); await look(1.15, 0); await wait(10000); }],
+  ['mars-ground-dusk', async () => { await land('mars', 18, 80); await look(1.15, 0); await wait(10000); }],
   ['mercury-ground-horizon', async () => { await land('mercury', 20, 0); await look(0.05, 0); await wait(10000); }],
   // 低轨机位：判"地形方块与基底球的交界"是否可见（R4）
   // 低轨必须对着**日下点**：lon 传 null 会落在夜面，整幅图全黑（此前就是这样，
@@ -245,7 +267,7 @@ for (const [name, fn] of SCENARIOS) {
     const t0 = Date.now();
     await freshPage();
     await fn();
-    const m = await metrics();
+    const m = (await metrics()) ?? {};
     const f = await fps();
     const st = await state();
     await p.screenshot({ path: `${OUT}${name}.png` });
