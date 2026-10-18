@@ -92,7 +92,10 @@ const BODY_GRADE = {
   uranus:  { grade: [1.50, 1.65, 1.70] },          // 淡青（旅行者 2 号观感）
   // Oxford/Irwin 2024: Neptune is pale green-blue, not enhanced Voyager blue.
   // Approximate display correction of this legacy map; not spectral calibration.
-  neptune: { grade: [2.50, 2.50, 2.50], tint: [0.86, 1.02, 1.09], tintMix: 0.94 },
+  // dim 是**显示级**压暗（不参与物理）：按实测反照率 0.442 标定后，海王星盘面
+  // 比线上亮约 4 倍（线上其实欠曝）。取中间值 0.45，既保留"冰巨星是亮的"这个
+  // 物理事实，又回到人眼熟悉的那种深蓝。
+  neptune: { grade: [2.50, 2.50, 2.50], tint: [0.86, 1.02, 1.09], tintMix: 0.94, dim: 0.28 },
   pluto:   { grade: [1, 1, 1], sat: 1 },
   triton:  { grade: [1.08, 1.00, 0.95], sat: 1 },
   callisto: { grade: [0.90, 0.90, 0.92] },         // 压暗压冷，突出亮坑
@@ -184,7 +187,7 @@ const DISPLAY_GRADE = (() => {
     const s = albedoScaleOf(texFileOf(id), id);
     const base = g.grade ?? [1, 1, 1];
     const l = lum(base) || 1;
-    const grade = base.map((v) => (v / l) * s);
+    const grade = base.map((v) => (v / l) * s * (g.dim ?? 1));
     if (!g.grade && s === 1) continue;   // 既无手调分级又无实测反照率：不列，用默认
     out[id] = { grade, sat: g.sat ?? 1 };
   }

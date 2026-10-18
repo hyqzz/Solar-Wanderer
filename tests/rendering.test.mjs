@@ -1059,7 +1059,7 @@ test('曝光律：uSunI = 1/d²、曝光 = K·d²，两者相乘与距离无关'
   // 模拟"相机对着目标曝光"，让水星不再是一块黑饼。这里仍校验距离律的系数。
   const e = m.match(/exposureTarget = THREE\.MathUtils\.clamp\(\s*([\d.]+) \* Math\.max\(dSunAU, 0\.004\) \*\* 2 \* exposureAdapt/);
   assert.ok(e, '曝光的距离部分必须写成 K·d²·adapt 的形式');
-  assert.ok(/exposureAdapt = 1 \+ \(Math\.pow\(0\.45 \/ Math\.max\(a, 0\.03\), 0\.75\) - 1\) \* w/.test(m),
+  assert.ok(/exposureAdapt = 1 \+ \(Math\.pow\(0\.62 \/ Math\.max\(a, 0\.03\), 1\.0\) - 1\) \* w/.test(m),
     '缺少反照率适应因子（水星等暗天体会被压成黑饼）');
   const K = Number(e[1]);
   assert.ok(K > 0.3 && K < 1.2, `曝光标定系数 ${K} 应在 (0.3, 1.2)：太小画面发灰、太大亮部削顶`);

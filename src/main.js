@@ -1560,7 +1560,7 @@ function updateAtmosphereFogAndExposure(nearest, dt) {
       ) / Math.max(e.phys.radiusKm, 1e-6);
       const w = 1 - THREE.MathUtils.smoothstep(rr, 40, 100);
       if (w > 0) {
-        exposureAdapt = 1 + (Math.pow(0.45 / Math.max(a, 0.03), 0.75) - 1) * w;
+        exposureAdapt = 1 + (Math.pow(0.62 / Math.max(a, 0.03), 1.0) - 1) * w;
       }
     }
   }
