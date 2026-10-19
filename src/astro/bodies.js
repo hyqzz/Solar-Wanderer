@@ -86,11 +86,16 @@ export const BODIES = {
       mie: [7.7e-5, 8.3e-5, 9.3e-5], mieG: 0.72, multiplier: 0.66,
       interiorBoost: 1.52, // ≈1/0.66：补偿 multiplier 降低对地表/低空无散射天空亮度的影响
     },
-    // cloudsReal：由 tools/fetch-clouds.mjs 从 NASA GIBS 的 MODIS 云量产品生成的
-    // **真实日期**云图（灰度＝云量百分数）。存在时优先于合成的 earth_clouds.jpg；
-    // 缺文件时自动回落到合成图，不影响启动（云图是可选的增强）。
-    textures: { map: 'earth_day.jpg', night: 'earth_night.jpg', clouds: 'earth_clouds.jpg',
-      cloudsReal: 'clouds_real.png' },
+    // 云层**只**用 earth_clouds.jpg。
+    //
+    // 曾经接 NASA GIBS 的 MODIS_Terra_Cloud_Fraction_Day（clouds_real.png）当"真实
+    // 日期云图"。那是**云量**——每个网格里被云覆盖的面积比例（全球均值 0.72），
+    // 不是云的厚度/反射率。把它当不透明度喂进 cloudAlpha，等于让 64% 的地表盖上
+    // 一层 >50% 不透明的白纱：地球从"蓝色行星 + 白色云涡"变成一颗白球
+    // （实测盘面近白像素 2.0% → 25.4%，400km 低轨 18.3% → 96.2%）。
+    // 要接真实云，必须换成 Cloud_Optical_Thickness 一类厚度产品，云量只做遮罩；
+    // 在那之前回落到合成云图——线上就是这张，效果已知。
+    textures: { map: 'earth_day.jpg', night: 'earth_night.jpg', clouds: 'earth_clouds.jpg' },
     desc: '已知唯一存在生命的行星。71% 表面被液态水覆盖，氮氧大气，一颗大卫星稳定着自转轴。你的家园。',
   },
   mars: {

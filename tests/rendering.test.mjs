@@ -240,14 +240,15 @@ test('真实云图资产与清单存在且自洽，并已在贴图清单里登�
   assert.equal(png.readUInt32BE(0), 0x89504e47, 'clouds_real.png 不是 PNG');
 });
 
-test('云层优先用真实日期云图，缺文件时回落合成图', () => {
-  assert.ok(BODIES.earth.textures.cloudsReal, '地球贴图未声明真实云图');
+test('地球云层不使用 MODIS 云量图（云量不是不透明度）', () => {
+  // 2026-10-19：MODIS_Terra_Cloud_Fraction_Day 是**云量**（覆盖比例，全球均值 0.72），
+  // 不是云的厚度。当成不透明度喂进去会让 64% 地表盖上 >50% 不透明的白纱——
+  // 实测地球盘面近白像素 2.0% → 25.4%、400km 低轨 18.3% → 96.2%。
+  assert.equal(BODIES.earth.textures.cloudsReal, undefined, '地球仍在声明云量图');
+  assert.equal(BODIES.earth.textures.clouds, 'earth_clouds.jpg', '云层应回落到合成云图');
   const src = read('src/scene/builder.js');
-  assert.ok(/phys\.textures\?\.cloudsReal && cache\.has\(phys\.textures\.cloudsReal\)/.test(src),
-    '未优先选真实云图');
-  // 回落分支必须保留——真实云图是可选的增强，缺了不能让地球没有云
   assert.ok(/phys\.textures\?\.clouds && !phys\.textures\.cloudsOpaque/.test(src),
-    '缺少回落合成云图的分支');
+    '缺少合成云图分支');
 });
 
 test('云层经纬度在体固系里算（否则云挂在惯性系不随自转）', () => {
@@ -529,7 +530,11 @@ test('星场源码确实用真实星表，且没有残留的虚构星', () => {
   assert.ok(!/BRIGHT_STARS/.test(src), '手写亮星表仍有残留');
   assert.ok(!/STAR_COLORS/.test(src), '离散色档仍有残留');
   assert.ok(!/Math\.pow\(1 - u \* 0\.999/.test(src), '虚构背景星的幂律抽样仍在');
-  assert.ok(!/11000/.test(src), '虚构背景星仍在生成');
+  // 2026-10-19：恢复一层**极限星等之外**的暗星背景（11,000 颗，按银道面集中），
+  // 强度上限 0.22、远低于星表层。它不是"虚构亮星"——真实的恒星计数在 6.5 等之外
+  // 仍按 log N ∝ 0.6m 增长，这一层只是把肉眼看不到的那部分底噪做出来。
+  assert.ok(/const I = 0\.22 \* \(0\.25 \+ 0\.75 \* Math\.pow\(rnd\(\), 2\.2\)\)/.test(src),
+    '缺少暗星背景层（或强度上限被改掉）');
   // 标签必须每颗星各自持有方向——共用一个临时向量会让所有标签指向最后一颗
   const main = read('src/main.js');
   assert.ok(/const dirWorld = raDecToWorld\(/.test(main), '标签方向未按星各自持有');
@@ -1115,8 +1120,13 @@ test('太阳光球保留色温（不是灰度）', () => {
   // 但"一眼认得出是太阳"要求暖色。只改色度、不改结构（米粒/黑子/临边昏暗）。
   // 2026-10-18：改为**保留贴图色相、只归一亮度**——取纯亮度再乘色度常数会
   // 把太阳标志性的暖橙整个丢掉（线上直接用贴图颜色，所以一眼认得出）。
-  assert.ok(/vec3 base = sampled \* \(0\.85 \/ max\(luminance, 1e-3\)\)/.test(src),
-    '光球基色应保留贴图色相');
+  // 2026-10-19：逐像素归一化 `sampled * (0.85/luminance)` 会把贴图的**所有亮度
+  // 结构清零**（米粒组织消失），改为按**全图均值**归一（uMapMean），结构 100% 保留。
+  assert.ok(/vec3 base = sampled \* \(0\.85 \/ max\(uMapMean, 1e-3\)\)/.test(src),
+    '光球基色应保留贴图结构（按全图均值归一）');
+  assert.ok(!/0\.85 \/ max\(luminance, 1e-3\)/.test(src), '仍在逐像素归一化（会抹平米粒）');
+  // 米粒门禁不能写反：周期 ≥1px 才淡入
+  assert.ok(/smoothstep\(1\.0, 3\.5, px1\)/.test(src), '米粒 LOD 门禁仍写反');
   assert.ok(!/vec3 base = vec3\(luminance\)/.test(src), '仍是纯灰基色');
 });
 
@@ -1321,10 +1331,14 @@ test('远距行星光点按 1/d² 衰减（否则海王星比金星亮）', () =
 
 // ── 银河必须真的在天上 ──────────────────────────────────────────────────────
 // milkyway.jpg 实测均值 0/255、峰值 46——几乎全黑，于是夜空只有星点、没有银河。
-test('银河改为程序化生成（贴图本身是全黑的）', () => {
+test('银河：真实贴图优先，程序化只作兜底', () => {
   const src = read('src/scene/starfield.js');
-  assert.ok(/function makeMilkyWayTexture/.test(src), '缺少程序化银河');
-  assert.ok(/makeMilkyWayTexture\(\) \?\? milkywayTex/.test(src), '未作为贴图回退');
+  assert.ok(/function makeMilkyWayTexture/.test(src), '缺少程序化兜底');
+  // 2026-10-19：2026-09-30 把 milkyway.jpg 换成压暗版（均值 1.4→0.4），随后
+  // 误判为"全黑"改成程序化——但平均值低不等于没内容，银河本来就是很淡的带。
+  // 现在恢复 1.9MB 原图，程序化只在贴图缺失时兜底。
+  assert.ok(/milkywayTex = milkywayTex \?\? makeMilkyWayTexture\(\)/.test(src),
+    '真实贴图未优先');
   assert.ok(/Math\.exp\(-Math\.abs\(b\) \/ 9\)/.test(src), '缺少银盘亮度带');
   assert.ok(/dust/.test(src), '缺少尘埃暗带');
   // 球面分段：银盘半高宽 ~7°，32 段时一面跨 5.6°，会被切成多边形色块

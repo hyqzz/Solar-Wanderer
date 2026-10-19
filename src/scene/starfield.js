@@ -83,7 +83,7 @@ function makeMilkyWayTexture() {
 function createZodiacalLight() {
   const uniforms = {
     uSunDir: { value: new THREE.Vector3(1, 0, 0) },
-    uIntensity: { value: 0.020 },
+    uIntensity: { value: 0.0012 },
     // 随星空一起淡出（见 createStarfield 里的说明）
     uFade: { value: 1.0 },
   };
@@ -113,12 +113,19 @@ function createZodiacalLight() {
         vec3 d = normalize(vDir);
         // 世界系 +Y = 黄北极，所以 d.y 直接就是黄纬的正弦
         float lat = asin(clamp(d.y, -1.0, 1.0));
-        float band = exp(-abs(lat) / 0.14);            // 半高宽约 8°
+        float band = exp(-abs(lat) / 0.14);            // 沿黄道 ±15°
         float cosEl = dot(d, normalize(uSunDir));
         float elon = acos(clamp(cosEl, -1.0, 1.0));    // 日心距（弧度）
-        // 朝太阳方向增亮，~80° 外基本消失
-        float bright = exp(-(elon * elon) / (1.15 * 1.15));
-        float I = band * (0.25 + 0.75 * bright) * uIntensity * uFade;
+        // **朝太阳的锥，没有底的带。**
+        //
+        // 旧式 band * (0.25 + 0.75*bright) 里那个 0.25 是错的：它让黄道光在
+        // **背日方向仍有 25% 亮度**，于是变成一条绕黄道一整圈的光带。真实的
+        // 黄道光是一个朝太阳的锥（日心距 30–90° 最明显），背日方向暗到与背景
+        // 同量级——真实比值 50:1 以上，旧写法只有 4:1。相机基本都待在黄道面
+        // 附近、看行星就是沿着黄道看，所以那条带**横穿每一张太空图**。
+        // 平方衰减 + 更紧的锥角，把 90° 以外压到可忽略。
+        float bright = exp(-(elon * elon) / (0.85 * 0.85));
+        float I = band * bright * bright * uIntensity * uFade;
         // 略偏暖白（尘埃散射略红于太阳）
         gl_FragColor = vec4(vec3(1.0, 0.965, 0.90) * I, 1.0);
       }
@@ -137,17 +144,20 @@ export function createStarfield(milkywayTex) {
 
   // 银河球：银道坐标定向（NGP: RA 192.8595°, Dec 27.1284°；银心: RA 266.405°, Dec −28.936°）
   //
-  // 贴图换成**程序化生成**的银道面。仓库里的 milkyway.jpg 实测均值 0/255
-  // （峰值 46）——它几乎是一张全黑图，于是夜空里只有星点、没有银河。
-  // 真实银河是肉眼最容易认出的天球结构：一条从地平线拱到地平线的乳白色带，
-  // 银心方向更亮、被尘埃带切成两半。这里按银道坐标直接合成，不依赖下载。
-  milkywayTex = makeMilkyWayTexture() ?? milkywayTex;
+  // **真实贴图优先，程序化只作兜底。**
+  //
+  // 2026-09-30 那次把仓库里的 milkyway.jpg 换成了压暗版（1.9MB → 0.53MB，均值
+  // 1.4 → 0.4），随后 2026-10-17 因为"贴图均值 0/255"改成程序化生成——那是一次
+  // 误诊：平均值低不等于没内容，银河本来就是一条很淡的带，亮度集中在银道面。
+  // 换掉之后银河从"有尘埃结构的真实照片"变成平滑团块，材质疑色也从 0.5 降到 0.34。
+  // 现在恢复 1.9MB 那张原图（与线上同一文件），程序化版本只在贴图缺失时兜底。
+  milkywayTex = milkywayTex ?? makeMilkyWayTexture();
   if (milkywayTex) {
     milkywayTex.colorSpace = THREE.SRGBColorSpace;
     const mat = new THREE.MeshBasicMaterial({
       map: milkywayTex, side: THREE.BackSide, depthWrite: false, fog: false,
       transparent: true,
-      color: new THREE.Color(0.34, 0.34, 0.38), // 压暗，避免压过前景
+      color: new THREE.Color(0.5, 0.5, 0.55), // 与线上一致
     });
     milkyMat = mat;
     // 分段给足：银盘亮带半高宽只有 ~7°，32 段时一个面跨 5.6°——带子会被切成
@@ -164,15 +174,15 @@ export function createStarfield(milkywayTex) {
     group.add(mesh);
   }
 
-  const pointCanvas = document.createElement('canvas');
-  pointCanvas.width = pointCanvas.height = 32;
-  const pointCtx = pointCanvas.getContext('2d');
-  const pointGlow = pointCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  pointGlow.addColorStop(0, 'rgba(255,255,255,1)');
-  pointGlow.addColorStop(0.35, 'rgba(255,255,255,0.8)');
-  pointGlow.addColorStop(1, 'rgba(255,255,255,0)');
-  pointCtx.fillStyle = pointGlow; pointCtx.fillRect(0, 0, 32, 32);
-  const pointMap = new THREE.CanvasTexture(pointCanvas);
+  // **星点用硬点，不用贴图。**
+  //
+  // 此前用一张 32×32 的径向渐变当 sprite，最暗档只有 1.7px：一张带软边的
+  // 32×32 贴图被压到 1.7 像素，mipmap 平均后峰值对比度塌掉，星点变成一团
+  // 半透明的灰——眼睛读成"噪点/灰渣"而不是"星"。线上是不带 map 的
+  // PointsMaterial，落在屏幕上就是 1–2 像素的硬点，所以"干净清晰"。
+  // 实测同一块天区：线上星点半高宽 6px、本地 14px（相对值，同一缩放）。
+  // 软边在放大观察时确实更"物理"（真实星点有衍射晕），但在 1–2 像素尺度上
+  // 它只会换来对比度损失——这里选择清晰。
 
   // ── 真实星表（BSC5，9096 颗 V ≤ 6.5）────────────────────────────────────
   // 这里是**全部**恒星，不再叠程序化假星。
@@ -188,11 +198,11 @@ export function createStarfield(milkywayTex) {
   // 第二层的 min/max 极易写反，而写反的后果是条件永假——那 92 颗亮星会**静默消失**，
   // 画面照出、只是天上少了一批最该有的星（实测就栽在这里：只剩 9004 颗暗星）。
   const LAYERS = [
-    // 三档而不是两档：只有两档时天狼星（−1.46 等）与一颗 2.4 等星圆面一样大，
-    // 只差强度——"亮星"的层次感全压在最亮那一档里。多一档几乎零成本。
-    { size: 5.0, lo: -Infinity, hi: 0.5 },   // 一等星及以上（天狼、老人、南门二…）
-    { size: 3.2, lo: 0.5, hi: 2.0 },         // 二等
-    { size: 1.7, lo: 2.0, hi: Infinity },    // 三等及以下
+    // 尺寸与线上对齐（3.4 / 2.6 / 1.4）。三档而不是两档：只有两档时天狼星
+    // （−1.46 等）与一颗 2.4 等星圆面一样大，只差强度——"亮星"的层次感全压在最亮档。
+    { size: 3.4, lo: -Infinity, hi: 0.5 },   // 一等星及以上（天狼、老人、南门二…）
+    { size: 2.6, lo: 0.5, hi: 2.0 },         // 二等
+    { size: 1.4, lo: 2.0, hi: Infinity },    // 三等及以下
   ];
   const layers = [];
   for (const spec of LAYERS) {
@@ -200,7 +210,7 @@ export function createStarfield(milkywayTex) {
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(0), 3));
     const mat = new THREE.PointsMaterial({
-      size: spec.size, map: pointMap, sizeAttenuation: false, vertexColors: true, fog: false,
+      size: spec.size, sizeAttenuation: false, vertexColors: true, fog: false,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
     fadeMats.push(mat);
@@ -209,6 +219,51 @@ export function createStarfield(milkywayTex) {
     brightGroup.add(pts);
     layers.push({ mat, geo, lo: spec.lo, hi: spec.hi });
   }
+  // ── 暗星背景层：星表只到 V=6.5，天球的其余部分不是空的 ──────────────
+  //
+  // 真实的恒星计数随星等按 log N ∝ 0.6m 增长，6.5 等之外还有大量恒星——肉眼
+  // 看不见，但长曝光/相机能看到，它们也正是"银河"这条带的组成。星表 9,096 颗
+  // 摊到全天只有 0.22 颗/平方度；线上那 11,900 颗程序化星其实就是在近似这一层。
+  // 这里按**银道面集中**生成（薄盘视角分布，|b| 特征角约 12°），既补足密度，
+  // 又不把银河带洗平——各向均匀反而会把弥散带对比冲掉。
+  {
+    const COUNT = 11000;
+    const ngp = raDecToWorld(192.8595 * DEG, 27.1284 * DEG, new THREE.Vector3());
+    const pos = new Float32Array(COUNT * 3), col = new Float32Array(COUNT * 3);
+    let s = 987654321;
+    const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const v = new THREE.Vector3();
+    let n = 0, guard = 0;
+    while (n < COUNT && guard++ < COUNT * 40) {
+      const z = rnd() * 2 - 1, phi = rnd() * Math.PI * 2, r = Math.sqrt(1 - z * z);
+      v.set(r * Math.cos(phi), z, r * Math.sin(phi));
+      const sinB = Math.max(-1, Math.min(1, v.dot(ngp)));
+      if (rnd() > Math.exp(-Math.abs(Math.asin(sinB)) / 0.22)) continue;
+      pos[n * 3] = v.x * SKY_R * 0.98;
+      pos[n * 3 + 1] = v.y * SKY_R * 0.98;
+      pos[n * 3 + 2] = v.z * SKY_R * 0.98;
+      // 比星表那层更暗：这是"极限星等之外"的背景，只负责把天的底噪做出来
+      const I = 0.22 * (0.25 + 0.75 * Math.pow(rnd(), 2.2));
+      const t = rnd();
+      const cr = t < 0.5 ? 1.0 : (t < 0.85 ? 1.0 : 1.0);
+      const cg = t < 0.5 ? 0.95 : (t < 0.85 ? 0.92 : 0.78);
+      const cb = t < 0.5 ? 0.90 : (t < 0.85 ? 0.76 : 0.56);
+      col[n * 3] = cr * I; col[n * 3 + 1] = cg * I; col[n * 3 + 2] = cb * I;
+      n++;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, n * 3), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col.subarray(0, n * 3), 3));
+    const mat = new THREE.PointsMaterial({
+      size: 1.4, sizeAttenuation: false, vertexColors: true, fog: false,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    fadeMats.push(mat);
+    const pts = new THREE.Points(geo, mat);
+    pts.renderOrder = -9;
+    brightGroup.add(pts);
+  }
+
   brightGroup.frustumCulled = false;
 
   const _dir = new THREE.Vector3();
