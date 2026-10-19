@@ -157,7 +157,7 @@ BODY = """
 <div class="find"><h4>① 地球：云层与颜色</h4>
 <dl><dt>现象</dt><dd>改前本地地球被一层均匀白纱罩住，几乎认不出是地球（盘面近白 25.4%、平均饱和 2.4%）。</dd>
 <dt>根因</dt><dd>云层用了 NASA GIBS 的 <code>MODIS_Terra_Cloud_Fraction_Day</code>——那是<b>云量</b>（每格被云覆盖的面积比例，全球均值 0.72），不是云的厚度，被当成不透明度喂进了 <code>cloudAlpha</code>。</dd>
-<dt>现状</dt><dd>已回落到合成云图 <code>earth_clouds.jpg</code>：近白 8.4%、饱和 10.6%（线上 2.0% / 10.9%）。</dd></dl>
+<dt>现状</dt><dd>已回落到合成云图 <code>earth_clouds.jpg</code>。当前数值见第 2 节表格（earth-space 行的「白%」）。</dd></dl>
 <figure><img src="img/earth-space.png" alt="地球深空"><figcaption>earth-space　左：线上　右：本地</figcaption></figure>
 <figure><img src="crop/earth-disc.png" alt="地球盘面特写"><figcaption>地球盘面特写（2×）　左：线上　右：本地</figcaption></figure></div>
 
@@ -187,7 +187,7 @@ BODY = """
 
 <div class="find"><h4>⑥ 地球低轨</h4>
 <dl><dt>现象</dt><dd>改前 400km 低轨盘面近白 96.2%，整幅是一层灰蓝薄纱。</dd>
-<dt>现状</dt><dd>近白 21.0%（线上 18.3%），海陆结构与云涡重新可见。</dd></dl>
+<dt>现状</dt><dd>当前数值见第 2 节表格。注：400km 满幅就是整颗地球，该机位的「盘面」近似会退化成「最亮 3% 区域」，白% 只能作趋势参考；肉眼可见的真实差距是本地海面偏浅、偏平。</dd></dl>
 <figure><img src="img/earth-leo.png" alt="地球低轨"><figcaption>earth-leo　左：线上　右：本地</figcaption></figure>
 <figure><img src="crop/leo-surface.png" alt="低轨地表特写"><figcaption>400km 地表特写（2×）　左：线上　右：本地</figcaption></figure></div>
 
@@ -226,9 +226,22 @@ python tools/verify-gates.py .cmp/now/live .cmp/now/local</pre>
 """
 
 
-def data_uri(path):
-    w, h, bpp, px = mr.read_png(path)
-    return "data:image/png;base64," + base64.b64encode(mr.encode_png(w, h, bpp, px)).decode()
+_CACHE = {}
+
+
+def data_uri(path, max_w=1000):
+    """内联为 data URI。超过 max_w 的按比例缩到 max_w（LANCZOS），
+    同一路径只编码一次——逐项对比与图册复用同一批图，不重复占体积。"""
+    if path in _CACHE:
+        return _CACHE[path]
+    im = Image.open(path).convert("RGB")
+    if im.width > max_w:
+        h2 = max(1, round(im.height * max_w / im.width))
+        im = im.resize((max_w, h2), Image.LANCZOS)
+    uri = "data:image/png;base64," + base64.b64encode(
+        mr.encode_png(im.width, im.height, 3, im.tobytes())).decode()
+    _CACHE[path] = uri
+    return uri
 
 
 html = ("<title>Solar Wanderer 当前对照</title>\n<style>" + CSS + "</style>\n<div class=\"wrap\">\n"
