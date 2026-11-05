@@ -1,7 +1,8 @@
 name: Sync to Gitee
 
-# 自动把 GitHub 仓库镜像到 Gitee（所有分支与标签，保持与 GitHub 一致）。
-# 需要在仓库 Secrets 中配置 GITEE_SSH_PRIVATE_KEY。
+# 把 GitHub 镜像到 Gitee，但绝不覆盖 Gitee 上独有的工作。
+# 同步前检查：Gitee 是否存在 GitHub 没有的分支/标签，或含有 GitHub 未包含的提交。
+# 一旦发现，工作流失败并提示，不推送任何内容；确认后再手动处理。
 on:
   push:
   workflow_dispatch:
@@ -22,12 +23,45 @@ jobs:
           chmod 600 ~/.ssh/gitee_key
           ssh-keyscan gitee.com >> ~/.ssh/known_hosts
 
-      - name: Push all branches and tags
+      - name: Guard against overwriting Gitee-only work
         env:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/gitee_key -o StrictHostKeyChecking=no"
         run: |
           git remote add gitee "git@gitee.com:heyqzz/${{ github.event.repository.name }}.git" || true
-          # Gitee 不接受直接推送 remote-tracking ref，先落地为本地分支
+          git fetch --no-tags gitee "+refs/heads/*:refs/remotes/gitee/*" "+refs/tags/*:refs/remotes/gitee-tags/*"
+          RISK=0
+          for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/gitee/); do
+            b="${ref#gitee/}"
+            [ "$b" = "HEAD" ] && continue
+            gsha=$(git rev-parse "$ref")
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$b"; then
+              echo "::error::Gitee 上存在 GitHub 没有的分支：$b，已中止同步。"
+              RISK=1
+            elif ! git merge-base --is-ancestor "$gsha" "refs/remotes/origin/$b"; then
+              echo "::error::Gitee 分支 $b 含有 GitHub 未包含的提交（$gsha），已中止同步。"
+              RISK=1
+            fi
+          done
+          for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/gitee-tags/); do
+            t="${ref#gitee-tags/}"
+            gsha=$(git rev-parse "$ref")
+            if ! git show-ref --verify --quiet "refs/tags/$t"; then
+              echo "::error::Gitee 上存在 GitHub 没有的标签：$t，已中止同步。"
+              RISK=1
+            elif [ "$gsha" != "$(git rev-parse "refs/tags/$t")" ]; then
+              echo "::error::标签 $t 在 Gitee 与 GitHub 指向不同提交，已中止同步。"
+              RISK=1
+            fi
+          done
+          if [ "$RISK" -ne 0 ]; then
+            echo "::error::检测到 Gitee 独有内容，未推送任何内容。请先确认如何处理。"
+            exit 1
+          fi
+
+      - name: Push all branches and tags
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/gitee_key -o StrictHostKeyChecking=no"
+        run: |
           for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/); do
             branch="${ref#origin/}"
             [ "$branch" = "HEAD" ] && continue
