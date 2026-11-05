@@ -27,5 +27,11 @@ jobs:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/gitee_key -o StrictHostKeyChecking=no"
         run: |
           git remote add gitee "git@gitee.com:heyqzz/${{ github.event.repository.name }}.git" || true
-          git push --force --prune gitee "refs/remotes/origin/*:refs/heads/*"
+          # Gitee 不接受直接推送 remote-tracking ref，先落地为本地分支
+          for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/); do
+            branch="${ref#origin/}"
+            [ "$branch" = "HEAD" ] && continue
+            git show-ref --verify --quiet "refs/heads/$branch" || git branch "$branch" "$ref"
+          done
+          git push --force --prune gitee --all
           git push --force gitee --tags
