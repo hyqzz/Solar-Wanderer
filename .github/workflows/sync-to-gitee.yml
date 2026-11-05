@@ -1,6 +1,6 @@
 name: Sync to Gitee
 
-# 自动把 GitHub 仓库镜像到 Gitee（包括所有分支与标签）。
+# 自动把 GitHub 仓库镜像到 Gitee（所有分支与标签，保持与 GitHub 一致）。
 # 需要在仓库 Secrets 中配置 GITEE_SSH_PRIVATE_KEY。
 on:
   push:
@@ -34,4 +34,4 @@ jobs:
             git show-ref --verify --quiet "refs/heads/$branch" || git branch "$branch" "$ref"
           done
           git push --force --prune gitee --all
-          git push --force gitee --tags
+          git push --force --prune gitee "refs/tags/*:refs/tags/*" || true
