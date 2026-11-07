@@ -1,8 +1,8 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with code in this repository.
 
-# Solar Wanderer · 遨游太阳系 — Codex 操作指南
+# Solar Wanderer · 遨游太阳系 — 仓库操作指南
 
 项目名：**Solar Wanderer / 遨游太阳系**（2026-06-11 定名，仓库 github.com/hyqzz/Solar-Wanderer，MIT 协议）。代码中 `heliosphere` 仅指日球层物理结构，非旧项目名。
 
@@ -19,11 +19,13 @@ npm install          # 安装 three + vite + puppeteer
 npm run dev          # Vite 开发服务器 → http://localhost:5173
 npm run build        # 生产构建 → dist/（纯静态部署）
 npm run preview      # 预览构建产物（先 build）
-npm test             # 47 项离线单元/星历精度测试（Node 原生 test runner）
+npm test             # 离线单元/星历精度测试（Node 原生 test runner，当前 150+ 项）
 node --test tests/ephemeris.test.mjs   # 运行单个测试文件
 node --test tests/*.test.mjs           # 运行全部测试文件
 npm run verify       # 在线与 NASA JPL Horizons 实时对照（需联网）
-npm run fit-moons    # 重新拟合卫星轨道到当前历元（双历元经验长期率）
+npm run fit-moons    # 重新拟合卫星轨道到当前历元（7 历元最小二乘 + 经验长期率）
+npm run fetch-ephemeris # 刷新 JPL 采样星历（10 年窗口，按年分片，可重入）
+npm run verify-release  # 用离格点 JPL 参考校验采样星历
 npm run fit-tnos     # 从 SBDB 刷新 28 颗海外天体当前历元根数
 npm run fetch-small-bodies # 刷新 5412 颗真实小行星/彗星（SBDB）
 npm run fetch-dem    # 重新生成真实 DEM 瓦片（LOLA/MOLA/ETOPO1 → public/dem/）
@@ -48,8 +50,9 @@ npm run fetch-textures # 重新下载贴图资产
 
 - **离线生成/拟合/验证**
   - `node tools/verify-ephemeris.mjs` — 在线与 JPL Horizons 交叉验证（`npm run verify` 的入口）
-  - `node tools/make-fixtures.mjs` — 重新生成 `tests/fixtures.json`（需联网）
+  - `npm run make-fixtures` — 重新生成 `tests/fixtures.json`（需联网；**必须先跑 fit-moons**，基准历元要与拟合历元同步）
   - `node tools/fit-moons.mjs` — 用 Horizons 状态向量重新拟合 21 颗卫星轨道
+  - `npm run fetch-ephemeris` — 刷新 10 年窗口的 JPL 采样星历（并发 4，失败不中断，可重入）
   - `node tools/fetch-textures.mjs` — 下载贴图资产
 - **回归 / 冒烟（需 dev server）**
   - `node tools/repro-r8.mjs` — 屏幕中心缩放三场景断言
@@ -65,6 +68,9 @@ npm run fetch-textures # 重新下载贴图资产
   - `node tools/probe-r8-shot.mjs` — 截图探测
   - `node tools/probe-maxdist.mjs` — 400 AU 远距标签可见性
   - `node tools/audit-visuals.mjs` — 视觉审查
+  - `node tools/probe-atlas.mjs` — 日下点满相圆盘图册（17 天体+环+地球夜面）
+  - `node tools/probe-surface.mjs` — 地表行走图册（7 天体地平线+仰天，含白昼星淡断言）
+  - `node tools/probe-starfade.mjs` — 白昼星空淡出链路诊断（skyFade 逐中间量）
   - `node tools/capture-demo.mjs` / `capture-mobile.mjs` — 生成演示截图
 
 ## 技术栈
@@ -101,7 +107,8 @@ npm run fetch-textures # 重新下载贴图资产
 - **计算坐标系**：日心黄道 J2000，单位 km。
 - **→ Three.js 世界**：`(x, y, z)_ecl → (x, z, -y)_three`，黄道北极对应 +Y。
 - **体固系 → 世界**：同样映射；本初子午线指向本地 +X，北极指向 +Y。
-- 太阳点光源强度 = `2.5 / dAU²`（StandardMaterial）；自定义着色器内按 `1/d²` 缩放。
+- 太阳点光源强度 = `π × (1/dAU²)^0.55`（StandardMaterial，纯白；系数 π 抵消漫反射的
+  1/π，与盘面材质 `albedo·NdotL·uSunI` 同量级）；自定义着色器内按 `1/d²` 缩放。
 
 ## 尺度与精度
 
@@ -126,15 +133,16 @@ npm run fetch-textures # 重新下载贴图资产
   - `tests/rotation.test.mjs` — IAU 自转模型
   - `tests/time.test.mjs` — UTC/TT/JD 换算
 - 离线基准数据在 `tests/fixtures.json`。
-- 若 `npm test` 因 fixtures 缺失失败，可运行 `node tools/make-fixtures.mjs`（需联网）重新生成。
+- 若 `npm test` 因 fixtures 缺失失败，可运行 `npm run make-fixtures`（需联网）重新生成；
+  基准历元必须与 `npm run fit-moons` 的拟合历元同步，否则测到的是「fixture 离历元多远」而不是模型精度。
 - 新增星历或轨道改动后，应跑 `npm run verify` 与 `npm test`。
 
 ## 已知限制（已接受）
 
-1. 卫星轨道用双历元经验长期率（λ/ϖ/Ω 分解，tools/fit-moons.mjs），一阶长期漂移正确；伽利略卫星拉普拉斯共振章动未建模，一年后残余相位误差约 2–4°——建议每季度跑 `npm run fit-moons`。
+1. 卫星轨道用 7 历元最小二乘拟合的密切根数 + 经验长期率（λ/ϖ/Ω 分解，tools/fit-moons.mjs）。实测：拟合历元处 <0.01°，离历元 ±180 天约 0.1–2°（伽利略卫星的受迫倾角与拉普拉斯共振章动未建模）。**JPL 采样星历覆盖 2025–2035（按年分片），窗口内走采样插值、精度 <0.001°**；窗口外或加载失败才回退到解析模型。建议每季度跑 `npm run fit-moons && npm run make-fixtures`，每年跑一次 `npm run fetch-ephemeris` 把窗口往后推。
 2. 日月食阴影锥为几何近似（无贝塞尔落区精确计算）。
 3. 地形：月球/火星/地球为真实 DEM（LOLA/MOLA/ETOPO1 四叉树瓦片，tools/fetch-dem.mjs 生成，public/dem/ 随站点部署）；其余天体仍为噪声+真实反照率融合。
-4. 气巨大红斑等特征为静态贴图，不随系统 III 经度对准。
+4. 木星大红斑/条带已有动态化（uTime 纬向风+对流胞+大红斑漂移，planetMaterial.js），但大红斑漂移速率为视觉化近似，未与系统 III 经度严格对准。
 
 ## 代码风格（来自 CONTRIBUTING.md）
 
