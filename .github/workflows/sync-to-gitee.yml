@@ -7,12 +7,30 @@ on:
   push:
   workflow_dispatch:
 
+# 同一个组内串行执行。短时间内连续 push 会触发多个 run，
+# 并发去连 gitee.com:22 极易被重置（kex_exchange_identification: Connection reset by peer）。
+# 每个 run 都会全量镜像，排队时新的挤掉旧的即可，不会丢内容。
+concurrency:
+  group: sync-to-gitee
+  cancel-in-progress: false
+
 jobs:
   mirror:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # 不依赖 known_hosts（境外 runner 上 ssh-keyscan 经常被重置），
+      # 同时加超时/心跳，避免连接挂死十几分钟。
+      GIT_SSH_COMMAND: >-
+        ssh -i ~/.ssh/gitee_key
+        -o StrictHostKeyChecking=no
+        -o UserKnownHostsFile=/dev/null
+        -o ConnectTimeout=20
+        -o ServerAliveInterval=15
+        -o ServerAliveCountMax=4
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -21,14 +39,30 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.GITEE_SSH_PRIVATE_KEY }}" > ~/.ssh/gitee_key
           chmod 600 ~/.ssh/gitee_key
-          ssh-keyscan gitee.com >> ~/.ssh/known_hosts
+          # 仅用于写入 known_hosts 备用；失败不影响后续（见上方 StrictHostKeyChecking=no）
+          ssh-keyscan -T 10 gitee.com >> ~/.ssh/known_hosts 2>/dev/null \
+            || echo "::warning::ssh-keyscan gitee.com 失败，已跳过（不依赖 known_hosts）"
 
       - name: Guard against overwriting Gitee-only work
-        env:
-          GIT_SSH_COMMAND: "ssh -i ~/.ssh/gitee_key -o StrictHostKeyChecking=no"
         run: |
           git remote add gitee "git@gitee.com:heyqzz/${{ github.event.repository.name }}.git" || true
-          git fetch --no-tags gitee "+refs/heads/*:refs/remotes/gitee/*" "+refs/tags/*:refs/remotes/gitee-tags/*"
+
+          # 关键：取不到 Gitee 现状时绝不能继续，否则后面的 --force 会覆盖 Gitee 独有内容。
+          ok=0
+          for i in 1 2 3 4 5; do
+            if git fetch --no-tags gitee \
+                 "+refs/heads/*:refs/remotes/gitee/*" \
+                 "+refs/tags/*:refs/remotes/gitee-tags/*"; then
+              ok=1; break
+            fi
+            echo "::warning::拉取 Gitee 现状失败（第 $i/5 次），将重试"
+            sleep $((i * 10))
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::连续 5 次无法读取 Gitee 现状，为免覆盖 Gitee 独有内容，已中止同步。"
+            exit 1
+          fi
+
           RISK=0
           for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/gitee/); do
             b="${ref#gitee/}"
@@ -59,13 +93,31 @@ jobs:
           fi
 
       - name: Push all branches and tags
-        env:
-          GIT_SSH_COMMAND: "ssh -i ~/.ssh/gitee_key -o StrictHostKeyChecking=no"
         run: |
           for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/); do
             branch="${ref#origin/}"
             [ "$branch" = "HEAD" ] && continue
             git show-ref --verify --quiet "refs/heads/$branch" || git branch "$branch" "$ref"
           done
-          git push --force --prune gitee --all
-          git push --force --prune gitee "refs/tags/*:refs/tags/*" || true
+
+          # gitee.com 对境外 runner 的连接偶发重置，重试即可，不必让整个 run 变红。
+          ok=0
+          for i in 1 2 3 4 5; do
+            if git push --force --prune gitee --all; then ok=1; break; fi
+            echo "::warning::推送分支失败（第 $i/5 次），将重试"
+            sleep $((i * 10))
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::连续 5 次推送分支失败。"
+            exit 1
+          fi
+
+          # 标签不是同步的关键路径，失败仅告警，不判定失败。
+          for i in 1 2 3; do
+            if git push --force --prune gitee "refs/tags/*:refs/tags/*"; then
+              exit 0
+            fi
+            echo "::warning::推送标签失败（第 $i/3 次），将重试"
+            sleep $((i * 10))
+          done
+          echo "::warning::标签未能同步，分支已同步完成。"
